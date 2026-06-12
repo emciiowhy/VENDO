@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VendoPOS — One platform to run your whole business | POS + ERP for the Philippines</title>
+<meta name="description" content="VendoPOS is one multi-tenant POS + ERP built for Filipino businesses. BIR-ready receipts, GCash/Maya/QRPH payments, offline-capable, peso-first. Request a demo." />
+<meta property="og:title" content="VendoPOS — POS + ERP built for the Philippines" />
+<meta property="og:description" content="Run sales, stock, suppliers, finances, and staff in one system. BIR-ready, GCash/Maya/QRPH, offline-capable, peso-first." />
+<meta property="og:type" content="website" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        },
+        colors: {
+          ink:   { DEFAULT: '#0B1220', soft: '#56627A', faint: '#8A95A8' },
+          brand: { 50:'#EEF2FF', 100:'#DCE5FF', 200:'#BBCBFF', 400:'#5E7DFF', 500:'#2F5BFF', 600:'#1F49E6', 700:'#1A3CC0' },
+          accent:{ 50:'#E9FBF4', 500:'#0FB67E', 600:'#0A9968' },
+          paper: '#F7F9FC',
+        },
+        letterSpacing: { tightest: '-0.035em' },
+        borderRadius: { xl2: '1.125rem' },
+        boxShadow: {
+          soft: '0 1px 2px rgba(11,18,32,0.04), 0 14px 36px rgba(11,18,32,0.06)',
+          card: '0 1px 2px rgba(11,18,32,0.03), 0 8px 24px rgba(11,18,32,0.05)',
+          btn:  '0 1px 2px rgba(31,73,230,0.18), 0 6px 18px rgba(31,73,230,0.16)',
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  html { scroll-behavior: smooth; }
+  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  .hairline { border: 1px solid rgba(11,18,32,0.07); }
+  .hairline-t { border-top: 1px solid rgba(11,18,32,0.07); }
+  .hairline-b { border-bottom: 1px solid rgba(11,18,32,0.07); }
+  .hairline-r { border-right: 1px solid rgba(11,18,32,0.07); }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(11,18,32,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(11,18,32,0.035) 1px, transparent 1px);
+    background-size: 38px 38px;
+  }
+  .glass { background: rgba(255,255,255,0.72); backdrop-filter: saturate(180%) blur(12px); }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .faq-plus { transform: rotate(45deg); }
+  .faq-plus { transition: transform .25s ease; }
+  .field-input {
+    border: 1px solid rgba(11,18,32,0.10);
+    transition: border-color .15s, box-shadow .15s, background .15s;
+    background: #FBFCFE;
+  }
+  .field-input::placeholder { color: #98A2B3; }
+  .field-input:focus { outline: none; border-color: #2F5BFF; background: #fff; box-shadow: 0 0 0 4px rgba(47,91,255,0.12); }
+  .field-wrap.invalid .field-input { border-color: #E0455E; box-shadow: 0 0 0 4px rgba(224,69,94,0.10); }
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity:1; transform:none; transition:none; } }
+</style>
+</head>
+
+<body class="font-sans text-ink bg-white antialiased">
+
+<!-- ============ SVG ICON SPRITE (monochromatic line icons) ============ -->
+<svg width="0" height="0" class="hidden" aria-hidden="true">
+  <defs>
+    <g id="i-pos"><path d="M3 5h18a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 20h8M12 16v4"/></g>
+    <g id="i-box"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/><path d="M4 7l8 4 8-4M12 11v10"/></g>
+    <g id="i-truck"><path d="M2 6.5h11v9H2zM13 9.5h4l4 3.5v2.5h-8"/><circle cx="6" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/></g>
+    <g id="i-factory"><path d="M3 21V10l5 3v-3l5 3V8l4 2v11H3Z"/><path d="M3 21h18"/></g>
+    <g id="i-chart"><path d="M4 4v16h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/></g>
+    <g id="i-users"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 19.5a6.5 6.5 0 0 1 13 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 5.9M17 14.4a6.5 6.5 0 0 1 4.5 5.1"/></g>
+    <g id="i-heart"><path d="M12 20.5 4.2 13a4.6 4.6 0 0 1 6.5-6.5l1.3 1.3 1.3-1.3A4.6 4.6 0 0 1 19.8 13L12 20.5Z"/></g>
+    <g id="i-receipt"><path d="M6 3v18l2-1.2L10 21l2-1.2L14 21l2-1.2L18 21V3l-2 1.2L14 3l-2 1.2L10 3 8 4.2 6 3Z"/><path d="M9 8h6M9 12h6M9 16h4"/></g>
+    <g id="i-card"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 9.5h19M6 15h4"/></g>
+    <g id="i-wifi-off"><path d="M2 2l20 20"/><path d="M8.6 16.1a5 5 0 0 1 6.8 0M5 12.6a10 10 0 0 1 3.2-2.1M15.8 10.5a10 10 0 0 1 3.2 2.1M2 8.8a15.5 15.5 0 0 1 5.5-3.2M11.2 4.3a15.5 15.5 0 0 1 10.8 4.5"/><path d="M12 20h.01"/></g>
+    <g id="i-shield"><path d="M12 3 5 5.8v5.4c0 4.2 3 7.3 7 8.3 4-1 7-4.1 7-8.3V5.8L12 3Z"/><path d="M9.2 11.8 11.2 14l3.6-4"/></g>
+    <g id="i-check"><path d="M20 6 9 17l-5-5"/></g>
+    <g id="i-arrow"><path d="M5 12h14M13 6l6 6-6 6"/></g>
+    <g id="i-plus"><path d="M12 5v14M5 12h14"/></g>
+    <g id="i-layers"><path d="M12 3 3 7.5 12 12l9-4.5L12 3Z"/><path d="M3 12l9 4.5L21 12M3 16.5 12 21l9-4.5"/></g>
+    <g id="i-spark"><path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M17.7 6.3l-2.8 2.8M9.1 14.9l-2.8 2.8"/></g>
+  </defs>
+</svg>
+
+<!-- Prototype banner -->
+<div class="bg-ink text-white/80 text-[12.5px] tracking-wide text-center py-2 px-4 font-medium">
+  Prototype — concept proof. The “Request a Demo” form is simulated client-side; no data leaves your browser.
+</div>
+
+<!-- ============ NAVIGATION ============ -->
+<header class="sticky top-0 z-50 glass hairline-b">
+  <div class="max-w-[1160px] mx-auto px-6 h-[68px] flex items-center justify-between">
+    <a href="#" class="flex items-center gap-2.5">
+      <span class="w-8 h-8 rounded-[9px] bg-ink text-white grid place-items-center font-extrabold text-[15px] tracking-tight">V</span>
+      <span class="font-extrabold text-[19px] tracking-tightest">VendoPOS</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-9 text-[14.5px] font-semibold text-ink-soft">
+      <a href="#tools" class="hover:text-ink transition">Core Tools</a>
+      <a href="#why" class="hover:text-ink transition">Why PH</a>
+      <a href="#how" class="hover:text-ink transition">How it works</a>
+      <a href="#pricing" class="hover:text-ink transition">Pricing</a>
+      <a href="#faq" class="hover:text-ink transition">FAQ</a>
+    </nav>
+    <a href="#demo" class="inline-flex items-center gap-2 bg-ink text-white font-semibold text-[14.5px] px-5 py-2.5 rounded-[10px] hover:bg-black transition">
+      Request a Demo
+    </a>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="relative overflow-hidden">
+  <div class="absolute inset-0 grid-bg [mask-image:radial-gradient(900px_440px_at_72%_8%,black,transparent_75%)]"></div>
+  <div class="absolute -top-24 right-0 w-[620px] h-[620px] rounded-full bg-brand-50 blur-3xl opacity-70 -z-0"></div>
+  <div class="relative max-w-[1160px] mx-auto px-6 pt-20 pb-24">
+    <div class="grid lg:grid-cols-[1.04fr_0.96fr] gap-16 items-center">
+      <!-- Left -->
+      <div class="reveal">
+        <span class="inline-flex items-center gap-2 text-[12.5px] font-bold tracking-wide uppercase text-brand-600 bg-brand-50 hairline px-3 py-1.5 rounded-full">
+          POS + ERP · Built for the Philippines
+        </span>
+        <h1 class="mt-6 text-[clamp(2.5rem,5.4vw,3.85rem)] leading-[1.04] tracking-tightest font-extrabold text-ink">
+          One platform to run<br class="hidden sm:block" />
+          <span class="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent">your whole business.</span>
+        </h1>
+        <p class="mt-6 text-[1.16rem] leading-relaxed text-ink-soft max-w-[52ch]">
+          VendoPOS brings your sales, stock, suppliers, finances, and staff into a single system — designed for how Filipino coffee shops, restaurants, and retailers actually operate.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="#demo" class="inline-flex items-center gap-2 bg-brand-600 text-white font-semibold px-6 py-3.5 rounded-[11px] shadow-btn hover:bg-brand-700 transition">
+            Request a Demo
+            <svg viewBox="0 0 24 24" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow"/></svg>
+          </a>
+          <a href="#tools" class="inline-flex items-center gap-2 bg-white hairline text-ink font-semibold px-6 py-3.5 rounded-[11px] hover:border-brand-200 hover:text-brand-600 transition">
+            Explore the 7 Core Tools
+          </a>
+        </div>
+        <ul class="mt-8 flex flex-wrap gap-x-7 gap-y-2.5 text-[14.5px] text-ink-soft font-medium">
+          <li class="flex items-center gap-2.5"><span class="w-1.5 h-1.5 rounded-full bg-accent-500"></span>BIR-ready receipts</li>
+          <li class="flex items-center gap-2.5"><span class="w-1.5 h-1.5 rounded-full bg-accent-500"></span>GCash · Maya · QRPH</li>
+          <li class="flex items-center gap-2.5"><span class="w-1.5 h-1.5 rounded-full bg-accent-500"></span>Works offline</li>
+          <li class="flex items-center gap-2.5"><span class="w-1.5 h-1.5 rounded-full bg-accent-500"></span>Peso-first</li>
+        </ul>
+      </div>
+
+      <!-- Right: minimal mini-dashboard -->
+      <div class="reveal">
+        <div class="rounded-xl2 bg-white hairline shadow-soft overflow-hidden">
+          <div class="flex items-center gap-2 px-5 h-11 hairline-b bg-paper">
+            <span class="w-2.5 h-2.5 rounded-full bg-ink/15"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-ink/15"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-ink/15"></span>
+            <span class="ml-auto text-[12px] font-semibold text-ink-faint tracking-wide">VendoPOS · Point of Sale</span>
+          </div>
+          <div class="grid grid-cols-[1.35fr_1fr]">
+            <!-- product list -->
+            <div class="p-4 grid grid-cols-2 gap-2.5 content-start hairline-r">
+              <div class="hairline rounded-lg p-3">
+                <div class="w-7 h-7 rounded-md bg-brand-50 hairline mb-2.5 grid place-items-center">
+                  <svg viewBox="0 0 24 24" class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.6"><use href="#i-box"/></svg>
+                </div>
+                <div class="text-[12.5px] font-bold text-ink">Kapeng Barako</div>
+                <div class="text-[12px] text-ink-faint">₱120</div>
+              </div>
+              <div class="hairline rounded-lg p-3">
+                <div class="w-7 h-7 rounded-md bg-brand-50 hairline mb-2.5 grid place-items-center">
+                  <svg viewBox="0 0 24 24" class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.6"><use href="#i-box"/></svg>
+                </div>
+                <div class="text-[12.5px] font-bold text-ink">Milk Tea</div>
+                <div class="text-[12px] text-ink-faint">₱140</div>
+              </div>
+              <div class="hairline rounded-lg p-3">
+                <div class="w-7 h-7 rounded-md bg-brand-50 hairline mb-2.5 grid place-items-center">
+                  <svg viewBox="0 0 24 24" class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.6"><use href="#i-box"/></svg>
+                </div>
+                <div class="text-[12.5px] font-bold text-ink">Ensaymada</div>
+                <div class="text-[12px] text-ink-faint">₱85</div>
+              </div>
+              <div class="hairline rounded-lg p-3">
+                <div class="w-7 h-7 rounded-md bg-brand-50 hairline mb-2.5 grid place-items-center">
+                  <svg viewBox="0 0 24 24" class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.6"><use href="#i-box"/></svg>
+                </div>
+                <div class="text-[12.5px] font-bold text-ink">Ube Cake</div>
+                <div class="text-[12px] text-ink-faint">₱160</div>
+              </div>
+            </div>
+            <!-- cart -->
+            <div class="p-4 bg-paper flex flex-col">
+              <div class="text-[11px] font-bold uppercase tracking-wider text-ink-faint mb-2">Current order</div>
+              <div class="space-y-0">
+                <div class="flex justify-between text-[12.5px] py-2 hairline-b"><span class="text-ink-soft">Kapeng Barako ×2</span><span class="font-semibold">₱240</span></div>
+                <div class="flex justify-between text-[12.5px] py-2 hairline-b"><span class="text-ink-soft">Ensaymada ×1</span><span class="font-semibold">₱85</span></div>
+                <div class="flex justify-between text-[12.5px] py-2 hairline-b"><span class="text-ink-soft">Milk Tea ×1</span><span class="font-semibold">₱140</span></div>
+              </div>
+              <div class="mt-auto pt-3">
+                <div class="flex justify-between items-baseline">
+                  <span class="text-[12px] font-semibold text-ink-soft uppercase tracking-wide">Total</span>
+                  <span class="text-[1.4rem] font-extrabold tracking-tight">₱465</span>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-1.5">
+                  <span class="text-[11px] font-bold text-accent-600 bg-accent-50 rounded-md py-1.5 text-center">GCash</span>
+                  <span class="text-[11px] font-bold text-accent-600 bg-accent-50 rounded-md py-1.5 text-center">Maya</span>
+                  <span class="text-[11px] font-bold text-accent-600 bg-accent-50 rounded-md py-1.5 text-center">QRPH</span>
+                  <span class="text-[11px] font-bold text-ink-soft bg-white hairline rounded-md py-1.5 text-center">Cash</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRUST BAR ============ -->
+<div class="hairline-y bg-paper border-y" style="border-color:rgba(11,18,32,0.07)">
+  <div class="max-w-[1160px] mx-auto px-6 py-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-3">
+    <div class="flex items-center gap-2.5 text-[14px] font-semibold text-ink">
+      <svg viewBox="0 0 24 24" class="w-[18px] h-[18px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.6"><use href="#i-receipt"/></svg> BIR-ready receipts &amp; reports
+    </div>
+    <div class="flex items-center gap-2.5 text-[14px] font-semibold text-ink">
+      <svg viewBox="0 0 24 24" class="w-[18px] h-[18px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.6"><use href="#i-wifi-off"/></svg> Offline-capable POS
+    </div>
+    <div class="flex items-center gap-2.5 text-[14px] font-semibold text-ink">
+      <svg viewBox="0 0 24 24" class="w-[18px] h-[18px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.6"><use href="#i-card"/></svg> GCash · Maya · QRPH
+    </div>
+    <div class="flex items-center gap-2.5 text-[14px] font-semibold text-ink">
+      <svg viewBox="0 0 24 24" class="w-[18px] h-[18px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.6"><use href="#i-shield"/></svg> Isolated per-business data
+    </div>
+    <div class="flex items-center gap-2.5 text-[14px] font-semibold text-ink">
+      <span class="w-[18px] h-[18px] grid place-items-center text-brand-600 font-extrabold text-[15px] leading-none">₱</span> Peso-first, end to end
+    </div>
+  </div>
+</div>
+
+<!-- ============ PROBLEM vs SOLUTION ============ -->
+<section id="problem" class="py-28">
+  <div class="max-w-[1160px] mx-auto px-6">
+    <div class="max-w-[58ch] reveal">
+      <span class="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">The problem</span>
+      <h2 class="mt-4 text-[clamp(1.9rem,3.6vw,2.6rem)] leading-[1.1] tracking-tightest font-extrabold">
+        Your business runs on spreadsheets and a dozen disconnected apps.
+      </h2>
+      <p class="mt-5 text-[1.08rem] text-ink-soft leading-relaxed">
+        Sales here, stock there, suppliers in a chat thread, payroll in another sheet. Nothing talks to each other — and none of it was built for the way you actually operate in the Philippines.
+      </p>
+    </div>
+
+    <!-- open comparative layout -->
+    <div class="mt-16 grid md:grid-cols-2 gap-px bg-[rgba(11,18,32,0.07)] hairline rounded-xl2 overflow-hidden reveal">
+      <div class="bg-white p-9 lg:p-12">
+        <div class="flex items-center gap-3">
+          <span class="text-[12px] font-bold tracking-widest uppercase text-ink-faint">Today</span>
+          <span class="h-px flex-1 bg-[rgba(11,18,32,0.08)]"></span>
+        </div>
+        <ul class="mt-7 space-y-5">
+          <li class="flex gap-4 text-ink-soft text-[1.02rem] leading-snug"><span class="text-ink-faint mt-0.5">—</span> Five or more tools, none of them connected.</li>
+          <li class="flex gap-4 text-ink-soft text-[1.02rem] leading-snug"><span class="text-ink-faint mt-0.5">—</span> Tax season means rebuilding BIR reports by hand.</li>
+          <li class="flex gap-4 text-ink-soft text-[1.02rem] leading-snug"><span class="text-ink-faint mt-0.5">—</span> The internet drops and you can’t ring up a sale.</li>
+          <li class="flex gap-4 text-ink-soft text-[1.02rem] leading-snug"><span class="text-ink-faint mt-0.5">—</span> Foreign POS tools price in dollars, ignore e-wallets.</li>
+          <li class="flex gap-4 text-ink-soft text-[1.02rem] leading-snug"><span class="text-ink-faint mt-0.5">—</span> No single source of truth across the business.</li>
+        </ul>
+      </div>
+      <div class="bg-ink text-white p-9 lg:p-12 relative overflow-hidden">
+        <div class="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-brand-500/20 blur-2xl"></div>
+        <div class="relative flex items-center gap-3">
+          <span class="text-[12px] font-bold tracking-widest uppercase text-brand-200">With VendoPOS</span>
+          <span class="h-px flex-1 bg-white/15"></span>
+        </div>
+        <ul class="relative mt-7 space-y-5">
+          <li class="flex gap-4 text-white/90 text-[1.02rem] leading-snug"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] mt-0.5 shrink-0 text-accent-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> One platform, seven connected tools.</li>
+          <li class="flex gap-4 text-white/90 text-[1.02rem] leading-snug"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] mt-0.5 shrink-0 text-accent-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> BIR-ready receipts and reports out of the box.</li>
+          <li class="flex gap-4 text-white/90 text-[1.02rem] leading-snug"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] mt-0.5 shrink-0 text-accent-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Keeps selling offline, syncs the moment you’re back.</li>
+          <li class="flex gap-4 text-white/90 text-[1.02rem] leading-snug"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] mt-0.5 shrink-0 text-accent-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Peso-first with GCash, Maya, and QRPH built in.</li>
+          <li class="flex gap-4 text-white/90 text-[1.02rem] leading-snug"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] mt-0.5 shrink-0 text-accent-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Everything in one place — one source of truth.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CORE TOOLS (Bento) ============ -->
+<section id="tools" class="py-28 bg-paper hairline-y border-y" style="border-color:rgba(11,18,32,0.07)">
+  <div class="max-w-[1160px] mx-auto px-6">
+    <div class="max-w-[60ch] reveal">
+      <span class="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">One platform, seven core tools</span>
+      <h2 class="mt-4 text-[clamp(1.9rem,3.6vw,2.6rem)] leading-[1.1] tracking-tightest font-extrabold">
+        Everything your business does, in one place.
+      </h2>
+      <p class="mt-5 text-[1.08rem] text-ink-soft leading-relaxed">
+        Each tool owns exactly one job. Turn on what you need today; add the rest as you grow — without ever switching systems.
+      </p>
+    </div>
+
+    <div class="mt-14 grid grid-cols-2 lg:grid-cols-4 gap-4 reveal">
+      <!-- wide highlight -->
+      <article class="col-span-2 row-span-1 lg:row-span-2 rounded-xl2 bg-ink text-white p-8 flex flex-col justify-between relative overflow-hidden">
+        <div class="absolute -right-20 -bottom-20 w-64 h-64 rounded-full bg-brand-500/25 blur-3xl"></div>
+        <div class="relative">
+          <div class="w-11 h-11 rounded-[12px] bg-white/10 grid place-items-center">
+            <svg viewBox="0 0 24 24" class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-layers"/></svg>
+          </div>
+          <h3 class="mt-6 text-[1.5rem] font-extrabold tracking-tight leading-tight">One login.<br/>One source of truth.</h3>
+          <p class="mt-3 text-white/70 text-[0.98rem] leading-relaxed max-w-[34ch]">
+            Every tool shares the same data, so a sale at the POS updates inventory, feeds your finances, and rewards loyalty — automatically.
+          </p>
+        </div>
+        <div class="relative mt-8 flex items-center gap-2 text-[13px] font-semibold text-brand-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-accent-500"></span> Fully isolated per business
+        </div>
+      </article>
+
+      <article class="rounded-xl2 bg-white hairline p-6 hover:-translate-y-0.5 transition">
+        <div class="w-11 h-11 rounded-[12px] bg-brand-50 hairline grid place-items-center mb-5"><svg viewBox="0 0 24 24" class="w-[22px] h-[22px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-pos"/></svg></div>
+        <h3 class="text-[1.05rem] font-bold tracking-tight">Point of Sale</h3>
+        <p class="mt-2 text-[0.9rem] text-ink-soft leading-relaxed">Ring up Customers and take payment — the fast front-of-house sales surface.</p>
+      </article>
+
+      <article class="rounded-xl2 bg-white hairline p-6 hover:-translate-y-0.5 transition">
+        <div class="w-11 h-11 rounded-[12px] bg-brand-50 hairline grid place-items-center mb-5"><svg viewBox="0 0 24 24" class="w-[22px] h-[22px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-box"/></svg></div>
+        <h3 class="text-[1.05rem] font-bold tracking-tight">Inventory</h3>
+        <p class="mt-2 text-[0.9rem] text-ink-soft leading-relaxed">Know exactly how much stock you have and where it sits, in real time.</p>
+      </article>
+
+      <article class="rounded-xl2 bg-white hairline p-6 hover:-translate-y-0.5 transition">
+        <div class="w-11 h-11 rounded-[12px] bg-brand-50 hairline grid place-items-center mb-5"><svg viewBox="0 0 24 24" class="w-[22px] h-[22px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-truck"/></svg></div>
+        <h3 class="text-[1.05rem] font-bold tracking-tight">Procurement &amp; Supply Chain</h3>
+        <p class="mt-2 text-[0.9rem] text-ink-soft leading-relaxed">Suppliers, purchase orders, and receiving — manage how goods arrive.</p>
+      </article>
+
+      <article class="rounded-xl2 bg-white hairline p-6 hover:-translate-y-0.5 transition">
+        <div class="w-11 h-11 rounded-[12px] bg-brand-50 hairline grid place-items-center mb-5"><svg viewBox="0 0 24 24" class="w-[22px] h-[22px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-factory"/></svg></div>
+        <h3 class="text-[1.05rem] font-bold tracking-tight">Manufacturing</h3>
+        <p class="mt-2 text-[0.9rem] text-ink-soft leading-relaxed">Build products from raw materials with recipes and bill-of-materials.</p>
+      </article>
+
+      <article class="rounded-xl2 bg-white hairline p-6 hover:-translate-y-0.5 transition">
+        <div class="w-11 h-11 rounded-[12px] bg-brand-50 hairline grid place-items-center mb-5"><svg viewBox="0 0 24 24" class="w-[22px] h-[22px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chart"/></svg></div>
+        <h3 class="text-[1.05rem] font-bold tracking-tight">Finance &amp; Accounting</h3>
+        <p class="mt-2 text-[0.9rem] text-ink-soft leading-relaxed">Money in and out — sales reports, expenses, tax, and profit &amp; loss.</p>
+      </article>
+
+      <article class="rounded-xl2 bg-white hairline p-6 hover:-translate-y-0.5 transition">
+        <div class="w-11 h-11 rounded-[12px] bg-brand-50 hairline grid place-items-center mb-5"><svg viewBox="0 0 24 24" class="w-[22px] h-[22px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-users"/></svg></div>
+        <h3 class="text-[1.05rem] font-bold tracking-tight">Human Resources</h3>
+        <p class="mt-2 text-[0.9rem] text-ink-soft leading-relaxed">Employees, shifts, and payroll for your own staff.</p>
+      </article>
+
+      <article class="rounded-xl2 bg-white hairline p-6 hover:-translate-y-0.5 transition">
+        <div class="w-11 h-11 rounded-[12px] bg-brand-50 hairline grid place-items-center mb-5"><svg viewBox="0 0 24 24" class="w-[22px] h-[22px] text-brand-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-heart"/></svg></div>
+        <h3 class="text-[1.05rem] font-bold tracking-tight">Customer Relationship</h3>
+        <p class="mt-2 text-[0.9rem] text-ink-soft leading-relaxed">Track your Customers and grow loyalty over time.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHY PH ============ -->
+<section id="why" class="py-28">
+  <div class="max-w-[1160px] mx-auto px-6">
+    <div class="max-w-[60ch] reveal">
+      <span class="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">Built for the Philippines</span>
+      <h2 class="mt-4 text-[clamp(1.9rem,3.6vw,2.6rem)] leading-[1.1] tracking-tightest font-extrabold">
+        The advantages global POS tools ignore.
+      </h2>
+      <p class="mt-5 text-[1.08rem] text-ink-soft leading-relaxed">
+        Square and Lightspeed weren’t built for here. VendoPOS is — down to the receipt, the payment, and the peso.
+      </p>
+    </div>
+
+    <div class="mt-14 grid md:grid-cols-2 gap-4 reveal">
+      <div class="rounded-xl2 bg-white hairline p-8 flex gap-6 items-start">
+        <div class="w-12 h-12 shrink-0 rounded-[13px] bg-accent-50 grid place-items-center"><svg viewBox="0 0 24 24" class="w-6 h-6 text-accent-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-receipt"/></svg></div>
+        <div>
+          <h3 class="text-[1.18rem] font-bold tracking-tight">BIR-ready receipts &amp; reports</h3>
+          <p class="mt-2 text-[0.96rem] text-ink-soft leading-relaxed">Issue compliant receipts and generate the reports you need at tax time — no manual rebuilding, no spreadsheet gymnastics.</p>
+          <div class="mt-4 flex gap-2"><span class="text-[11.5px] font-semibold text-ink-soft bg-paper hairline px-2.5 py-1 rounded-full">Compliance</span><span class="text-[11.5px] font-semibold text-ink-soft bg-paper hairline px-2.5 py-1 rounded-full">Sales reports</span></div>
+        </div>
+      </div>
+      <div class="rounded-xl2 bg-white hairline p-8 flex gap-6 items-start">
+        <div class="w-12 h-12 shrink-0 rounded-[13px] bg-accent-50 grid place-items-center"><svg viewBox="0 0 24 24" class="w-6 h-6 text-accent-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-card"/></svg></div>
+        <div>
+          <h3 class="text-[1.18rem] font-bold tracking-tight">GCash, Maya &amp; QRPH</h3>
+          <p class="mt-2 text-[0.96rem] text-ink-soft leading-relaxed">Accept the payments your Customers actually use. Cash, e-wallets, and QR — all rung up the same simple way.</p>
+          <div class="mt-4 flex gap-2"><span class="text-[11.5px] font-semibold text-ink-soft bg-paper hairline px-2.5 py-1 rounded-full">GCash</span><span class="text-[11.5px] font-semibold text-ink-soft bg-paper hairline px-2.5 py-1 rounded-full">Maya</span><span class="text-[11.5px] font-semibold text-ink-soft bg-paper hairline px-2.5 py-1 rounded-full">QRPH</span></div>
+        </div>
+      </div>
+      <div class="rounded-xl2 bg-white hairline p-8 flex gap-6 items-start">
+        <div class="w-12 h-12 shrink-0 rounded-[13px] bg-accent-50 grid place-items-center"><svg viewBox="0 0 24 24" class="w-6 h-6 text-accent-600" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-wifi-off"/></svg></div>
+        <div>
+          <h3 class="text-[1.18rem] font-bold tracking-tight">Works offline, syncs later</h3>
+          <p class="mt-2 text-[0.96rem] text-ink-soft leading-relaxed">When the internet drops, the POS keeps selling. Transactions sync automatically the moment you’re back online — you never lose a sale.</p>
+          <div class="mt-4 flex gap-2"><span class="text-[11.5px] font-semibold text-ink-soft bg-paper hairline px-2.5 py-1 rounded-full">Offline-first</span><span class="text-[11.5px] font-semibold text-ink-soft bg-paper hairline px-2.5 py-1 rounded-full">Auto-sync</span></div>
+        </div>
+      </div>
+      <div class="rounded-xl2 bg-white hairline p-8 flex gap-6 items-start">
+        <div class="w-12 h-12 shrink-0 rounded-[13px] bg-accent-50 grid place-items-center text-accent-600 font-extrabold text-[22px] leading-none">₱</div>
+        <div>
+          <h3 class="text-[1.18rem] font-bold tracking-tight">Peso-first, end to end</h3>
+          <p class="mt-2 text-[0.96rem] text-ink-soft leading-relaxed">Every price, report, and total is in Philippine peso. No currency confusion, no conversion guesswork — just your money, your way.</p>
+          <div class="mt-4 flex gap-2"><span class="text-[11.5px] font-semibold text-ink-soft bg-paper hairline px-2.5 py-1 rounded-full">₱ everywhere</span><span class="text-[11.5px] font-semibold text-ink-soft bg-paper hairline px-2.5 py-1 rounded-full">Local-first</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section id="how" class="py-28 bg-ink text-white relative overflow-hidden">
+  <div class="absolute inset-0 grid-bg opacity-[0.15] [mask-image:radial-gradient(700px_400px_at_50%_0%,black,transparent_75%)]"></div>
+  <div class="relative max-w-[1160px] mx-auto px-6">
+    <div class="max-w-[60ch] reveal">
+      <span class="text-[12.5px] font-bold tracking-widest uppercase text-brand-200">Hands-on onboarding</span>
+      <h2 class="mt-4 text-[clamp(1.9rem,3.6vw,2.6rem)] leading-[1.1] tracking-tightest font-extrabold text-white">How it works</h2>
+      <p class="mt-5 text-[1.08rem] text-white/65 leading-relaxed">No complicated self-setup. We onboard you personally, so you’re running on day one.</p>
+    </div>
+
+    <div class="mt-14 grid md:grid-cols-3 gap-4 reveal">
+      <div class="rounded-xl2 border border-white/10 bg-white/[0.03] p-8 relative">
+        <span class="text-[13px] font-bold text-brand-200 tracking-widest">STEP 01</span>
+        <h3 class="mt-4 text-[1.2rem] font-bold tracking-tight">Request a demo</h3>
+        <p class="mt-2.5 text-white/65 text-[0.96rem] leading-relaxed">Tell us about your business. We’ll show you exactly how VendoPOS fits your shop, restaurant, or store.</p>
+      </div>
+      <div class="rounded-xl2 border border-white/10 bg-white/[0.03] p-8 relative">
+        <span class="text-[13px] font-bold text-brand-200 tracking-widest">STEP 02</span>
+        <h3 class="mt-4 text-[1.2rem] font-bold tracking-tight">We set you up</h3>
+        <p class="mt-2.5 text-white/65 text-[0.96rem] leading-relaxed">Our team configures your isolated workspace, loads your products, and trains your staff — hands-on, no guesswork.</p>
+      </div>
+      <div class="rounded-xl2 border border-white/10 bg-white/[0.03] p-8 relative">
+        <span class="text-[13px] font-bold text-brand-200 tracking-widest">STEP 03</span>
+        <h3 class="mt-4 text-[1.2rem] font-bold tracking-tight">Run your business</h3>
+        <p class="mt-2.5 text-white/65 text-[0.96rem] leading-relaxed">Start ringing up sales, tracking stock, and seeing your numbers — all from one system, from day one.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section id="pricing" class="py-28">
+  <div class="max-w-[1160px] mx-auto px-6">
+    <div class="max-w-[60ch] reveal">
+      <span class="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">Plans</span>
+      <h2 class="mt-4 text-[clamp(1.9rem,3.6vw,2.6rem)] leading-[1.1] tracking-tightest font-extrabold">
+        Pick the bundle that fits where you are.
+      </h2>
+      <p class="mt-5 text-[1.08rem] text-ink-soft leading-relaxed">
+        Every plan differs by which tools are unlocked. Start small, upgrade as you grow — same platform, no migration.
+      </p>
+    </div>
+
+    <div class="mt-14 grid lg:grid-cols-3 gap-5 items-stretch reveal">
+      <!-- Starter -->
+      <div class="rounded-xl2 bg-white hairline p-8 flex flex-col">
+        <h3 class="text-[1.3rem] font-extrabold tracking-tight">Starter</h3>
+        <p class="mt-1.5 text-[0.9rem] text-ink-soft min-h-[40px]">For single-location coffee shops &amp; small retailers.</p>
+        <div class="mt-5 flex items-baseline gap-1.5">
+          <span class="text-[2.6rem] font-extrabold tracking-tightest">₱499</span>
+          <span class="text-ink-soft font-semibold">/mo</span>
+        </div>
+        <span class="mt-2 inline-block text-[11.5px] font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md self-start">Indicative — not final</span>
+        <ul class="mt-7 space-y-3.5 flex-1">
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Point of Sale</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Inventory</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> BIR-ready receipts</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> GCash / Maya / QRPH</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Offline-capable POS</li>
+        </ul>
+        <a href="#demo" class="mt-7 inline-flex justify-center items-center bg-white hairline text-ink font-semibold py-3 rounded-[11px] hover:border-brand-200 hover:text-brand-600 transition">Request a Demo</a>
+      </div>
+
+      <!-- Business (featured) -->
+      <div class="rounded-xl2 bg-white p-8 flex flex-col relative border-2 border-brand-500 shadow-soft">
+        <span class="absolute top-6 right-6 text-[11px] font-bold uppercase tracking-wider text-brand-600 bg-brand-50 hairline px-3 py-1 rounded-full">Most popular</span>
+        <h3 class="text-[1.3rem] font-extrabold tracking-tight">Business</h3>
+        <p class="mt-1.5 text-[0.9rem] text-ink-soft min-h-[40px]">For growing multi-staff retailers &amp; restaurants.</p>
+        <div class="mt-5 flex items-baseline gap-1.5">
+          <span class="text-[2.6rem] font-extrabold tracking-tightest">₱1,499</span>
+          <span class="text-ink-soft font-semibold">/mo</span>
+        </div>
+        <span class="mt-2 inline-block text-[11.5px] font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md self-start">Indicative — not final</span>
+        <ul class="mt-7 space-y-3.5 flex-1">
+          <li class="flex gap-3 text-[0.93rem] text-ink"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Everything in Starter</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Procurement &amp; Supply Chain</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Customer Relationship (CRM)</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Finance &amp; Accounting</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Multi-staff roles</li>
+        </ul>
+        <a href="#demo" class="mt-7 inline-flex justify-center items-center bg-brand-600 text-white font-semibold py-3 rounded-[11px] shadow-btn hover:bg-brand-700 transition">Request a Demo</a>
+      </div>
+
+      <!-- Enterprise -->
+      <div class="rounded-xl2 bg-white hairline p-8 flex flex-col">
+        <h3 class="text-[1.3rem] font-extrabold tracking-tight">Enterprise</h3>
+        <p class="mt-1.5 text-[0.9rem] text-ink-soft min-h-[40px]">For large, complex, multi-location operations.</p>
+        <div class="mt-5 flex items-baseline gap-1.5">
+          <span class="text-[2.6rem] font-extrabold tracking-tightest">Contact us</span>
+        </div>
+        <span class="mt-2 inline-block text-[11.5px] font-semibold px-2.5 py-1 rounded-md self-start invisible">placeholder</span>
+        <ul class="mt-7 space-y-3.5 flex-1">
+          <li class="flex gap-3 text-[0.93rem] text-ink"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Everything in Business</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Manufacturing (recipes / BOM)</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Human Resources &amp; payroll</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Multi-location</li>
+          <li class="flex gap-3 text-[0.93rem] text-ink-soft"><svg viewBox="0 0 24 24" class="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg> Priority support</li>
+        </ul>
+        <a href="#demo" class="mt-7 inline-flex justify-center items-center bg-white hairline text-ink font-semibold py-3 rounded-[11px] hover:border-brand-200 hover:text-brand-600 transition">Request a Demo</a>
+      </div>
+    </div>
+    <p class="mt-8 text-center text-[0.9rem] text-ink-soft">Prices shown in Philippine peso (₱) and are indicative placeholders pending finalisation. No checkout — every plan starts with a demo.</p>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section id="faq" class="py-28 bg-paper hairline-y border-y" style="border-color:rgba(11,18,32,0.07)">
+  <div class="max-w-[1160px] mx-auto px-6">
+    <div class="text-center max-w-[60ch] mx-auto reveal">
+      <span class="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">Answers</span>
+      <h2 class="mt-4 text-[clamp(1.9rem,3.6vw,2.6rem)] leading-[1.1] tracking-tightest font-extrabold">Frequently asked questions</h2>
+    </div>
+    <div class="mt-12 max-w-[780px] mx-auto space-y-3 reveal">
+      <details class="group bg-white hairline rounded-[14px] px-6" open>
+        <summary class="flex items-center justify-between gap-4 cursor-pointer py-5 font-bold text-[1.02rem]">Is my business data private and isolated?<span class="faq-plus shrink-0"><svg viewBox="0 0 24 24" class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#i-plus"/></svg></span></summary>
+        <p class="pb-5 text-ink-soft leading-relaxed">Yes. Each business runs on its own isolated workspace. Your sales, stock, customers, and finances are fully separated from every other business on the platform — no one else can see your data, and you can’t see theirs.</p>
+      </details>
+      <details class="group bg-white hairline rounded-[14px] px-6">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer py-5 font-bold text-[1.02rem]">Do I have to sign a long contract?<span class="faq-plus shrink-0"><svg viewBox="0 0 24 24" class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#i-plus"/></svg></span></summary>
+        <p class="pb-5 text-ink-soft leading-relaxed">No long lock-in. We start with a demo and onboard you hands-on. Plans are month-to-month, and we’ll walk you through exactly what’s included before you commit.</p>
+      </details>
+      <details class="group bg-white hairline rounded-[14px] px-6">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer py-5 font-bold text-[1.02rem]">What happens when the internet goes down?<span class="faq-plus shrink-0"><svg viewBox="0 0 24 24" class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#i-plus"/></svg></span></summary>
+        <p class="pb-5 text-ink-soft leading-relaxed">Your POS keeps working. Sales are recorded locally and sync automatically the moment your connection is back — so you never miss a transaction during a brownout or a dropped line.</p>
+      </details>
+      <details class="group bg-white hairline rounded-[14px] px-6">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer py-5 font-bold text-[1.02rem]">Are the receipts and reports BIR-compliant?<span class="faq-plus shrink-0"><svg viewBox="0 0 24 24" class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#i-plus"/></svg></span></summary>
+        <p class="pb-5 text-ink-soft leading-relaxed">VendoPOS is built peso-first with BIR-ready receipts and reports, so tax time doesn’t mean rebuilding everything by hand. We’ll confirm the specifics for your business type during onboarding.</p>
+      </details>
+      <details class="group bg-white hairline rounded-[14px] px-6">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer py-5 font-bold text-[1.02rem]">Can my Customers pay with GCash and Maya?<span class="faq-plus shrink-0"><svg viewBox="0 0 24 24" class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#i-plus"/></svg></span></summary>
+        <p class="pb-5 text-ink-soft leading-relaxed">Yes — GCash, Maya, and QRPH alongside cash, all rung up the same simple way at the till.</p>
+      </details>
+      <details class="group bg-white hairline rounded-[14px] px-6">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer py-5 font-bold text-[1.02rem]">How do I get started?<span class="faq-plus shrink-0"><svg viewBox="0 0 24 24" class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#i-plus"/></svg></span></summary>
+        <p class="pb-5 text-ink-soft leading-relaxed">Request a demo below. There’s no self-serve signup — our team onboards you personally, sets up your workspace, and trains your staff so you’re running from day one.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DEMO FORM ============ -->
+<section id="demo" class="py-28 relative overflow-hidden">
+  <div class="absolute -top-20 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-brand-50 blur-3xl rounded-full -z-10"></div>
+  <div class="max-w-[760px] mx-auto px-6">
+    <div class="rounded-[20px] bg-white hairline shadow-soft overflow-hidden">
+      <div class="bg-ink text-white px-8 sm:px-10 py-9">
+        <h2 class="text-[1.7rem] font-extrabold tracking-tightest">Request a demo</h2>
+        <p class="mt-2 text-white/65">Tell us about your business. We’ll reach out to set you up — no signup, no checkout, just a conversation.</p>
+      </div>
+
+      <form id="demoForm" novalidate class="px-8 sm:px-10 py-9 grid sm:grid-cols-2 gap-5">
+        <div class="field-wrap flex flex-col gap-2">
+          <label for="name" class="text-[14px] font-bold text-ink">Your name <span class="text-rose-500">*</span></label>
+          <input id="name" name="name" type="text" autocomplete="name" placeholder="Juan dela Cruz" class="field-input rounded-[10px] px-3.5 py-3 text-[15px]" />
+          <span class="text-[12.5px] font-semibold text-rose-600 min-h-[1em]" data-err="name"></span>
+        </div>
+        <div class="field-wrap flex flex-col gap-2">
+          <label for="businessName" class="text-[14px] font-bold text-ink">Business name <span class="text-rose-500">*</span></label>
+          <input id="businessName" name="businessName" type="text" autocomplete="organization" placeholder="Kape ni Juan" class="field-input rounded-[10px] px-3.5 py-3 text-[15px]" />
+          <span class="text-[12.5px] font-semibold text-rose-600 min-h-[1em]" data-err="businessName"></span>
+        </div>
+        <div class="field-wrap flex flex-col gap-2">
+          <label for="email" class="text-[14px] font-bold text-ink">Email <span class="text-rose-500">*</span></label>
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@business.ph" class="field-input rounded-[10px] px-3.5 py-3 text-[15px]" />
+          <span class="text-[12.5px] font-semibold text-rose-600 min-h-[1em]" data-err="email"></span>
+        </div>
+        <div class="field-wrap flex flex-col gap-2">
+          <label for="phone" class="text-[14px] font-bold text-ink">Phone <span class="text-rose-500">*</span></label>
+          <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="0917 123 4567" class="field-input rounded-[10px] px-3.5 py-3 text-[15px]" />
+          <span class="text-[12.5px] font-semibold text-rose-600 min-h-[1em]" data-err="phone"></span>
+        </div>
+        <div class="field-wrap flex flex-col gap-2 sm:col-span-2">
+          <label for="businessType" class="text-[14px] font-bold text-ink">Business type <span class="text-rose-500">*</span></label>
+          <select id="businessType" name="businessType" class="field-input rounded-[10px] px-3.5 py-3 text-[15px]">
+            <option value="">Select your business type…</option>
+            <option>Coffee shop / Café</option>
+            <option>Restaurant / Food service</option>
+            <option>Retail store (small)</option>
+            <option>Retail store (medium–large)</option>
+            <option>Manufacturing / Production</option>
+            <option>Other</option>
+          </select>
+          <span class="text-[12.5px] font-semibold text-rose-600 min-h-[1em]" data-err="businessType"></span>
+        </div>
+        <div class="field-wrap flex flex-col gap-2 sm:col-span-2">
+          <label for="message" class="text-[14px] font-bold text-ink">Message <span class="text-ink-faint font-medium">(optional)</span></label>
+          <textarea id="message" name="message" rows="3" placeholder="Tell us anything that would help us prepare for your demo…" class="field-input rounded-[10px] px-3.5 py-3 text-[15px] resize-y"></textarea>
+        </div>
+        <div class="sm:col-span-2 flex flex-col gap-3">
+          <button type="submit" class="inline-flex justify-center items-center gap-2 bg-brand-600 text-white font-semibold py-3.5 rounded-[11px] shadow-btn hover:bg-brand-700 transition">
+            Request my demo
+            <svg viewBox="0 0 24 24" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#i-arrow"/></svg>
+          </button>
+          <p class="text-[12.5px] text-ink-soft text-center">We’ll only use your details to contact you about VendoPOS. Your data stays private.</p>
+        </div>
+      </form>
+
+      <div id="successPanel" class="hidden px-8 sm:px-10 py-14 text-center" role="status" aria-live="polite">
+        <div class="w-16 h-16 rounded-full bg-accent-50 grid place-items-center mx-auto">
+          <svg viewBox="0 0 24 24" class="w-8 h-8 text-accent-600" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg>
+        </div>
+        <h3 class="mt-5 text-[1.45rem] font-extrabold tracking-tight">Salamat! Your request is in.</h3>
+        <p class="mt-2.5 text-ink-soft max-w-[44ch] mx-auto leading-relaxed">We’ve received your demo request and our team will reach out soon to set you up. Watch your inbox and phone for our message.</p>
+        <div id="leadEcho" class="mt-6 inline-block text-left text-[14px] bg-paper hairline rounded-[12px] px-5 py-4 leading-relaxed"></div>
+        <div class="mt-7">
+          <button id="resetBtn" type="button" class="inline-flex items-center bg-white hairline text-ink font-semibold px-5 py-2.5 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition">Submit another request</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="bg-ink text-white/60 pt-16 pb-9">
+  <div class="max-w-[1160px] mx-auto px-6">
+    <div class="grid md:grid-cols-[1.5fr_1fr_1fr_1fr] gap-10">
+      <div>
+        <div class="flex items-center gap-2.5 text-white">
+          <span class="w-8 h-8 rounded-[9px] bg-white text-ink grid place-items-center font-extrabold text-[15px]">V</span>
+          <span class="font-extrabold text-[18px] tracking-tightest">VendoPOS</span>
+        </div>
+        <p class="mt-4 text-[0.92rem] leading-relaxed max-w-[34ch]">One multi-tenant POS + ERP platform built for how Filipino businesses actually operate.</p>
+      </div>
+      <div>
+        <h4 class="text-white text-[12.5px] font-bold uppercase tracking-widest mb-4">Product</h4>
+        <ul class="space-y-2.5 text-[0.92rem]">
+          <li><a href="#tools" class="hover:text-white transition">Core Tools</a></li>
+          <li><a href="#why" class="hover:text-white transition">Why VendoPOS</a></li>
+          <li><a href="#pricing" class="hover:text-white transition">Pricing</a></li>
+          <li><a href="#how" class="hover:text-white transition">How it works</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="text-white text-[12.5px] font-bold uppercase tracking-widest mb-4">Company</h4>
+        <ul class="space-y-2.5 text-[0.92rem]">
+          <li><a href="#demo" class="hover:text-white transition">Request a Demo</a></li>
+          <li><a href="#faq" class="hover:text-white transition">FAQ</a></li>
+          <li><a href="#" class="hover:text-white transition">Contact</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="text-white text-[12.5px] font-bold uppercase tracking-widest mb-4">Legal</h4>
+        <ul class="space-y-2.5 text-[0.92rem]">
+          <li><a href="#" class="hover:text-white transition">Privacy Policy</a></li>
+          <li><a href="#" class="hover:text-white transition">Terms of Service</a></li>
+          <li><a href="#" class="hover:text-white transition">Data &amp; Security</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="mt-12 pt-7 border-t border-white/10 flex flex-wrap justify-between gap-3 text-[13px]">
+      <span>© 2026 VendoPOS. All rights reserved.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // --- Demo form: client-side validation + simulated POST /api/leads (the PRD's one server seam) ---
+  const form = document.getElementById('demoForm');
+  const successPanel = document.getElementById('successPanel');
+  const leadEcho = document.getElementById('leadEcho');
+  const resetBtn = document.getElementById('resetBtn');
+
+  const REQUIRED = ['name', 'businessName', 'email', 'phone', 'businessType'];
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function fieldWrap(name) { return form.querySelector(`#${name}`).closest('.field-wrap'); }
+  function setError(name, msg) {
+    const wrap = fieldWrap(name);
+    const errEl = form.querySelector(`[data-err="${name}"]`);
+    if (wrap) wrap.classList.toggle('invalid', !!msg);
+    if (errEl) errEl.textContent = msg || '';
+  }
+
+  function validate(data) {
+    const errors = {};
+    REQUIRED.forEach(k => {
+      if (!String(data[k] || '').trim()) errors[k] = 'This field is required.';
+    });
+    if (data.email && !EMAIL_RE.test(data.email.trim())) errors.email = 'Please enter a valid email address.';
+    if (data.phone && data.phone.replace(/\D/g, '').length < 7) errors.phone = 'Please enter a valid phone number.';
+    return errors;
+  }
+
+  // Simulates the server-side Route Handler: validate → persist/dispatch → respond.
+  function submitLead(payload) {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        const errors = validate(payload);
+        if (Object.keys(errors).length) reject({ validation: errors });
+        else resolve({ ok: true, lead: payload }); // real app: email/notify the Super Admin
+      }, 400);
+    });
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    REQUIRED.forEach(k => setError(k, ''));
+    const payload = Object.fromEntries(new FormData(form).entries());
+
+    const localErrors = validate(payload);
+    if (Object.keys(localErrors).length) {
+      Object.entries(localErrors).forEach(([k, msg]) => setError(k, msg));
+      const firstBad = form.querySelector('.field-wrap.invalid input, .field-wrap.invalid select');
+      if (firstBad) firstBad.focus();
+      return;
+    }
+
+    try {
+      const res = await submitLead(payload);
+      const L = res.lead;
+      leadEcho.innerHTML =
+        `<strong>${esc(L.name)}</strong> — ${esc(L.businessName)}<br>` +
+        `${esc(L.email)} · ${esc(L.phone)}<br>` +
+        `Business type: ${esc(L.businessType)}` +
+        (L.message ? `<br>“${esc(L.message)}”` : '');
+      form.classList.add('hidden');
+      successPanel.classList.remove('hidden');
+      successPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (err) {
+      if (err && err.validation) Object.entries(err.validation).forEach(([k, msg]) => setError(k, msg));
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    form.reset();
+    REQUIRED.forEach(k => setError(k, ''));
+    successPanel.classList.add('hidden');
+    form.classList.remove('hidden');
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  form.addEventListener('input', (e) => { if (e.target.name) setError(e.target.name, ''); });
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  // --- Scroll reveal ---
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>

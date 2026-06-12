@@ -1,0 +1,95 @@
+/**
+ * Client for the Super Admin Leads pipeline (`/api/v1/admin/leads/*`).
+ * SUPER_ADMIN-only server-side; calls ride with `credentials: "include"`.
+ */
+import { API_BASE_URL } from "./api";
+
+const BASE = `${API_BASE_URL}/api/v1/admin/leads`;
+
+export type LeadStatus = "PENDING_DEMO" | "APPROVED" | "REJECTED";
+export type Plan = "starter" | "business" | "enterprise";
+
+export interface Lead {
+  id: string;
+  businessName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  status: LeadStatus;
+  requestedAt: string;
+  businessType: string | null;
+  message: string | null;
+}
+
+export interface ProvisionPayload {
+  storeName: string;
+  slug: string;
+  plan: Plan;
+  ownerEmail: string;
+  ownerName: string;
+}
+
+export interface ProvisionedTenant {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+}
+
+export type Result<T> =
+  | ({ ok: true } & T)
+  | { ok: false; error?: string; field?: string; errors?: Record<string, string> };
+
+const NETWORK_ERR = { ok: false as const, error: "Could not reach the server. Check your connection." };
+
+async function readJson<T>(res: Response): Promise<Result<T>> {
+  try {
+    return (await res.json()) as Result<T>;
+  } catch {
+    return { ok: false, error: "Unexpected server response." };
+  }
+}
+
+/** Mirrors the backend slugify so the drawer previews the exact stored slug. */
+export function slugify(input: string): string {
+  return input
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
+export async function listLeads(): Promise<Result<{ leads: Lead[] }>> {
+  try {
+    return await readJson(await fetch(`${BASE}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function approveLead(
+  id: string,
+  payload: ProvisionPayload,
+): Promise<Result<{ tenant: ProvisionedTenant; lead: Lead }>> {
+  try {
+    const res = await fetch(`${BASE}/${id}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+    return await readJson(res);
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function rejectLead(id: string): Promise<Result<{ lead: Lead }>> {
+  try {
+    const res = await fetch(`${BASE}/${id}/reject`, { method: "POST", credentials: "include" });
+    return await readJson(res);
+  } catch {
+    return NETWORK_ERR;
+  }
+}

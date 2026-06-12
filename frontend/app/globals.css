@@ -1,0 +1,421 @@
+@import "tailwindcss";
+
+/* Class-strategy dark mode: `dark:` responds to a .dark ancestor (applied by
+   the authenticated app shells onto their own root, not <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- VendoPOS design tokens (Tailwind v4 CSS-first config) ---- */
+@theme {
+  --font-sans: var(--font-jakarta), "Inter", system-ui, sans-serif;
+
+  /* Ink reads warm-charcoal, not cool navy — pen on a ledger, not a UI chrome. */
+  --color-ink: #15171c;
+  --color-ink-soft: #585d68;
+  --color-ink-faint: #8b8f99;
+
+  /* Brand blue, deepened and de-neoned: trust/ink, not a notification badge.
+     It now pops against the warm ivory canvas rather than dissolving into a
+     cold blue-gray field. */
+  --color-brand-50: #eef1fe;
+  --color-brand-100: #dce3fd;
+  --color-brand-200: #bccbfa;
+  --color-brand-400: #5775f3;
+  --color-brand-500: #2b50ea;
+  --color-brand-600: #1d40cf;
+  --color-brand-700: #1834a8;
+
+  /* Accent = settled money. Deeper emerald so it feels like cash on the counter,
+     not a generic success toast. */
+  --color-accent-50: #e6f6ef;
+  --color-accent-500: #0aa372;
+  --color-accent-600: #088057;
+
+  /* Warm ivory ledger paper — the canvas that gives the whole product its
+     temperature. White cards sit crisp on top of it. */
+  --color-paper: #f6f4ee;
+  /* Card / panel surface — replaces bare bg-white so dark mode can retint it. */
+  --color-surface: #ffffff;
+
+  /* Card / panel surface — replaces bare bg-white so dark mode can retint it.
+     surface-2 is the next elevation up (dropdowns, popovers, the figure that
+     should read as floating above a card). In light it leans on shadow; in dark
+     it steps a few % lighter. */
+  --color-surface-2: #ffffff;
+
+  --tracking-tightest: -0.035em;
+  --radius-xl2: 1.125rem;
+
+  /* ---- Type scale ----------------------------------------------------------
+     One ladder instead of eyeballed text-[12.5px] literals. Body steps bake a
+     line-height; the numeric/display steps also bake the tight tracking the
+     ledger wants, so a hero figure is one class, not three. */
+  --text-cap: 0.6875rem;           /* 11 — uppercase labels, badges, tags */
+  --text-cap--line-height: 1rem;
+  --text-fine: 0.75rem;            /* 12 — metadata, captions, fine print */
+  --text-fine--line-height: 1.1rem;
+  --text-note: 0.8125rem;          /* 13 — secondary body, supporting copy */
+  --text-note--line-height: 1.25rem;
+  --text-title: 1.15rem;           /* page / header titles */
+  --text-title--line-height: 1.35rem;
+  --text-title--letter-spacing: -0.035em;
+  --text-stat: 1.8rem;             /* KPI figures */
+  --text-stat--line-height: 1;
+  --text-stat--letter-spacing: -0.035em;
+  --text-hero: 2.4rem;             /* overview headline figures */
+  --text-hero--line-height: 1;
+  --text-hero--letter-spacing: -0.04em;
+  --text-feature: 3rem;            /* the single dominant figure on a screen */
+  --text-feature--line-height: 1;
+  --text-feature--letter-spacing: -0.04em;
+
+  --shadow-soft: 0 1px 2px rgba(11, 18, 32, 0.04), 0 14px 36px rgba(11, 18, 32, 0.06);
+  --shadow-card: 0 1px 2px rgba(11, 18, 32, 0.03), 0 8px 24px rgba(11, 18, 32, 0.05);
+  --shadow-btn: 0 1px 2px rgba(29, 64, 207, 0.18), 0 6px 18px rgba(29, 64, 207, 0.16);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: #fff;
+  color: var(--color-ink);
+}
+
+/* ---- Hairline borders: 1px solid rgba(11,18,32,0.07) ----
+   Two weights, not one. `hairline` is the quiet default for card edges and
+   section dividers; `hairline-strong` is the emphasis weight for boundaries
+   that need to be felt — a focal panel, a hovered tile, a header underline. */
+.hairline {
+  border: 1px solid rgba(11, 18, 32, 0.07);
+}
+.hairline-strong {
+  border: 1px solid rgba(11, 18, 32, 0.12);
+}
+.hairline-strong-t {
+  border-top: 1px solid rgba(11, 18, 32, 0.12);
+}
+.hairline-t {
+  border-top: 1px solid rgba(11, 18, 32, 0.07);
+}
+.hairline-b {
+  border-bottom: 1px solid rgba(11, 18, 32, 0.07);
+}
+.hairline-r {
+  border-right: 1px solid rgba(11, 18, 32, 0.07);
+}
+.hairline-y {
+  border-top: 1px solid rgba(11, 18, 32, 0.07);
+  border-bottom: 1px solid rgba(11, 18, 32, 0.07);
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  backdrop-filter: saturate(180%) blur(12px);
+}
+
+.grid-bg {
+  background-image: linear-gradient(rgba(11, 18, 32, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 18, 32, 0.035) 1px, transparent 1px);
+  background-size: 38px 38px;
+}
+
+/* ---- FAQ disclosure ---- */
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+.faq-plus {
+  transition: transform 0.25s ease;
+}
+details[open] .faq-plus {
+  transform: rotate(45deg);
+}
+
+/* ---- Form fields: low contrast until focus ---- */
+.field-input {
+  border: 1px solid rgba(11, 18, 32, 0.1);
+  background: #fbfcfe;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.field-input::placeholder {
+  color: #98a2b3;
+}
+.field-input:focus {
+  outline: none;
+  border-color: #2f5bff;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(47, 91, 255, 0.12);
+}
+.field-wrap.invalid .field-input {
+  border-color: #e0455e;
+  box-shadow: 0 0 0 4px rgba(224, 69, 94, 0.1);
+}
+
+/* ---- "Trusted by" logo marquee (infinite horizontal loop) ----
+   The track holds the brand set twice (Batch 1 + Batch 2). Translating it from
+   0% to exactly -50% slides the first batch fully off the left as the second
+   batch arrives flush behind it, so the loop resets at the midpoint with no jump
+   or seam. `will-change: transform` promotes the track to its own GPU layer for
+   a hardware-accelerated, jank-free scroll. */
+@keyframes marquee-infinite {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee-infinite {
+  width: max-content;
+  animation: marquee-infinite 25s linear infinite;
+  will-change: transform;
+}
+/* Pause the belt on hover so a visitor can read / click a wordmark. */
+.animate-marquee-infinite:hover {
+  animation-play-state: paused;
+}
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee-infinite {
+    animation: none;
+  }
+}
+
+/* ---- Scroll reveal ---- */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ---- Slide-over drawer (right-anchored action panels) ---- */
+@keyframes vp-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.slide-over {
+  animation: vp-slide-in 0.18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide-over {
+    animation: none;
+  }
+}
+
+/* ---- Centered overlay: backdrop fade + card scale/float ---- */
+@keyframes vp-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes vp-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vp-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes vp-pop-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(1rem) scale(0.95);
+  }
+}
+.overlay-backdrop {
+  animation: vp-overlay-in 0.2s ease-out forwards;
+}
+.overlay-backdrop.closing {
+  animation: vp-overlay-out 0.2s ease-in forwards;
+}
+.overlay-card {
+  animation: vp-pop-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.overlay-card.closing {
+  animation: vp-pop-out 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+/* ---- Alert toast entrance (slide + fade in from the right edge) ---- */
+@keyframes vp-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+.toast-in {
+  animation: vp-toast-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-in {
+    animation: none;
+  }
+}
+
+/* Internal panel step transition (e.g. profile selector → PIN pad). */
+@keyframes vp-step-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.step-in {
+  animation: vp-step-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay-backdrop,
+  .overlay-card,
+  .step-in {
+    animation: none;
+  }
+}
+
+/* =========================================================================
+   Dark mode. Applied via a `.dark` class on the authenticated app shells.
+   Most utilities read theme CSS variables, so retinting the variables here
+   flips text, panels, borders, inputs and tinted badges in one place. The
+   few dual-role shades (e.g. bg-ink chips/scrims) are patched with explicit
+   dark: utilities at the call sites.
+   ========================================================================= */
+.dark {
+  --color-ink: #ecebe6; /* primary text — warm paper-white, not cool */
+  --color-ink-soft: #9b9ea7;
+  --color-ink-faint: #6e727b;
+
+  /* Night is neutral charcoal, not blue — the dark counterpart of the ivory
+     canvas, so the brand blue pops in both modes instead of blending in. */
+  --color-paper: #101218; /* page canvas / offset */
+  --color-surface: #181b23; /* cards, sidebars, top bars, modals */
+  --color-surface-2: #20242e; /* elevated: dropdowns, popovers, focal figure */
+
+  /* tinted badge/active backgrounds (bg-only shades) */
+  --color-brand-50: #1c2a52;
+  --color-brand-100: #243463;
+  --color-brand-200: #324679;
+  --color-brand-700: #b9c8ff; /* text on the dark brand tint */
+
+  --color-accent-50: #11271f;
+  --color-amber-50: #2c2208;
+  --color-rose-50: #2c1218;
+}
+
+/* Hairline borders → light, low-opacity in dark. */
+.dark .hairline {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+.dark .hairline-strong {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.dark .hairline-strong-t {
+  border-top-color: rgba(255, 255, 255, 0.16);
+}
+.dark .hairline-t {
+  border-top-color: rgba(255, 255, 255, 0.09);
+}
+.dark .hairline-b {
+  border-bottom-color: rgba(255, 255, 255, 0.09);
+}
+.dark .hairline-r {
+  border-right-color: rgba(255, 255, 255, 0.09);
+}
+.dark .hairline-y {
+  border-top-color: rgba(255, 255, 255, 0.09);
+  border-bottom-color: rgba(255, 255, 255, 0.09);
+}
+.dark .hairline-l {
+  border-left-color: rgba(255, 255, 255, 0.09);
+}
+.dark .lg\:border-\[rgba\(11\,18\,32\,0\.07\)\] {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+/* Glass + blueprint canvas in dark. */
+.dark .glass {
+  background: rgba(16, 18, 24, 0.72);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  backdrop-filter: saturate(160%) blur(12px);
+}
+.dark .grid-bg {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+}
+
+/* Form fields in dark. */
+.dark .field-input {
+  background: #0f1830;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--color-ink);
+}
+.dark .field-input::placeholder {
+  color: #6b7891;
+}
+.dark .field-input:focus {
+  background: #0f1830;
+  border-color: #5e7dff;
+  box-shadow: 0 0 0 4px rgba(94, 125, 255, 0.18);
+}
+
+/* Smooth, fluid color transitions whenever the mode flips. Scoped to the
+   themed workspaces so marketing pages are unaffected. */
+.theme-root,
+.theme-root * {
+  /* Use explicit longhands (not the `transition` shorthand) and include the
+     properties existing micro-interactions animate (transform/box-shadow/
+     opacity), so theme color shifts animate without clobbering hover/active. */
+  transition-property: background-color, border-color, color, fill, box-shadow, transform, opacity;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-root,
+  .theme-root * {
+    transition: none;
+  }
+}
