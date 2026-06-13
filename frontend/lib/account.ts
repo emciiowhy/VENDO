@@ -86,6 +86,10 @@ export interface ReceiptSettings {
   vatLabel: string | null;
   invoicePrefix: string | null;
   showLogo: boolean;
+  /** BIR machine-accreditation footer fields. */
+  ptu: string | null;
+  min: string | null;
+  serial: string | null;
 }
 
 export interface ReceiptSettingsInput {
@@ -94,6 +98,9 @@ export interface ReceiptSettingsInput {
   vatLabel?: string;
   invoicePrefix?: string;
   showLogo: boolean;
+  ptu?: string;
+  min?: string;
+  serial?: string;
 }
 
 export const getReceipt = () => getJson<{ settings: ReceiptSettings }>("/receipt");

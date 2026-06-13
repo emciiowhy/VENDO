@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "./Icon";
+import { BrandMark } from "./BrandMark";
 
 /**
  * Marketing top-nav with mega-menu dropdowns. Server-rendered shell, but
@@ -17,6 +18,8 @@ import { Icon, type IconName } from "./Icon";
 interface MenuLink {
   label: string;
   href: string;
+  /** Optional leading icon (used by the grouped Industry menu). */
+  icon?: IconName;
 }
 
 interface MenuGroup {
@@ -33,23 +36,58 @@ interface MenuDef {
   label: string;
   /** Multi-column mega panel (Products) vs. a single tidy column. */
   columns: MenuGroup[][];
+  /** Optional full-width footer link, e.g. "View all industries". */
+  footer?: { label: string; href: string };
 }
 
 const INDUSTRY: MenuDef = {
   key: "industry",
   label: "Industry",
+  footer: { label: "View all industries", href: "/industry" },
   columns: [
     [
       {
-        title: "Built for every counter",
+        title: "F&B Business",
         icon: "store",
         links: [
-          { label: "Retail & E-commerce", href: "/industry/retail-ecommerce" },
-          { label: "Food & Beverage (F&B)", href: "/industry/food-and-beverage" },
-          { label: "Hospitality & Lodging", href: "/industry/hospitality-lodging" },
-          { label: "Personal Care & Services", href: "/industry/personal-care-services" },
-          { label: "Healthcare & Pharmacies", href: "/industry/healthcare-pharmacies" },
-          { label: "Warehouse, Distribution & Logistics", href: "/industry/warehouse-logistics" },
+          { label: "Cafés & Bakeries", href: "/industry/cafes-bakeries", icon: "store" },
+          { label: "Restaurants", href: "/industry/restaurants", icon: "receipt" },
+          { label: "Quick Serve", href: "/industry/quick-serve", icon: "bolt" },
+          { label: "Fine Dining & Specialty", href: "/industry/fine-dining", icon: "heart" },
+          { label: "Cloud Kitchen & Delivery Only", href: "/industry/cloud-kitchen", icon: "truck" },
+        ],
+      },
+    ],
+    [
+      {
+        title: "Retail Business",
+        icon: "cart",
+        accent: true,
+        links: [
+          { label: "Grocery & Supermarket", href: "/industry/grocery-supermarket", icon: "cart" },
+          { label: "Convenience Store", href: "/industry/convenience-store", icon: "store" },
+          { label: "Fashion & Apparel", href: "/industry/fashion-apparel", icon: "tag" },
+          { label: "Specialty Store", href: "/industry/specialty-store", icon: "layers" },
+          { label: "Online Store / e-Commerce", href: "/industry/online-store", icon: "monitor" },
+        ],
+      },
+    ],
+    [
+      {
+        title: "Service",
+        icon: "heart",
+        links: [
+          { label: "Personal Care & Salons", href: "/industry/personal-care", icon: "heart" },
+          { label: "Healthcare & Pharmacies", href: "/industry/healthcare", icon: "shield" },
+        ],
+      },
+      {
+        title: "Enterprise",
+        icon: "building",
+        accent: true,
+        links: [
+          { label: "Multi-location & Franchise", href: "/industry/multi-location", icon: "building" },
+          { label: "Warehouse & Distribution", href: "/industry/warehouse-logistics", icon: "truck" },
         ],
       },
     ],
@@ -59,6 +97,7 @@ const INDUSTRY: MenuDef = {
 const PRODUCTS: MenuDef = {
   key: "products",
   label: "Products",
+  footer: { label: "View all products", href: "/products" },
   columns: [
     [
       {
@@ -86,8 +125,18 @@ const PRODUCTS: MenuDef = {
     ],
     [
       {
+        title: "Back office & operations",
+        icon: "layers",
+        links: [
+          { label: "Finance & P&L", href: "/products/finance" },
+          { label: "Procurement", href: "/products/procurement" },
+          { label: "Manufacturing", href: "/products/manufacturing" },
+        ],
+      },
+      {
         title: "Customer Loyalty made easy",
         icon: "tag",
+        accent: true,
         links: [
           { label: "Loyalty Program", href: "/products/loyalty-program" },
           { label: "Membership", href: "/products/membership" },
@@ -95,6 +144,8 @@ const PRODUCTS: MenuDef = {
           { label: "Customisable Promotions", href: "/products/promotions" },
         ],
       },
+    ],
+    [
       {
         title: "Reach more customers and sell online",
         icon: "monitor",
@@ -114,6 +165,7 @@ const PRODUCTS: MenuDef = {
 const HARDWARE: MenuDef = {
   key: "hardware",
   label: "Hardware",
+  footer: { label: "View all hardware & bundles", href: "/hardware" },
   columns: [
     [
       {
@@ -146,16 +198,17 @@ const HARDWARE: MenuDef = {
 const RESOURCES: MenuDef = {
   key: "resources",
   label: "Resources",
+  footer: { label: "Browse all resources", href: "/resources" },
   columns: [
     [
       {
         title: "Learn the platform",
         icon: "file",
         links: [
-          { label: "Blog", href: "/blog" },
-          { label: "How it works", href: "/#how" },
-          { label: "Why PH businesses switch", href: "/#why" },
-          { label: "FAQ", href: "/#faq" },
+          { label: "Blog", href: "/blog", icon: "file" },
+          { label: "How it works", href: "/#how", icon: "activity" },
+          { label: "Why PH businesses switch", href: "/#why", icon: "heart" },
+          { label: "FAQ", href: "/#faq", icon: "search" },
         ],
       },
     ],
@@ -191,13 +244,16 @@ function GroupBlock({ group }: { group: MenuGroup }) {
         <span className="text-[11.5px] font-bold tracking-wide uppercase">{group.title}</span>
       </div>
       <div className={`mt-2 h-px ${group.accent ? "bg-brand-500/70" : "bg-ink/10"}`} />
-      <ul className="mt-3 space-y-2.5">
+      <ul className="mt-3 space-y-1">
         {group.links.map((l) => (
           <li key={l.label}>
             <Link
               href={l.href}
-              className="block text-[14.5px] font-semibold text-ink hover:text-brand-600 transition"
+              className="flex items-center gap-2.5 -mx-2 px-2 py-1.5 rounded-lg text-[14px] font-semibold text-ink hover:bg-paper hover:text-brand-600 transition"
             >
+              {l.icon && (
+                <Icon name={l.icon} className="w-4 h-4 text-ink-faint shrink-0" strokeWidth={1.7} />
+              )}
               {l.label}
             </Link>
           </li>
@@ -207,17 +263,27 @@ function GroupBlock({ group }: { group: MenuGroup }) {
   );
 }
 
+/** Panel width keyed by the number of columns the menu declares. */
+const PANEL_WIDTH: Record<number, string> = {
+  1: "w-[340px]",
+  2: "w-[680px]",
+  3: "w-[860px]",
+};
+const PANEL_GRID: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+};
+
 /** The dropdown panel rendered under an open menu item. */
 function MegaPanel({ menu }: { menu: MenuDef }) {
-  const isWide = menu.columns.length > 1;
+  const cols = menu.columns.length;
   return (
     <div
-      className={`absolute left-1/2 -translate-x-1/2 top-full pt-3 z-50 ${
-        isWide ? "w-[680px]" : "w-[340px]"
-      }`}
+      className={`absolute left-1/2 -translate-x-1/2 top-full pt-3 z-50 ${PANEL_WIDTH[cols] ?? "w-[680px]"}`}
     >
       <div className="rounded-2xl bg-surface hairline shadow-2xl p-7">
-        <div className={`grid gap-x-10 gap-y-7 ${isWide ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className={`grid gap-x-9 gap-y-7 ${PANEL_GRID[cols] ?? "grid-cols-2"}`}>
           {menu.columns.map((col, ci) => (
             <div key={ci} className="space-y-7">
               {col.map((group) => (
@@ -226,6 +292,15 @@ function MegaPanel({ menu }: { menu: MenuDef }) {
             </div>
           ))}
         </div>
+        {menu.footer && (
+          <Link
+            href={menu.footer.href}
+            className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-paper hairline py-3 text-[13.5px] font-semibold text-ink hover:text-brand-600 transition"
+          >
+            {menu.footer.label}
+            <Icon name="arrow" className="w-4 h-4" strokeWidth={1.8} />
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -259,9 +334,7 @@ export function Nav() {
     <header ref={navRef} className="sticky top-0 z-50 glass hairline-b">
       <div className="max-w-[1160px] mx-auto px-6 h-[68px] flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="w-8 h-8 rounded-[9px] bg-ink text-white grid place-items-center font-extrabold text-[15px] tracking-tight">
-            V
-          </span>
+          <BrandMark className="w-8 h-8" />
           <span className="font-extrabold text-[19px] tracking-tightest">VendoPOS</span>
         </Link>
 

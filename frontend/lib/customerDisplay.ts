@@ -20,6 +20,8 @@ export interface DisplayLine {
   qty: number;
   unitCents: number;
   lineCents: number;
+  /** Raw product image reference (resolved to a URL on the display), or null. */
+  imageUrl: string | null;
 }
 
 export interface DisplaySnapshot {

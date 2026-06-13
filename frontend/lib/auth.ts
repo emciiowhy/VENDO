@@ -20,6 +20,8 @@ export interface SessionUser {
   name: string;
   /** Live store/business name from /auth/me (null for SUPER_ADMIN). */
   tenantName?: string | null;
+  /** Owner-uploaded store logo URL from /auth/me (null when none / SUPER_ADMIN). */
+  tenantLogoUrl?: string | null;
 }
 
 /** Human-readable copy for the `?error=` codes the backend redirects with. */

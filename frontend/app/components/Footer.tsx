@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandMark } from "./BrandMark";
 
 const columns = [
   {
@@ -36,9 +37,7 @@ export function Footer() {
         <div className="grid md:grid-cols-[1.5fr_1fr_1fr_1fr] gap-10">
           <div>
             <div className="flex items-center gap-2.5 text-white">
-              <span className="w-8 h-8 rounded-[9px] bg-white text-ink grid place-items-center font-extrabold text-[15px]">
-                V
-              </span>
+              <BrandMark className="w-8 h-8" />
               <span className="font-extrabold text-[18px] tracking-tightest">VendoPOS</span>
             </div>
             <p className="mt-4 text-[0.92rem] leading-relaxed max-w-[34ch]">

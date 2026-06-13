@@ -1,4 +1,5 @@
 import { pool, query } from "../db.js";
+import { moveStock } from "../inventory/stockLedger.js";
 import { getPaymentQrMap } from "../merchant/paymentQr.repository.js";
 import { notifyLowStock, type LowStockHit } from "../notifications/notifications.repository.js";
 import type {
@@ -35,8 +36,24 @@ interface CatalogRow {
  * `tenantId` (read from the verified session, never the request).
  */
 export async function getCatalog(tenantId: string): Promise<Catalog> {
-  const store = await query<{ name: string; slug: string | null }>(
-    `SELECT name, slug FROM tenants WHERE id = $1`,
+  const store = await query<{
+    name: string;
+    slug: string | null;
+    address: string | null;
+    phone: string | null;
+    tin: string | null;
+    vat_label: string | null;
+    receipt_header: string | null;
+    receipt_footer: string | null;
+    logo_url: string | null;
+    receipt_show_logo: boolean;
+    receipt_ptu: string | null;
+    receipt_min: string | null;
+    receipt_serial: string | null;
+  }>(
+    `SELECT name, slug, address, phone, tin, vat_label, receipt_header, receipt_footer,
+            logo_url, receipt_show_logo, receipt_ptu, receipt_min, receipt_serial
+       FROM tenants WHERE id = $1`,
     [tenantId],
   );
 
@@ -69,8 +86,22 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
     imageUrl: r.image_url,
   }));
 
+  const s = store.rows[0];
   return {
-    store: { name: store.rows[0]?.name ?? "Store", slug: store.rows[0]?.slug ?? null },
+    store: {
+      name: s?.name ?? "Store",
+      slug: s?.slug ?? null,
+      address: s?.address ?? null,
+      phone: s?.phone ?? null,
+      tin: s?.tin ?? null,
+      vatLabel: s?.vat_label ?? null,
+      receiptHeader: s?.receipt_header ?? null,
+      receiptFooter: s?.receipt_footer ?? null,
+      logoUrl: s?.receipt_show_logo === false ? null : s?.logo_url ?? null,
+      ptu: s?.receipt_ptu ?? null,
+      min: s?.receipt_min ?? null,
+      serial: s?.receipt_serial ?? null,
+    },
     categories: cats.rows,
     products,
     paymentQrs,
@@ -125,12 +156,25 @@ export async function createOrder(
       wanted.set(it.productId, (wanted.get(it.productId) ?? 0) + it.qty);
     }
 
-    const resolved: { id: string; name: string; unit: number; qty: number; lineTotal: number }[] = [];
+    const resolved: {
+      id: string;
+      name: string;
+      unit: number;
+      qty: number;
+      lineTotal: number;
+      threshold: number;
+    }[] = [];
     let totalCents = 0;
 
     for (const [productId, qty] of wanted) {
-      const r = await client.query<{ id: string; name: string; price_cents: number; stock: number }>(
-        `SELECT id, name, price_cents, stock
+      const r = await client.query<{
+        id: string;
+        name: string;
+        price_cents: number;
+        stock: number;
+        low_stock_threshold: number;
+      }>(
+        `SELECT id, name, price_cents, stock, low_stock_threshold
            FROM products
           WHERE id = $1 AND tenant_id = $2 AND is_active = TRUE
           FOR UPDATE`,
@@ -150,7 +194,14 @@ export async function createOrder(
       }
       const lineTotal = row.price_cents * qty;
       totalCents += lineTotal;
-      resolved.push({ id: row.id, name: row.name, unit: row.price_cents, qty, lineTotal });
+      resolved.push({
+        id: row.id,
+        name: row.name,
+        unit: row.price_cents,
+        qty,
+        lineTotal,
+        threshold: row.low_stock_threshold,
+      });
     }
 
     // Apply a cart-level discount (server-authoritative). `percent` clamps to
@@ -182,21 +233,10 @@ export async function createOrder(
       changeCents = tendered - netCents;
     }
 
-    // Decrement stock under the held locks, capturing any product that lands
-    // at/below its low-stock floor so the owner can be notified post-commit.
+    // Stock is decremented *after* the sale row exists (below), so each movement
+    // is journalled against its sale's id. Low-stock hits are gathered there for
+    // the post-commit notification.
     const lowStockHits: LowStockHit[] = [];
-    for (const it of resolved) {
-      const dec = await client.query<{ name: string; stock: number; low_stock_threshold: number }>(
-        `UPDATE products SET stock = stock - $1, updated_at = now()
-          WHERE id = $2
-        RETURNING name, stock, low_stock_threshold`,
-        [it.qty, it.id],
-      );
-      const row = dec.rows[0];
-      if (row && row.low_stock_threshold > 0 && row.stock <= row.low_stock_threshold) {
-        lowStockHits.push({ id: it.id, name: row.name, stock: row.stock, threshold: row.low_stock_threshold });
-      }
-    }
 
     const vatCents = Math.round((netCents * VAT_NUM) / VAT_DEN);
     const subtotalCents = netCents - vatCents;
@@ -269,6 +309,28 @@ export async function createOrder(
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [saleId, it.id, it.name, it.unit, it.qty, it.lineTotal],
       );
+    }
+
+    // Decrement stock through the ledger (rows already locked above), one signed
+    // movement per line tagged to this sale. Stock was validated under the held
+    // lock, so a NEGATIVE result here would mean a logic error, not a race —
+    // surface it by throwing into the catch/ROLLBACK rather than overselling.
+    for (const it of resolved) {
+      const moved = await moveStock(client, {
+        tenantId,
+        productId: it.id,
+        qtyDelta: -it.qty,
+        reason: "sale",
+        refTable: "sales",
+        refId: saleId,
+        createdBy: cashierUserId,
+      });
+      if (!moved.ok) {
+        throw new Error(`stock ledger refused sale line ${it.id}: ${moved.code}`);
+      }
+      if (it.threshold > 0 && moved.balanceAfter <= it.threshold) {
+        lowStockHits.push({ id: it.id, name: it.name, stock: moved.balanceAfter, threshold: it.threshold });
+      }
     }
 
     // Loyalty: 1 point per ₱100 of net sale, accrued in the same transaction.

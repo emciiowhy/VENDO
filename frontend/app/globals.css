@@ -30,6 +30,13 @@
   --color-accent-500: #0aa372;
   --color-accent-600: #088057;
 
+  /* Amber = roadmap / "coming soon" — warm, distinct from accent green and
+     brand blue, readable on the ivory canvas. */
+  --color-amber-50: #fdf3e3;
+  --color-amber-100: #fbe6c2;
+  --color-amber-500: #e0930b;
+  --color-amber-600: #b9740a;
+
   /* Warm ivory ledger paper — the canvas that gives the whole product its
      temperature. White cards sit crisp on top of it. */
   --color-paper: #f6f4ee;
@@ -317,6 +324,164 @@ details[open] .faq-plus {
   }
 }
 
+/* ---- Customer-facing display (second screen) motion -----------------------
+   Used only by /pos/customer-display. A glanceable screen, so motion is gentle
+   and purposeful: rows ease in, the total pops when it changes, the idle brand
+   breathes, and the QR has a scanning sweep. All disabled under reduced-motion. */
+@keyframes cd-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes cd-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes cd-float {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-10px);
+  }
+}
+@keyframes cd-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes cd-scan {
+  0% {
+    transform: translateY(0%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(1000%);
+    opacity: 0;
+  }
+}
+@keyframes cd-sparkle {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-26px) scale(1);
+    opacity: 0;
+  }
+}
+.cd-row-in {
+  animation: cd-row-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cd-pop {
+  animation: cd-pop 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cd-float {
+  animation: cd-float 3.6s ease-in-out infinite alternate;
+}
+.cd-ring {
+  animation: cd-ring 2.6s ease-out infinite;
+}
+.cd-scan {
+  animation: cd-scan 2.4s ease-in-out infinite;
+}
+.cd-sparkle {
+  animation: cd-sparkle 1.5s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cd-row-in,
+  .cd-pop,
+  .cd-float,
+  .cd-ring,
+  .cd-scan,
+  .cd-sparkle {
+    animation: none;
+  }
+}
+
+/* ---- System-health query-latency monitor ----------------------------------
+   The latency panel reads like a vitals trace: the sparkline draws itself on
+   each new sample, a glow sweeps left→right across the plot continuously, and
+   the live cursor breathes. Purposeful, infrastructure-room motion. */
+@keyframes hl-draw {
+  from {
+    stroke-dashoffset: var(--hl-len, 1000);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes hl-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+@keyframes hl-cursor {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.55);
+    opacity: 0.55;
+  }
+}
+.hl-draw {
+  stroke-dasharray: var(--hl-len, 1000);
+  animation: hl-draw 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hl-sweep {
+  animation: hl-sweep 2.8s ease-in-out infinite;
+}
+.hl-cursor {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hl-cursor 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hl-draw,
+  .hl-sweep,
+  .hl-cursor {
+    animation: none;
+  }
+  .hl-draw {
+    stroke-dashoffset: 0;
+  }
+}
+
 /* =========================================================================
    Dark mode. Applied via a `.dark` class on the authenticated app shells.
    Most utilities read theme CSS variables, so retinting the variables here
@@ -343,6 +508,9 @@ details[open] .faq-plus {
 
   --color-accent-50: #11271f;
   --color-amber-50: #2c2208;
+  --color-amber-100: #3a2e0d;
+  --color-amber-500: #f0b429;
+  --color-amber-600: #f7c948; /* text on the dark amber tint */
   --color-rose-50: #2c1218;
 }
 

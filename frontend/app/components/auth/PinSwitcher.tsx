@@ -8,6 +8,7 @@ import { ForgotPin } from "./ForgotPin";
 import { useTheme } from "../theme/ThemeProvider";
 import { switchByPin } from "@/lib/auth";
 import { listCashiers, type CashierProfile } from "@/lib/pos";
+import { formatCents } from "@/lib/format";
 
 /**
  * The shared-terminal cashier switch (WARM terminal — a manager/owner is signed
@@ -22,15 +23,40 @@ import { listCashiers, type CashierProfile } from "@/lib/pos";
 export function PinSwitcher({
   triggerLabel = "Cashier? Enter your PIN",
   triggerClassName = "inline-flex items-center justify-center gap-2 w-full bg-surface hairline text-ink font-semibold text-[14.5px] py-3 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition duration-150",
+  openShift = null,
+  onCloseShift,
+  autoOpen = false,
+  hideTrigger = false,
+  onClose,
+  selectTitle = "Switch cashier",
+  selectSubtitle = "Choose your profile to take the till.",
 }: {
   triggerLabel?: string;
   triggerClassName?: string;
+  /**
+   * The CURRENT operator's open shift, if any. When set, switching cashiers
+   * first warns that the drawer is still open — handing the till to someone else
+   * without a Z-Read leaves an unreconciled shift. Null when the operator has no
+   * open shift (e.g. an owner/manager off-till), which skips the warning.
+   */
+  openShift?: { expectedCashCents: number } | null;
+  /** Jump the operator into the End-shift (Z-Read) flow from the warning. */
+  onCloseShift?: () => void;
+  /** Open immediately on mount (e.g. the "who's next?" prompt after a Z-Read). */
+  autoOpen?: boolean;
+  /** Render no trigger button — for a purely parent-controlled instance. */
+  hideTrigger?: boolean;
+  /** Notified when the switcher is dismissed (so a parent can unmount it). */
+  onClose?: () => void;
+  /** Heading copy for the profile-select step (e.g. "Who's on duty?"). */
+  selectTitle?: string;
+  selectSubtitle?: string;
 } = {}) {
   const { theme } = useTheme();
-  const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<"select" | "pin">("select");
+  const [open, setOpen] = useState(autoOpen);
+  const [step, setStep] = useState<"shiftWarn" | "select" | "pin">("select");
   const [cashiers, setCashiers] = useState<CashierProfile[]>([]);
-  const [loadingList, setLoadingList] = useState(false);
+  const [loadingList, setLoadingList] = useState(autoOpen);
   const [selected, setSelected] = useState<CashierProfile | null>(null);
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -45,12 +71,31 @@ export function PinSwitcher({
     setError(null);
     setSubmitting(false);
     setForgot(false);
-  }, []);
+    onClose?.();
+  }, [onClose]);
 
-  // Open + load profiles (in the handler — no setState-in-effect).
+  // Auto-opened (next-cashier) instance: load profiles on mount. No setState
+  // before the await keeps this off the cascading-render path the lint guards.
+  useEffect(() => {
+    if (!autoOpen) return;
+    let alive = true;
+    void (async () => {
+      const res = await listCashiers();
+      if (!alive) return;
+      setCashiers(res.ok ? res.cashiers : []);
+      setLoadingList(false);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [autoOpen]);
+
+  // Open + load profiles (in the handler — no setState-in-effect). If the
+  // current operator still has an open shift, lead with the reconcile warning;
+  // profiles load in the background so "Switch anyway" is instant.
   const openSwitcher = useCallback(async () => {
     setOpen(true);
-    setStep("select");
+    setStep(openShift ? "shiftWarn" : "select");
     setSelected(null);
     setPin("");
     setError(null);
@@ -58,7 +103,17 @@ export function PinSwitcher({
     const res = await listCashiers();
     setCashiers(res.ok ? res.cashiers : []);
     setLoadingList(false);
+  }, [openShift]);
+
+  const proceedToSelect = useCallback(() => {
+    setStep("select");
+    setError(null);
   }, []);
+
+  const closeShiftFromWarn = useCallback(() => {
+    close();
+    onCloseShift?.();
+  }, [close, onCloseShift]);
 
   const pickProfile = useCallback((c: CashierProfile) => {
     setSelected(c);
@@ -129,18 +184,23 @@ export function PinSwitcher({
 
   return (
     <>
-      <button type="button" onClick={() => void openSwitcher()} className={triggerClassName}>
-        <Icon name="users" className="w-[18px] h-[18px]" strokeWidth={1.7} />
-        {triggerLabel}
-      </button>
+      {!hideTrigger && (
+        <button type="button" onClick={() => void openSwitcher()} className={triggerClassName}>
+          <Icon name="users" className="w-[18px] h-[18px]" strokeWidth={1.7} />
+          {triggerLabel}
+        </button>
+      )}
 
       {open &&
         createPortal(
           // Portal to <body> so the fixed overlay escapes the POS header's
           // .glass (backdrop-filter) containing block — otherwise it'd be
-          // trapped/clipped to the 60px header. The theme class is carried in
-          // so dark-mode tokens still resolve outside the app shell root.
-          <div className={theme === "dark" ? "dark" : ""}>
+          // trapped/clipped to the 60px header. The theme class is carried in so
+          // dark-mode tokens resolve outside the app shell root; `text-ink` sets
+          // the base text colour too (the portal isn't under .theme-root, so
+          // headings/names would otherwise inherit browser-default black and go
+          // invisible on the dark card).
+          <div className={"text-ink " + (theme === "dark" ? "dark" : "")}>
             <div className="fixed inset-0 z-[120] grid place-items-center px-5" role="dialog" aria-modal="true" aria-label="Switch cashier">
               {/* Blurred full-screen scrim */}
               <button
@@ -166,12 +226,18 @@ export function PinSwitcher({
                 )}
                 <div>
                   <h3 className="text-[1.15rem] font-extrabold tracking-tight">
-                    {step === "select" ? "Switch cashier" : "Enter your PIN"}
+                    {step === "shiftWarn"
+                      ? "Shift still open"
+                      : step === "select"
+                        ? selectTitle
+                        : "Enter your PIN"}
                   </h3>
                   <p className="mt-0.5 text-[13px] text-ink-soft">
-                    {step === "select"
-                      ? "Choose your profile to take the till."
-                      : `Signing in as ${selected?.name ?? "cashier"} — 4 digits.`}
+                    {step === "shiftWarn"
+                      ? "Reconcile your drawer before handing over the till."
+                      : step === "select"
+                        ? selectSubtitle
+                        : `Signing in as ${selected?.name ?? "cashier"} — 4 digits.`}
                   </p>
                 </div>
               </div>
@@ -187,7 +253,42 @@ export function PinSwitcher({
 
             {/* Step content */}
             <div key={step} className="step-in px-6 pb-6">
-              {step === "select" ? (
+              {step === "shiftWarn" ? (
+                <div>
+                  <div className="flex items-start gap-3 rounded-[12px] bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-3.5">
+                    <Icon name="receipt" className="w-5 h-5 mt-0.5 text-amber-600 shrink-0" strokeWidth={1.8} />
+                    <div className="text-[13px] leading-relaxed text-ink">
+                      Your shift is still open
+                      {openShift ? (
+                        <>
+                          {" "}— the drawer should hold{" "}
+                          <span className="font-bold tabular-nums">{formatCents(openShift.expectedCashCents)}</span>
+                        </>
+                      ) : null}
+                      . Switching hands the till to another cashier without closing
+                      your shift, so the drawer won&apos;t be reconciled to you. End
+                      your shift (Z-Read) first unless you&apos;re sure.
+                    </div>
+                  </div>
+                  <div className="mt-5 grid gap-2.5">
+                    <button
+                      type="button"
+                      onClick={closeShiftFromWarn}
+                      className="inline-flex items-center justify-center gap-2 w-full bg-brand-600 text-white font-bold text-[14px] py-3 rounded-[10px] hover:bg-brand-700 transition duration-150"
+                    >
+                      <Icon name="receipt" className="w-[18px] h-[18px]" strokeWidth={1.9} />
+                      End my shift first
+                    </button>
+                    <button
+                      type="button"
+                      onClick={proceedToSelect}
+                      className="inline-flex items-center justify-center gap-2 w-full bg-surface hairline text-ink-soft font-semibold text-[13.5px] py-2.5 rounded-[10px] hover:text-ink hover:border-brand-200 transition duration-150"
+                    >
+                      Switch anyway
+                    </button>
+                  </div>
+                </div>
+              ) : step === "select" ? (
                 <div>
                   {loadingList ? (
                     <p className="py-8 text-center text-[13.5px] text-ink-soft">Loading profiles…</p>

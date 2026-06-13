@@ -154,7 +154,10 @@ productsRouter.post("/products", uploadProductImage, async (req, res) => {
 
     // Only stream the image to storage once the rest of the payload is valid.
     const imageUrl = req.file ? await putProductImage(req.file.buffer, req.file.mimetype) : null;
-    res.status(201).json({ ok: true, product: await createProduct(tenantId, parsed.data, imageUrl) });
+    res.status(201).json({
+      ok: true,
+      product: await createProduct(tenantId, parsed.data, imageUrl, req.user?.userId ?? null),
+    });
   } catch (err) {
     if (isUniqueViolation(err)) {
       return res.status(409).json({ ok: false, error: "A product with that SKU already exists." });
@@ -182,7 +185,13 @@ productsRouter.patch("/products/:id", uploadProductImage, async (req, res) => {
       imageUrl = null;
     }
 
-    const product = await updateProduct(tenantId, req.params.id, parsed.data, imageUrl);
+    const product = await updateProduct(
+      tenantId,
+      req.params.id,
+      parsed.data,
+      imageUrl,
+      req.user?.userId ?? null,
+    );
     if (!product) return res.status(404).json({ ok: false, error: "Product not found." });
 
     // Drop the superseded image once the row points elsewhere.

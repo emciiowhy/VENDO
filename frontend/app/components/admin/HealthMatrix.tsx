@@ -166,7 +166,7 @@ function StatusBar({ status, latencyMs }: { status: Status; latencyMs: number | 
   };
   const s = map[status];
   return (
-    <div className="rounded-xl2 bg-surface hairline shadow-card px-5 py-4 flex items-center gap-3">
+    <div className="rounded-xl2 bg-surface hairline shadow-card px-5 py-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
       <span className={"w-2.5 h-2.5 rounded-full " + s.dot + (status !== "down" ? " animate-pulse" : "")} />
       <span className={"text-[14px] font-bold tracking-tight " + s.text}>{s.label}</span>
       {latencyMs !== null && (
@@ -270,8 +270,26 @@ function Stat({ label, value, warn }: { label: string; value?: number; warn?: bo
   );
 }
 
+/**
+ * Query-latency vitals trace. The samples render as an animated SVG sparkline —
+ * an area sweep that redraws itself on each new tick, a glow that scans across
+ * the plot, and a breathing cursor pinned to the live reading. Replaces the old
+ * static bar chart; all motion is CSS and respects prefers-reduced-motion.
+ */
 function LatencyPanel({ samples, current }: { samples: number[]; current: number | null }) {
+  const W = 100;
+  const H = 32;
   const max = Math.max(1, ...samples);
+  // Map samples into the SVG box (y inverted; a 2px floor keeps a flat 0 visible).
+  const pts = samples.map((v, i) => {
+    const x = samples.length === 1 ? 0 : (i / (samples.length - 1)) * W;
+    const y = H - Math.max(2, (v / max) * (H - 2));
+    return { x, y };
+  });
+  const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(" ");
+  const areaPath = pts.length ? `${linePath} L ${W} ${H} L 0 ${H} Z` : "";
+  const last = pts[pts.length - 1];
+
   return (
     <div className="rounded-xl2 bg-surface hairline shadow-card p-5">
       <div className="flex items-center justify-between">
@@ -287,18 +305,52 @@ function LatencyPanel({ samples, current }: { samples: number[]; current: number
           <span className="text-[13px] font-bold tracking-tight tabular-nums">{current} ms</span>
         )}
       </div>
-      <div className="mt-5 flex items-end gap-1 h-[64px]">
+
+      <div className="relative mt-5 h-[64px] rounded-[10px] bg-paper/60 hairline overflow-hidden">
         {samples.length === 0 ? (
-          <span className="w-full text-center text-[12.5px] text-ink-soft self-center">sampling…</span>
+          <span className="absolute inset-0 grid place-items-center text-[12.5px] text-ink-soft">
+            sampling…
+          </span>
         ) : (
-          samples.map((v, i) => (
-            <span
-              key={i}
-              className="flex-1 rounded-t-[3px] bg-brand-400/70"
-              style={{ height: `${Math.max(4, (v / max) * 100)}%` }}
-              title={`${v} ms`}
-            />
-          ))
+          <>
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              preserveAspectRatio="none"
+              className="absolute inset-0 w-full h-full"
+              aria-hidden="true"
+            >
+              <defs>
+                <linearGradient id="hl-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--color-brand-500)" stopOpacity="0.32" />
+                  <stop offset="100%" stopColor="var(--color-brand-500)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d={areaPath} fill="url(#hl-fill)" />
+              <path
+                key={`${samples.length}:${current ?? 0}`}
+                d={linePath}
+                fill="none"
+                stroke="var(--color-brand-500)"
+                strokeWidth={1.6}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scale-stroke"
+                className="hl-draw"
+                style={{ ["--hl-len" as string]: "240" }}
+              />
+              {last && (
+                <circle
+                  className="hl-cursor"
+                  cx={last.x}
+                  cy={last.y}
+                  r={2.2}
+                  fill="var(--color-brand-600)"
+                />
+              )}
+            </svg>
+            {/* Scanning glow sweep across the trace. */}
+            <span className="pointer-events-none absolute inset-y-0 -inset-x-6 hl-sweep bg-[linear-gradient(90deg,transparent,rgba(56,103,255,0.16),transparent)]" />
+          </>
         )}
       </div>
     </div>

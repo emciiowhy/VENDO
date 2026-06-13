@@ -18,7 +18,7 @@ import {
   revokeSession,
   setPasswordHash,
   startSession,
-  tenantNameById,
+  tenantBrandById,
   type LoginMethod,
 } from "./auth.repository.js";
 import { createPinRequest, listActiveCashiers } from "../staff/staff.repository.js";
@@ -142,14 +142,17 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   // Enrich with the live store name from the DB (handles renames without a
   // re-login, and keeps the tenant id as the only thing trusted from the JWT).
   let tenantName: string | null = null;
+  let tenantLogoUrl: string | null = null;
   if (user.tenantId) {
     try {
-      tenantName = await tenantNameById(user.tenantId);
+      const brand = await tenantBrandById(user.tenantId);
+      tenantName = brand.name;
+      tenantLogoUrl = brand.logoUrl;
     } catch (err) {
-      console.error("[auth] tenant name lookup failed:", err);
+      console.error("[auth] tenant brand lookup failed:", err);
     }
   }
-  res.json({ ok: true, user: { ...user, tenantName } });
+  res.json({ ok: true, user: { ...user, tenantName, tenantLogoUrl } });
 });
 
 /** POST /auth/logout — revoke this device's session row and drop the cookie. */

@@ -75,8 +75,26 @@ export type EwalletQrMethod = "GCash" | "Maya" | "QRPH";
 /** Owner-uploaded checkout QR image URLs by method (null when none uploaded). */
 export type PaymentQrMap = Record<EwalletQrMethod, string | null>;
 
+/** Store identity + receipt config, surfaced for the printed ticket. */
+export interface StoreBrand {
+  name: string;
+  slug: string | null;
+  address: string | null;
+  phone: string | null;
+  tin: string | null;
+  vatLabel: string | null;
+  receiptHeader: string | null;
+  receiptFooter: string | null;
+  /** Logo URL for the receipt, or null when the owner hid it. */
+  logoUrl: string | null;
+  /** BIR machine-accreditation footer (Permit to Use / Machine ID / Serial). */
+  ptu: string | null;
+  min: string | null;
+  serial: string | null;
+}
+
 export interface Catalog {
-  store: { name: string; slug: string | null };
+  store: StoreBrand;
   categories: CatalogCategory[];
   products: CatalogProduct[];
   /** Owner-uploaded e-wallet QR codes shown to customers at checkout. */

@@ -109,6 +109,10 @@ export interface ReceiptSettings {
   vatLabel: string | null;
   invoicePrefix: string | null;
   showLogo: boolean;
+  /** BIR machine-accreditation footer fields (all optional). */
+  ptu: string | null;
+  min: string | null;
+  serial: string | null;
 }
 
 export async function getReceiptSettings(tenantId: string): Promise<ReceiptSettings | null> {
@@ -118,8 +122,12 @@ export async function getReceiptSettings(tenantId: string): Promise<ReceiptSetti
     vat_label: string | null;
     invoice_prefix: string | null;
     receipt_show_logo: boolean;
+    receipt_ptu: string | null;
+    receipt_min: string | null;
+    receipt_serial: string | null;
   }>(
-    `SELECT receipt_header, receipt_footer, vat_label, invoice_prefix, receipt_show_logo
+    `SELECT receipt_header, receipt_footer, vat_label, invoice_prefix, receipt_show_logo,
+            receipt_ptu, receipt_min, receipt_serial
        FROM tenants WHERE id = $1`,
     [tenantId],
   );
@@ -131,6 +139,9 @@ export async function getReceiptSettings(tenantId: string): Promise<ReceiptSetti
     vatLabel: r.vat_label,
     invoicePrefix: r.invoice_prefix,
     showLogo: r.receipt_show_logo,
+    ptu: r.receipt_ptu,
+    min: r.receipt_min,
+    serial: r.receipt_serial,
   };
 }
 
@@ -138,9 +149,10 @@ export async function updateReceiptSettings(tenantId: string, s: ReceiptSettings
   await query(
     `UPDATE tenants
         SET receipt_header = $2, receipt_footer = $3, vat_label = $4,
-            invoice_prefix = $5, receipt_show_logo = $6
+            invoice_prefix = $5, receipt_show_logo = $6,
+            receipt_ptu = $7, receipt_min = $8, receipt_serial = $9
       WHERE id = $1`,
-    [tenantId, s.header, s.footer, s.vatLabel, s.invoicePrefix, s.showLogo],
+    [tenantId, s.header, s.footer, s.vatLabel, s.invoicePrefix, s.showLogo, s.ptu, s.min, s.serial],
   );
 }
 

@@ -1,4 +1,5 @@
 import type { IconName } from "@/app/components/Icon";
+import type { FeatureStatus } from "@/app/components/marketing/RoadmapBadge";
 
 /**
  * Content source for the marketing product pages under /products/[slug]. Each
@@ -8,6 +9,10 @@ import type { IconName } from "@/app/components/Icon";
  * This is marketing copy, not app config — but the slugs are the single source
  * of truth that `generateStaticParams` and the nav both rely on, so add a
  * product here first, then point the nav link at `/products/<slug>`.
+ *
+ * Whether a product is actually shipped is tracked by SHIPPED below (a single
+ * list), so pages and menus can flag what's "coming soon" without sprinkling a
+ * status on every entry.
  */
 export interface ProductFeature {
   icon: IconName;
@@ -497,15 +502,167 @@ export const PRODUCTS: ProductPage[] = [
       },
     ],
   },
+  // ---- Back office & operations (shipped ERP pillars) ---------------------
+  {
+    slug: "finance",
+    category: "Back office & operations",
+    icon: "peso",
+    name: "Finance & P&L",
+    tagline: "See your real profit, not just your sales.",
+    intro:
+      "Record expenses and watch a live profit-and-loss build from your actual POS revenue — no spreadsheets, no month-end scramble.",
+    features: [
+      {
+        icon: "peso",
+        title: "Expense tracking",
+        body: "Log costs as they happen and keep every peso accounted for against your revenue.",
+      },
+      {
+        icon: "chart",
+        title: "Live P&L",
+        body: "Revenue from the POS meets your expenses in a running profit-and-loss you can trust.",
+      },
+      {
+        icon: "download",
+        title: "Export for accounting",
+        body: "Pull clean summaries for any period when it's time to file or hand off to your bookkeeper.",
+      },
+    ],
+  },
+  {
+    slug: "procurement",
+    category: "Back office & operations",
+    icon: "truck",
+    name: "Procurement",
+    tagline: "From purchase order to restocked shelf.",
+    intro:
+      "Manage suppliers, raise purchase orders, and receive against them so inventory restocks itself the moment goods arrive.",
+    features: [
+      {
+        icon: "users",
+        title: "Supplier directory",
+        body: "Keep your vendors, terms, and contacts in one place, tied to what you buy from each.",
+      },
+      {
+        icon: "file",
+        title: "Purchase orders",
+        body: "Raise POs for what you need and track them from sent to received.",
+      },
+      {
+        icon: "refresh",
+        title: "Receiving restocks stock",
+        body: "Receiving a PO adds the goods straight into inventory — no double entry.",
+      },
+    ],
+  },
+  {
+    slug: "manufacturing",
+    category: "Back office & operations",
+    icon: "factory",
+    name: "Manufacturing",
+    tagline: "Turn ingredients into finished goods, tracked.",
+    intro:
+      "Define recipes and bills of materials, then run production that consumes component stock and restocks the finished product automatically.",
+    features: [
+      {
+        icon: "layers",
+        title: "Recipes & BOM",
+        body: "Define what goes into each finished good so production always knows its inputs.",
+      },
+      {
+        icon: "factory",
+        title: "Production runs",
+        body: "Run a batch and components are deducted while finished goods are added — in one step.",
+      },
+      {
+        icon: "box",
+        title: "Accurate component stock",
+        body: "Always know what raw materials you have left and what you can still produce.",
+      },
+    ],
+  },
 ];
 
 const BY_SLUG = new Map(PRODUCTS.map((p) => [p.slug, p]));
+
+/**
+ * Products that are actually shipped in the app today. Everything else renders
+ * with a "Coming soon" badge so the marketing site stays honest while still
+ * showing the full vision.
+ */
+const SHIPPED = new Set<string>([
+  "point-of-sale",
+  "payments",
+  "bir-accreditation",
+  "inventory-management",
+  "reporting-and-analytics",
+  "employee-management",
+  "loyalty-program",
+  "engage-crm",
+  "finance",
+  "procurement",
+  "manufacturing",
+]);
+
+export function productStatus(slug: string): FeatureStatus {
+  return SHIPPED.has(slug) ? "live" : "soon";
+}
+
+/** Maps a product slug to a photo key in lib/marketingMedia.ts. */
+const PRODUCT_PHOTO: Record<string, string> = {
+  "point-of-sale": "point-of-sale",
+  payments: "payments",
+  "qr-order-and-pay": "kitchen",
+  "bir-accreditation": "payments",
+  "inventory-management": "inventory",
+  "kitchen-display-system": "kitchen",
+  "multi-location-management": "enterprise",
+  "reporting-and-analytics": "analytics",
+  "employee-management": "staff",
+  "loyalty-program": "loyalty",
+  membership: "loyalty",
+  "engage-crm": "loyalty",
+  promotions: "loyalty",
+  "online-ordering": "online",
+  webstore: "online",
+  "marketplace-integration": "online",
+  "takeaway-and-pickup": "kitchen",
+  "integrated-logistics": "warehouse",
+  finance: "analytics",
+  procurement: "warehouse",
+  manufacturing: "inventory",
+};
+
+export function productPhotoKey(slug: string): string {
+  return PRODUCT_PHOTO[slug] ?? "analytics";
+}
+
+/** Declared order of the Products mega-menu / landing groups. */
+export const PRODUCT_GROUPS: string[] = [
+  "Seamless Checkouts & Payments",
+  "Run your store smoothly",
+  "Back office & operations",
+  "Customer Loyalty made easy",
+  "Reach more customers and sell online",
+];
+
+/** Products grouped by category, in PRODUCT_GROUPS order. */
+export function productsByGroup(): { category: string; items: ProductPage[] }[] {
+  return PRODUCT_GROUPS.map((category) => ({
+    category,
+    items: PRODUCTS.filter((p) => p.category === category),
+  }));
+}
 
 export function getProduct(slug: string): ProductPage | undefined {
   return BY_SLUG.get(slug);
 }
 
-/** Up to N other products to show as "explore more" links. */
+/** Up to N other products in the same category (then others) for "explore more". */
 export function relatedProducts(slug: string, limit = 6): ProductPage[] {
-  return PRODUCTS.filter((p) => p.slug !== slug).slice(0, limit);
+  const self = BY_SLUG.get(slug);
+  if (!self) return PRODUCTS.slice(0, limit);
+  const same = PRODUCTS.filter((p) => p.category === self.category && p.slug !== slug);
+  const others = PRODUCTS.filter((p) => p.category !== self.category && p.slug !== slug);
+  return [...same, ...others].slice(0, limit);
 }
