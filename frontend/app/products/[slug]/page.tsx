@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { FeaturePage } from "@/app/components/marketing/FeaturePage";
-import { getProduct, relatedProducts, PRODUCTS } from "@/lib/products";
+import { ProductView } from "@/app/components/marketing/ProductView";
+import { getProduct, PRODUCTS } from "@/lib/products";
 
 /**
- * Marketing feature page for a single product, e.g. /products/point-of-sale.
- * Fully static: every slug is pre-rendered from the PRODUCTS content source via
+ * Marketing page for a single product, e.g. /products/point-of-sale. Fully
+ * static: every slug is pre-rendered from the PRODUCTS content source via
  * generateStaticParams, with per-page metadata for SEO/social. Renders through
- * the shared <FeaturePage> template.
+ * the bespoke <ProductView> template.
  */
 
 export function generateStaticParams() {
@@ -38,27 +38,5 @@ export default async function ProductPage({
   const { slug } = await params;
   const product = getProduct(slug);
   if (!product) notFound();
-
-  return (
-    <FeaturePage
-      eyebrow={product.category}
-      icon={product.icon}
-      name={product.name}
-      tagline={product.tagline}
-      intro={product.intro}
-      cardsHeading={`What you get with ${product.name}`}
-      cards={product.features}
-      ctaHeading={`See ${product.name} in your store`}
-      ctaSub="Book a quick walkthrough and we'll set it up around how you actually operate."
-      related={{
-        heading: "Explore more products",
-        basePath: "/products",
-        items: relatedProducts(slug).map((p) => ({
-          slug: p.slug,
-          name: p.name,
-          icon: p.icon,
-        })),
-      }}
-    />
-  );
+  return <ProductView product={product} />;
 }

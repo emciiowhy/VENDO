@@ -71,7 +71,7 @@ export async function getDashboardPulse(tenantId: string): Promise<DashboardPuls
   }>(
     `SELECT to_char((now() AT TIME ZONE $2)::date, 'YYYY-MM-DD') AS day,
             coalesce(sum(total_cents), 0)::bigint    AS gross,
-            count(*)::int                            AS txns,
+            count(*) FILTER (WHERE kind = 'sale')::int AS txns,
             coalesce(sum(subtotal_cents), 0)::bigint AS net,
             coalesce(sum(vat_cents), 0)::bigint      AS vat,
             coalesce(sum(discount_cents), 0)::bigint AS discount
@@ -87,7 +87,7 @@ export async function getDashboardPulse(tenantId: string): Promise<DashboardPuls
   const hourlyRes = await query<{ hour: number; gross: string; txns: number }>(
     `SELECT extract(hour FROM created_at AT TIME ZONE $2)::int AS hour,
             coalesce(sum(total_cents), 0)::bigint AS gross,
-            count(*)::int AS txns
+            count(*) FILTER (WHERE kind = 'sale')::int AS txns
        FROM sales
       WHERE tenant_id = $1
         AND (created_at AT TIME ZONE $2)::date = (now() AT TIME ZONE $2)::date
@@ -102,7 +102,7 @@ export async function getDashboardPulse(tenantId: string): Promise<DashboardPuls
   }));
 
   const methodRes = await query<{ method: string; txns: number; gross: string }>(
-    `SELECT payment_method AS method, count(*)::int AS txns,
+    `SELECT payment_method AS method, count(*) FILTER (WHERE kind = 'sale')::int AS txns,
             coalesce(sum(total_cents), 0)::bigint AS gross
        FROM sales
       WHERE tenant_id = $1

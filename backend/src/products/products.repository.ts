@@ -1,4 +1,5 @@
-import { query } from "../db.js";
+import { pool, query } from "../db.js";
+import { moveStock } from "../inventory/stockLedger.js";
 import type {
   Category,
   CategoryCreateInput,
@@ -169,25 +170,52 @@ export async function createProduct(
   tenantId: string,
   input: ProductCreateInput,
   imageUrl: string | null,
+  createdBy: string | null = null,
 ): Promise<Product> {
-  const { rows } = await query<{ id: string }>(
-    `INSERT INTO products
-       (tenant_id, name, sku, category_id, price_cents, stock, low_stock_threshold, image_url, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     RETURNING id`,
-    [
-      tenantId,
-      input.name,
-      input.sku ?? null,
-      input.categoryId ?? null,
-      input.price,
-      input.stock,
-      input.lowStockThreshold,
-      imageUrl,
-      input.isActive ?? true,
-    ],
-  );
-  const created = await getProduct(tenantId, rows[0].id);
+  // The product is inserted at stock 0, then any opening quantity is posted as a
+  // `count` movement through the ledger. This keeps the invariant — cached stock
+  // always equals SUM(ledger deltas) — true from a product's very first row, so
+  // the drift check never false-flags a freshly created item.
+  const client = await pool.connect();
+  let newId: string;
+  try {
+    await client.query("BEGIN");
+    const ins = await client.query<{ id: string }>(
+      `INSERT INTO products
+         (tenant_id, name, sku, category_id, price_cents, stock, low_stock_threshold, image_url, is_active)
+       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8)
+       RETURNING id`,
+      [
+        tenantId,
+        input.name,
+        input.sku ?? null,
+        input.categoryId ?? null,
+        input.price,
+        input.lowStockThreshold,
+        imageUrl,
+        input.isActive ?? true,
+      ],
+    );
+    newId = ins.rows[0].id;
+    if (input.stock > 0) {
+      const moved = await moveStock(client, {
+        tenantId,
+        productId: newId,
+        qtyDelta: input.stock,
+        reason: "count",
+        note: "Opening stock",
+        createdBy,
+      });
+      if (!moved.ok) throw new Error(`stock ledger refused opening stock: ${moved.code}`);
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+  const created = await getProduct(tenantId, newId);
   if (!created) throw new Error("Product vanished immediately after insert.");
   return created;
 }
@@ -197,7 +225,13 @@ export async function updateProduct(
   id: string,
   input: ProductUpdateInput,
   imageUrl: string | null | undefined,
+  editedBy: string | null = null,
 ): Promise<Product | null> {
+  // `stock` is never written as a raw overwrite — an owner editing on-hand is a
+  // physical recount, so it goes through the ledger as a signed `adjust` delta
+  // (new − old). Everything else is a plain column update. When stock is in the
+  // payload we run both inside one transaction so the column and the journal
+  // move together; otherwise we keep the cheap single-statement path.
   const sets: string[] = [];
   const vals: unknown[] = [];
   const set = (col: string, val: unknown) => {
@@ -208,22 +242,72 @@ export async function updateProduct(
   if (input.sku !== undefined) set("sku", input.sku ?? null);
   if (input.categoryId !== undefined) set("category_id", input.categoryId);
   if (input.price !== undefined) set("price_cents", input.price);
-  if (input.stock !== undefined) set("stock", input.stock);
   if (input.lowStockThreshold !== undefined) set("low_stock_threshold", input.lowStockThreshold);
   if (input.isActive !== undefined) set("is_active", input.isActive);
   if (imageUrl !== undefined) set("image_url", imageUrl);
 
-  if (sets.length === 0) return getProduct(tenantId, id);
-  sets.push("updated_at = now()");
+  const stockRequested = input.stock !== undefined;
 
-  const { rows } = await query<{ id: string }>(
-    `UPDATE products SET ${sets.join(", ")}
-      WHERE id = $1 AND tenant_id = $2
-      RETURNING id`,
-    [id, tenantId, ...vals],
-  );
-  if (!rows[0]) return null;
-  return getProduct(tenantId, id);
+  if (!stockRequested) {
+    if (sets.length === 0) return getProduct(tenantId, id);
+    sets.push("updated_at = now()");
+    const { rows } = await query<{ id: string }>(
+      `UPDATE products SET ${sets.join(", ")}
+        WHERE id = $1 AND tenant_id = $2
+        RETURNING id`,
+      [id, tenantId, ...vals],
+    );
+    if (!rows[0]) return null;
+    return getProduct(tenantId, id);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Lock + read current stock so the adjust delta is computed race-free against
+    // concurrent sales/receives. moveStock re-locks the same row in this txn.
+    const cur = await client.query<{ stock: number }>(
+      `SELECT stock FROM products WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+      [id, tenantId],
+    );
+    if (!cur.rows[0]) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+
+    if (sets.length > 0) {
+      sets.push("updated_at = now()");
+      await client.query(
+        `UPDATE products SET ${sets.join(", ")} WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId, ...vals],
+      );
+    }
+
+    const delta = (input.stock as number) - cur.rows[0].stock;
+    const moved = await moveStock(client, {
+      tenantId,
+      productId: id,
+      qtyDelta: delta,
+      reason: "adjust",
+      note: "Manual stock edit",
+      createdBy: editedBy,
+    });
+    if (!moved.ok) {
+      await client.query("ROLLBACK");
+      // NEGATIVE can't happen (target stock is validated >= 0 by the schema);
+      // GONE was ruled out by the locked read above. Treat as not-found.
+      return null;
+    }
+
+    await client.query("COMMIT");
+    return getProduct(tenantId, id);
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /** Delete a product, returning its old image URL (if any) for cleanup. */

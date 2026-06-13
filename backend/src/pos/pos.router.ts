@@ -2,7 +2,15 @@ import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { orderSchema, shiftCloseSchema, shiftOpenSchema } from "./pos.schema.js";
+import { returnSchema, voidSchema } from "./refunds.schema.js";
 import { createOrder, getCatalog, listCashiers } from "./pos.repository.js";
+import {
+  getSaleDetail,
+  listRecentSales,
+  reverseSale,
+  type ReverseMode,
+  type ReverseResult,
+} from "./refunds.repository.js";
 import {
   closeShift,
   getActiveShift,
@@ -113,6 +121,122 @@ posRouter.post("/orders", async (req, res) => {
   } catch (err) {
     console.error("[pos] order failed:", err);
     return res.status(500).json({ ok: false, error: "Checkout failed. Nothing was charged." });
+  }
+});
+
+// ── Void / Return ────────────────────────────────────────────────────────────
+
+/** GET /api/v1/pos/sales — recent sales for the void/return picker. */
+posRouter.get("/sales", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const limit = Number(req.query.limit) || 50;
+    res.json({ ok: true, sales: await listRecentSales(tenantId, limit) });
+  } catch (err) {
+    console.error("[pos] list sales failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load recent sales." });
+  }
+});
+
+/** GET /api/v1/pos/sales/:id — one sale with per-line returnable quantities. */
+posRouter.get("/sales/:id", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const sale = await getSaleDetail(tenantId, req.params.id);
+    if (!sale) return res.status(404).json({ ok: false, error: "Sale not found." });
+    res.json({ ok: true, sale });
+  } catch (err) {
+    console.error("[pos] sale detail failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load the sale." });
+  }
+});
+
+/** Map a reversal failure to an HTTP response (shared by void + return). */
+function reversalError(res: Response, result: Extract<ReverseResult, { ok: false }>) {
+  const status = result.code === "NOT_FOUND" ? 404 : 409;
+  return res.status(status).json({ ok: false, code: result.code, error: result.detail ?? reversalMessage(result.code) });
+}
+function reversalMessage(code: Extract<ReverseResult, { ok: false }>["code"]): string {
+  switch (code) {
+    case "NOT_FOUND":
+      return "Sale not found.";
+    case "NOT_REVERSIBLE":
+      return "This sale can no longer be reversed.";
+    case "NOTHING_TO_RETURN":
+      return "There is nothing left to return on this sale.";
+    case "INVALID_LINE":
+      return "One of the selected lines is not on this sale.";
+    case "OVER_RETURN":
+      return "You can't return more than was sold.";
+  }
+}
+
+/**
+ * A reversal settles against the drawer it's processed in. A CASHIER must
+ * therefore have an open shift (same rule as ringing a sale); an owner/manager
+ * acting off-till reverses with shift_id null.
+ */
+async function resolveReversalShift(req: Request, tenantId: string): Promise<{ shiftId: string | null } | { blocked: true }> {
+  const userId = req.user?.userId ?? null;
+  const shiftId = await getActiveShiftId(tenantId, userId);
+  if (!shiftId && req.user?.role === "CASHIER") return { blocked: true };
+  return { shiftId };
+}
+
+/** POST /api/v1/pos/sales/:id/void — cancel a whole sale (full reversal). */
+posRouter.post("/sales/:id/void", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = voidSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const shift = await resolveReversalShift(req, tenantId);
+    if ("blocked" in shift) {
+      return res.status(409).json({ ok: false, code: "SHIFT_REQUIRED", error: "Open a shift before voiding a sale." });
+    }
+    const result = await reverseSale(
+      tenantId,
+      req.user?.userId ?? null,
+      req.params.id,
+      { kind: "void" },
+      parsed.data.reason ?? null,
+      shift.shiftId,
+    );
+    if (!result.ok) return reversalError(res, result);
+    res.status(201).json({ ok: true, reversal: result.reversal });
+  } catch (err) {
+    console.error("[pos] void failed:", err);
+    res.status(500).json({ ok: false, error: "Could not void the sale. Nothing was changed." });
+  }
+});
+
+/** POST /api/v1/pos/sales/:id/returns — return specific lines (partial or full). */
+posRouter.post("/sales/:id/returns", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = returnSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const shift = await resolveReversalShift(req, tenantId);
+    if ("blocked" in shift) {
+      return res.status(409).json({ ok: false, code: "SHIFT_REQUIRED", error: "Open a shift before processing a return." });
+    }
+    const mode: ReverseMode = { kind: "return", lines: parsed.data.lines };
+    const result = await reverseSale(
+      tenantId,
+      req.user?.userId ?? null,
+      req.params.id,
+      mode,
+      parsed.data.reason ?? null,
+      shift.shiftId,
+    );
+    if (!result.ok) return reversalError(res, result);
+    res.status(201).json({ ok: true, reversal: result.reversal });
+  } catch (err) {
+    console.error("[pos] return failed:", err);
+    res.status(500).json({ ok: false, error: "Could not process the return. Nothing was changed." });
   }
 });
 

@@ -11,6 +11,7 @@
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
     "seed:owner-passwords": "tsx src/seedOwnerPasswords.ts",
+    "validate:reports": "tsx src/validateReports.ts",
     "test": "vitest run"
   },
   "dependencies": {

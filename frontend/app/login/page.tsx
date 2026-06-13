@@ -5,6 +5,7 @@ import { IconSprite, Icon } from "../components/Icon";
 import { StoreSignIn } from "../components/auth/StoreSignIn";
 import { OwnerPasswordSignIn } from "../components/auth/OwnerPasswordSignIn";
 import { LoginNotice } from "../components/auth/LoginNotice";
+import { BrandMark } from "../components/BrandMark";
 import { GOOGLE_SIGN_IN_URL } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -57,9 +58,7 @@ export default function LoginPage() {
           />
 
           <Link href="/" className="relative inline-flex items-center gap-2.5 w-fit">
-            <span className="w-8 h-8 rounded-[9px] bg-white text-brand-600 grid place-items-center font-extrabold text-[15px] tracking-tight">
-              V
-            </span>
+            <BrandMark className="w-8 h-8" />
             <span className="font-extrabold text-[19px] tracking-tightest">VendoPOS</span>
           </Link>
 
@@ -101,9 +100,7 @@ export default function LoginPage() {
           {/* Brand mark for small screens, where the rail is hidden. */}
           <header className="px-6 py-6 lg:hidden">
             <Link href="/" className="inline-flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-[9px] bg-ink text-white grid place-items-center font-extrabold text-[15px] tracking-tight">
-                V
-              </span>
+              <BrandMark className="w-8 h-8" />
               <span className="font-extrabold text-[19px] tracking-tightest">VendoPOS</span>
             </Link>
           </header>

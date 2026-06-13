@@ -14,6 +14,14 @@ import {
 } from "@/lib/finance";
 import { ProfitTrendChart, ExpenseMixChart } from "./FinanceCharts";
 import { ExpenseFormModal } from "./ExpenseFormModal";
+import { BalanceSheetView, CashFlowView } from "./FinanceStatements";
+
+type Tab = "pnl" | "balance" | "cashflow";
+const TABS: { id: Tab; label: string; icon: IconName }[] = [
+  { id: "pnl", label: "Profit & loss", icon: "trend" },
+  { id: "balance", label: "Balance sheet", icon: "wallet" },
+  { id: "cashflow", label: "Cash flow", icon: "peso" },
+];
 
 /**
  * Merchant Finance console — a single-Tenant P&L. Revenue is summed live from
@@ -40,6 +48,7 @@ type State =
 
 export function FinanceConsole() {
   const { push } = useToast();
+  const [tab, setTab] = useState<Tab>("pnl");
   const [state, setState] = useState<State>({ status: "loading" });
   const [editing, setEditing] = useState<Expense | null>(null);
   const [adding, setAdding] = useState(false);
@@ -89,41 +98,68 @@ export function FinanceConsole() {
 
   return (
     <div className="space-y-6 max-w-[1180px]">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-[1.3rem] font-extrabold tracking-tightest">Profit &amp; loss</h2>
-          <p className="text-[13.5px] text-ink-soft">
-            {state.status === "ready"
-              ? `Revenue from the register, set against your costs — ${state.summary.monthLabel}.`
-              : "Revenue from the register, set against your recorded costs."}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn tracking-tight transition duration-150"
-        >
-          <Icon name="plus" className="w-[18px] h-[18px]" strokeWidth={2} />
-          Record expense
-        </button>
+      {/* Statement switcher — P&L (live) + the derived Balance sheet / Cash flow. */}
+      <div className="flex gap-1.5 overflow-x-auto rounded-[12px] bg-paper hairline p-1 w-fit max-w-full">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={
+              "inline-flex items-center gap-2 shrink-0 px-4 py-2 rounded-[9px] text-[13.5px] font-semibold transition duration-150 " +
+              (tab === t.id
+                ? "bg-surface text-brand-700 shadow-card"
+                : "text-ink-soft hover:text-ink")
+            }
+          >
+            <Icon name={t.icon} className="w-[16px] h-[16px]" strokeWidth={1.8} />
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {state.status === "loading" && <Skeleton />}
+      {tab === "balance" && <BalanceSheetView />}
+      {tab === "cashflow" && <CashFlowView />}
 
-      {state.status === "error" && (
-        <div className="rounded-xl2 bg-surface hairline shadow-card p-8 text-center">
-          <p className="text-[14px] font-semibold text-rose-600">{state.message}</p>
-        </div>
-      )}
+      {tab === "pnl" && (
+        <>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="text-[1.3rem] font-extrabold tracking-tightest">Profit &amp; loss</h2>
+              <p className="text-[13.5px] text-ink-soft">
+                {state.status === "ready"
+                  ? `Revenue from the register, set against your costs — ${state.summary.monthLabel}.`
+                  : "Revenue from the register, set against your recorded costs."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn tracking-tight transition duration-150"
+            >
+              <Icon name="plus" className="w-[18px] h-[18px]" strokeWidth={2} />
+              Record expense
+            </button>
+          </div>
 
-      {state.status === "ready" && (
-        <Ready
-          summary={state.summary}
-          expenses={state.expenses}
-          onAdd={() => setAdding(true)}
-          onEdit={setEditing}
-          onAskDelete={setConfirm}
-        />
+          {state.status === "loading" && <Skeleton />}
+
+          {state.status === "error" && (
+            <div className="rounded-xl2 bg-surface hairline shadow-card p-8 text-center">
+              <p className="text-[14px] font-semibold text-rose-600">{state.message}</p>
+            </div>
+          )}
+
+          {state.status === "ready" && (
+            <Ready
+              summary={state.summary}
+              expenses={state.expenses}
+              onAdd={() => setAdding(true)}
+              onEdit={setEditing}
+              onAskDelete={setConfirm}
+            />
+          )}
+        </>
       )}
 
       {(adding || editing) && (

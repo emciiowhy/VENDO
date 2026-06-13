@@ -25,7 +25,7 @@ const TALLY_SQL = `
   coalesce(sum(total_cents) FILTER (WHERE payment_method IN ('GCash','Maya')), 0)::bigint AS ewallet,
   coalesce(sum(total_cents) FILTER (WHERE payment_method = 'QRPH'), 0)::bigint            AS card,
   coalesce(sum(total_cents), 0)::bigint                                                   AS total,
-  count(*)::int                                                                            AS txns`;
+  count(*) FILTER (WHERE kind = 'sale')::int                                               AS txns`;
 
 interface TallyRow {
   cash: string;

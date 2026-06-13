@@ -1,4 +1,5 @@
 import { pool, query } from "../db.js";
+import { moveStock } from "../inventory/stockLedger.js";
 import type {
   ProduceInput,
   ProductionRunDetail,
@@ -328,18 +329,9 @@ export async function produce(
       consumed.push({ productId: c.product_id, name: c.name, qtyConsumed: needed });
     }
 
-    // Decrement components, increment the finished good (under the held locks).
-    for (const c of consumed) {
-      await client.query(
-        `UPDATE products SET stock = stock - $1, updated_at = now() WHERE id = $2 AND tenant_id = $3`,
-        [c.qtyConsumed, c.productId, tenantId],
-      );
-    }
+    // Stock moves through the ledger *after* the run row exists (below), so each
+    // consume/output movement is journalled against this run's id.
     const producedUnits = recipe.output_qty * input.batches;
-    await client.query(
-      `UPDATE products SET stock = stock + $1, updated_at = now() WHERE id = $2 AND tenant_id = $3`,
-      [producedUnits, recipe.product_id, tenantId],
-    );
 
     const seqRes = await client.query<{ next_seq: string }>(
       `INSERT INTO production_counters (tenant_id, next_seq)
@@ -376,6 +368,32 @@ export async function produce(
         [runId, c.productId, c.name, c.qtyConsumed],
       );
     }
+
+    // Consume each component (-), then add the finished good (+). Components were
+    // validated under the held locks above, so a NEGATIVE here is a logic error,
+    // not a race — throw into the ROLLBACK rather than produce from thin air.
+    for (const c of consumed) {
+      const moved = await moveStock(client, {
+        tenantId,
+        productId: c.productId,
+        qtyDelta: -c.qtyConsumed,
+        reason: "produce_consume",
+        refTable: "production_runs",
+        refId: runId,
+        createdBy,
+      });
+      if (!moved.ok) throw new Error(`stock ledger refused component ${c.productId}: ${moved.code}`);
+    }
+    const output = await moveStock(client, {
+      tenantId,
+      productId: recipe.product_id,
+      qtyDelta: producedUnits,
+      reason: "produce_output",
+      refTable: "production_runs",
+      refId: runId,
+      createdBy,
+    });
+    if (!output.ok) throw new Error(`stock ledger refused finished good: ${output.code}`);
 
     await client.query("COMMIT");
     const run = await getProductionRun(tenantId, runId);

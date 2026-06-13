@@ -1,5 +1,11 @@
 import { query } from "../db.js";
 import type { Expense, ExpenseCreateInput, ExpenseUpdateInput } from "./finance.schema.js";
+import {
+  buildBalanceSheet,
+  buildCashFlow,
+  type BalanceSheet,
+  type CashFlow,
+} from "./finance.reports.js";
 
 /**
  * Data access for Finance. EVERY query is scoped by `tenantId` (read from the
@@ -207,7 +213,7 @@ export async function getFinanceSummary(tenantId: string, months = 6): Promise<F
             coalesce(sum(subtotal_cents), 0)::bigint AS net,
             coalesce(sum(vat_cents), 0)::bigint      AS vat,
             coalesce(sum(discount_cents), 0)::bigint AS discount,
-            count(*)::int                            AS txns
+            count(*) FILTER (WHERE kind = 'sale')::int AS txns
        FROM sales
       WHERE tenant_id = $1
         AND (created_at AT TIME ZONE $2) >= date_trunc('month', now() AT TIME ZONE $2)`,
@@ -321,4 +327,130 @@ export async function getFinanceSummary(tenantId: string, months = 6): Promise<F
     byCategory,
     trend,
   };
+}
+
+// ── Balance sheet (financial position as of today) ───────────────────────────
+
+/**
+ * A snapshot balance sheet derived from the ledgers (see finance.reports.ts for
+ * the cash definition). Inventory is valued at each product's latest known
+ * purchase cost × on-hand; products never purchased contribute 0. All figures
+ * are cumulative (all-time), so this reads as the store's current net position.
+ */
+export async function getBalanceSheet(tenantId: string): Promise<BalanceSheet> {
+  const res = await query<{
+    collected: string;
+    expenses: string;
+    received: string;
+    inventory: string;
+    vat: string;
+    ap: string;
+    as_of: string;
+  }>(
+    `SELECT
+       (SELECT coalesce(sum(total_cents), 0)::bigint FROM sales
+          WHERE tenant_id = $1) AS collected,
+       (SELECT coalesce(sum(amount_cents), 0)::bigint FROM expenses
+          WHERE tenant_id = $1) AS expenses,
+       (SELECT coalesce(sum(total_cents), 0)::bigint FROM purchase_orders
+          WHERE tenant_id = $1 AND status = 'received') AS received,
+       (WITH latest_cost AS (
+          SELECT DISTINCT ON (i.product_id) i.product_id, i.unit_cost_cents
+            FROM purchase_order_items i
+            JOIN purchase_orders po ON po.id = i.po_id
+           WHERE po.tenant_id = $1
+           ORDER BY i.product_id, po.created_at DESC
+        )
+        SELECT coalesce(sum(p.stock * coalesce(lc.unit_cost_cents, 0)), 0)::bigint
+          FROM products p
+          LEFT JOIN latest_cost lc ON lc.product_id = p.id
+         WHERE p.tenant_id = $1) AS inventory,
+       (SELECT coalesce(sum(vat_cents), 0)::bigint FROM sales
+          WHERE tenant_id = $1) AS vat,
+       (SELECT coalesce(sum(total_cents), 0)::bigint FROM purchase_orders
+          WHERE tenant_id = $1 AND status IN ('draft', 'ordered')) AS ap,
+       to_char(now() AT TIME ZONE $2, 'YYYY-MM-DD') AS as_of`,
+    [tenantId, MNL],
+  );
+  const r = res.rows[0];
+  const cashCents = Number(r.collected) - Number(r.expenses) - Number(r.received);
+  return buildBalanceSheet(r.as_of, {
+    cashCents,
+    inventoryValueCents: Number(r.inventory),
+    vatPayableCents: Number(r.vat),
+    accountsPayableCents: Number(r.ap),
+  });
+}
+
+// ── Cash flow (direct method, one Manila month) ──────────────────────────────
+
+export interface CashFlowResult extends CashFlow {
+  month: string;
+  monthLabel: string;
+}
+
+/**
+ * A direct-method cash-flow statement for one Manila month. `month` is an
+ * optional YYYY-MM; anything else falls back to the current month. Opening cash
+ * is the cumulative position strictly before the month, so opening + net change
+ * reconciles to closing.
+ */
+export async function getCashFlow(tenantId: string, month?: string): Promise<CashFlowResult> {
+  const res = await query<{
+    ym: string;
+    start: string;
+    end_incl: string;
+    label: string;
+    sales_period: string;
+    exp_period: string;
+    recv_period: string;
+    sales_before: string;
+    exp_before: string;
+    recv_before: string;
+  }>(
+    `WITH b AS (
+        SELECT s AS start, (s + interval '1 month')::date AS next
+          FROM (
+            SELECT CASE WHEN $2 ~ '^\\d{4}-\\d{2}$'
+                        THEN to_date($2 || '-01', 'YYYY-MM-DD')
+                        ELSE (date_trunc('month', now() AT TIME ZONE $3))::date
+                   END AS s
+          ) q
+      )
+      SELECT to_char(b.start, 'YYYY-MM')                              AS ym,
+             to_char(b.start, 'YYYY-MM-DD')                          AS start,
+             to_char((b.next - interval '1 day')::date, 'YYYY-MM-DD') AS end_incl,
+             to_char(b.start, 'FMMonth YYYY')                        AS label,
+             (SELECT coalesce(sum(total_cents), 0)::bigint FROM sales
+                WHERE tenant_id = $1
+                  AND (created_at AT TIME ZONE $3) >= b.start
+                  AND (created_at AT TIME ZONE $3) <  b.next)         AS sales_period,
+             (SELECT coalesce(sum(amount_cents), 0)::bigint FROM expenses
+                WHERE tenant_id = $1
+                  AND incurred_on >= b.start AND incurred_on < b.next) AS exp_period,
+             (SELECT coalesce(sum(total_cents), 0)::bigint FROM purchase_orders
+                WHERE tenant_id = $1 AND status = 'received'
+                  AND (received_at AT TIME ZONE $3) >= b.start
+                  AND (received_at AT TIME ZONE $3) <  b.next)         AS recv_period,
+             (SELECT coalesce(sum(total_cents), 0)::bigint FROM sales
+                WHERE tenant_id = $1
+                  AND (created_at AT TIME ZONE $3) < b.start)          AS sales_before,
+             (SELECT coalesce(sum(amount_cents), 0)::bigint FROM expenses
+                WHERE tenant_id = $1 AND incurred_on < b.start)        AS exp_before,
+             (SELECT coalesce(sum(total_cents), 0)::bigint FROM purchase_orders
+                WHERE tenant_id = $1 AND status = 'received'
+                  AND (received_at AT TIME ZONE $3) < b.start)         AS recv_before
+        FROM b`,
+    [tenantId, month ?? "", MNL],
+  );
+  const r = res.rows[0];
+  const openingCashCents =
+    Number(r.sales_before) - Number(r.exp_before) - Number(r.recv_before);
+  const statement = buildCashFlow(r.start, r.end_incl, {
+    salesCollectedCents: Number(r.sales_period),
+    expensesPaidCents: Number(r.exp_period),
+    goodsReceivedCents: Number(r.recv_period),
+    openingCashCents,
+  });
+  return { ...statement, month: r.ym, monthLabel: r.label };
 }

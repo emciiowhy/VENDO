@@ -162,6 +162,17 @@ export async function tenantNameById(tenantId: string): Promise<string | null> {
   return rows[0]?.name ?? null;
 }
 
+/** The store's brand (name + uploaded logo URL) for the dashboard chrome. */
+export async function tenantBrandById(
+  tenantId: string,
+): Promise<{ name: string | null; logoUrl: string | null }> {
+  const { rows } = await query<{ name: string; logo_url: string | null }>(
+    `SELECT name, logo_url FROM tenants WHERE id = $1`,
+    [tenantId],
+  );
+  return { name: rows[0]?.name ?? null, logoUrl: rows[0]?.logo_url ?? null };
+}
+
 /** Record a successful sign-in: stamp last login and remember the Google subject. */
 export async function recordLogin(userId: string, googleSub: string): Promise<void> {
   await query(

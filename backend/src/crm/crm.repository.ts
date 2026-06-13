@@ -61,9 +61,9 @@ const CUSTOMER_SELECT = `c.id, c.name, c.phone, c.email, c.address, c.tags, c.no
 
 const SALES_AGG = `LEFT JOIN (
     SELECT customer_id,
-           count(*)            AS order_count,
-           sum(total_cents)    AS total_spent,
-           max(created_at)     AS last_order_at
+           count(*) FILTER (WHERE kind = 'sale')          AS order_count,
+           sum(total_cents)                               AS total_spent,
+           max(created_at) FILTER (WHERE kind = 'sale')   AS last_order_at
       FROM sales
      WHERE customer_id IS NOT NULL
      GROUP BY customer_id
@@ -206,7 +206,7 @@ export async function getCrmSummary(tenantId: string): Promise<CrmSummary> {
              AND (created_at AT TIME ZONE $2) >= date_trunc('month', now() AT TIME ZONE $2)) AS new_month,
         (SELECT count(*)::int FROM (
             SELECT customer_id FROM sales
-             WHERE tenant_id = $1 AND customer_id IS NOT NULL
+             WHERE tenant_id = $1 AND customer_id IS NOT NULL AND kind = 'sale'
              GROUP BY customer_id HAVING count(*) >= 2
           ) r) AS repeat,
         (SELECT coalesce(sum(loyalty_points), 0)::bigint FROM customers WHERE tenant_id = $1) AS points`,

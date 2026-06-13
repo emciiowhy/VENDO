@@ -10,6 +10,7 @@ import { ThemeToggle } from "../theme/ThemeToggle";
 import { ToastProvider } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { NotificationBell } from "./NotificationBell";
+import { BrandMark } from "../BrandMark";
 import { logout, type SessionUser } from "@/lib/auth";
 
 export interface NavItem {
@@ -95,13 +96,7 @@ export function DashShell({
           }
         >
           <div className="h-[68px] flex items-center gap-2.5 px-6 hairline-b">
-            <span className="w-8 h-8 rounded-[9px] bg-ink dark:bg-[#0b1220] text-white grid place-items-center font-extrabold text-[15px] tracking-tight">
-              V
-            </span>
-            <div className="leading-tight">
-              <div className="font-extrabold text-[16px] tracking-tightest">VendoPOS</div>
-              <div className="text-[11px] font-semibold text-ink-faint">{brandSub}</div>
-            </div>
+            <StoreBrand user={user} brandSub={brandSub} />
           </div>
 
           <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
@@ -236,6 +231,55 @@ export function DashShell({
   );
 }
 
+/**
+ * The sidebar brand lockup. The platform Super Admin sees VendoPOS; a Merchant
+ * sees THEIR OWN store — the uploaded logo (or a monogram fallback) and the
+ * store name — so the back office reads as the merchant's product, not ours.
+ */
+function StoreBrand({ user, brandSub }: { user: SessionUser; brandSub: string }) {
+  const isPlatform = user.role === "SUPER_ADMIN" || !user.tenantName;
+  if (isPlatform) {
+    return (
+      <>
+        <BrandMark className="w-8 h-8" />
+        <div className="leading-tight">
+          <div className="font-extrabold text-[16px] tracking-tightest">VendoPOS</div>
+          <div className="text-[11px] font-semibold text-ink-faint">{brandSub}</div>
+        </div>
+      </>
+    );
+  }
+
+  const storeName = user.tenantName ?? "Your Store";
+  const monogram = storeName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return (
+    <>
+      {user.tenantLogoUrl ? (
+        // Tenant logo is a cross-origin uploads URL; plain <img> avoids Image config.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={user.tenantLogoUrl}
+          alt={storeName}
+          className="w-8 h-8 rounded-[8px] object-cover hairline"
+        />
+      ) : (
+        <span className="grid place-items-center w-8 h-8 rounded-[8px] bg-brand-500 text-white font-extrabold text-[13px] tracking-tight">
+          {monogram || "S"}
+        </span>
+      )}
+      <div className="leading-tight min-w-0">
+        <div className="font-extrabold text-[16px] tracking-tightest truncate">{storeName}</div>
+        <div className="text-[11px] font-semibold text-ink-faint">{brandSub}</div>
+      </div>
+    </>
+  );
+}
+
 function BrandLoader({ dark }: { dark: boolean }) {
   // Carry the stored theme so a dark-mode user doesn't get a white flash before
   // the authenticated shell mounts (bg-paper retints via the .dark token).
@@ -256,9 +300,7 @@ function BrandLoader({ dark }: { dark: boolean }) {
       }
     >
       <div className="flex items-center gap-3 text-ink-soft">
-        <span className="w-9 h-9 rounded-[10px] bg-ink dark:bg-[#0b1220] text-white grid place-items-center font-extrabold tracking-tight animate-pulse">
-          V
-        </span>
+        <BrandMark className="w-9 h-9 animate-pulse" />
         <span className="text-[14px] font-semibold">Loading your workspace…</span>
       </div>
     </div>

@@ -5,6 +5,8 @@ import { expenseCreateSchema, expenseUpdateSchema } from "./finance.schema.js";
 import {
   createExpense,
   deleteExpense,
+  getBalanceSheet,
+  getCashFlow,
   getFinanceSummary,
   listExpenses,
   updateExpense,
@@ -55,6 +57,35 @@ financeRouter.get("/summary", async (req, res) => {
   } catch (err) {
     console.error("[finance] summary failed:", err);
     res.status(500).json({ ok: false, error: "Could not load your finance summary." });
+  }
+});
+
+// ── Balance sheet ────────────────────────────────────────────────────────────
+
+financeRouter.get("/balance-sheet", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    res.json({ ok: true, balanceSheet: await getBalanceSheet(tenantId) });
+  } catch (err) {
+    console.error("[finance] balance sheet failed:", err);
+    res.status(500).json({ ok: false, error: "Could not compile the balance sheet." });
+  }
+});
+
+// ── Cash flow ────────────────────────────────────────────────────────────────
+
+const MONTH = /^\d{4}-\d{2}$/;
+
+financeRouter.get("/cash-flow", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const month = typeof req.query.month === "string" && MONTH.test(req.query.month) ? req.query.month : undefined;
+  try {
+    res.json({ ok: true, cashFlow: await getCashFlow(tenantId, month) });
+  } catch (err) {
+    console.error("[finance] cash flow failed:", err);
+    res.status(500).json({ ok: false, error: "Could not compile the cash-flow statement." });
   }
 });
 

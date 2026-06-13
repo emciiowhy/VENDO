@@ -1,3 +1,4 @@
+import type { IconName } from "@/app/components/Icon";
 import { collection, type MarketingEntry } from "./marketing";
 
 /**
@@ -115,3 +116,66 @@ export const HARDWARE: MarketingEntry[] = [
 ];
 
 export const hardware = collection(HARDWARE);
+
+/** Hardware slug → photo key in lib/marketingMedia.ts. */
+const HARDWARE_PHOTO: Record<string, string> = {
+  "pos-terminal": "pos-terminal",
+  "receipt-printer": "receipt-printer",
+  "barcode-scanner": "barcode-scanner",
+  "cash-drawer": "cash-drawer",
+  "payment-reader": "payment-reader",
+  "customer-display": "customer-display",
+  "kitchen-display-screen": "kitchen-display",
+  "label-printer": "label-printer",
+};
+
+export function hardwarePhotoKey(slug: string): string {
+  return HARDWARE_PHOTO[slug] ?? "hardware-hero";
+}
+
+/**
+ * Pre-configured hardware bundles ("built for every business need", per the
+ * reference). Each lists the gear it includes by hardware slug so the bundle
+ * cards stay in sync with the catalog above.
+ */
+export interface HardwareBundle {
+  slug: string;
+  icon: IconName;
+  name: string;
+  forWho: string;
+  blurb: string;
+  /** Hardware slugs included in the bundle. */
+  includes: string[];
+  /** Photo key in lib/marketingMedia.ts. */
+  photoKey: string;
+}
+
+export const HARDWARE_BUNDLES: HardwareBundle[] = [
+  {
+    slug: "counter-starter",
+    icon: "store",
+    name: "Counter Starter",
+    forWho: "New & small shops",
+    blurb: "Everything to ring sales and print compliant receipts from day one.",
+    includes: ["pos-terminal", "receipt-printer", "cash-drawer"],
+    photoKey: "hardware-bundle",
+  },
+  {
+    slug: "cafe-restaurant",
+    icon: "monitor",
+    name: "Café & Restaurant",
+    forWho: "F&B service",
+    blurb: "Front counter plus a kitchen display so orders reach the line instantly.",
+    includes: ["pos-terminal", "receipt-printer", "kitchen-display-screen", "payment-reader"],
+    photoKey: "kitchen",
+  },
+  {
+    slug: "retail-pro",
+    icon: "cart",
+    name: "Retail Pro",
+    forWho: "High-volume retail",
+    blurb: "Scan-fast checkout with labels, a customer display, and card/QR payments.",
+    includes: ["pos-terminal", "barcode-scanner", "label-printer", "customer-display", "payment-reader"],
+    photoKey: "hardware-hero",
+  },
+];

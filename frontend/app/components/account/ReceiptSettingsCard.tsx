@@ -21,6 +21,9 @@ export function ReceiptSettingsCard() {
   const [vatLabel, setVatLabel] = useState("");
   const [prefix, setPrefix] = useState("");
   const [showLogo, setShowLogo] = useState(true);
+  const [ptu, setPtu] = useState("");
+  const [min, setMin] = useState("");
+  const [serial, setSerial] = useState("");
   const [prefixError, setPrefixError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -44,6 +47,9 @@ export function ReceiptSettingsCard() {
     setVatLabel(s.vatLabel ?? "");
     setPrefix(s.invoicePrefix ?? "");
     setShowLogo(s.showLogo);
+    setPtu(s.ptu ?? "");
+    setMin(s.min ?? "");
+    setSerial(s.serial ?? "");
   }
 
   if (loadError) {
@@ -64,6 +70,9 @@ export function ReceiptSettingsCard() {
       vatLabel,
       invoicePrefix: prefix.trim().toUpperCase(),
       showLogo,
+      ptu,
+      min,
+      serial,
     });
     setBusy(false);
     if (res.ok) {
@@ -115,6 +124,19 @@ export function ReceiptSettingsCard() {
             checked={showLogo}
             onChange={setShowLogo}
           />
+        </div>
+
+        <div className="hairline-t pt-4">
+          <div className="text-[13px] font-bold tracking-tight">BIR accreditation</div>
+          <p className="mt-0.5 text-[12.5px] text-ink-soft">
+            From your BIR Permit to Use (PTU). Printed in the receipt footer for a valid invoice; leave
+            blank if you don’t have one yet.
+          </p>
+          <div className="mt-3 grid sm:grid-cols-3 gap-4">
+            <TextField label="Permit to Use (PTU) No." value={ptu} onChange={setPtu} placeholder="FP000000000000" />
+            <TextField label="Machine ID No. (MIN)" value={min} onChange={setMin} placeholder="00000000000000" />
+            <TextField label="Serial No." value={serial} onChange={setSerial} placeholder="ABC123456" />
+          </div>
         </div>
 
         <div className="flex justify-end">

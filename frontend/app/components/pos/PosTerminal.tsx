@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon, IconSprite, type IconName } from "../Icon";
+import { BrandMark } from "../BrandMark";
 import { PinSwitcher } from "../auth/PinSwitcher";
 import { useSession } from "../auth/useSession";
 import { useTheme } from "../theme/ThemeProvider";
@@ -20,10 +21,13 @@ import {
   type PaymentMethod,
   type PaymentQrMap,
   type Sale,
+  type StoreBrand,
 } from "@/lib/pos";
 import { searchCustomers, type CustomerLite } from "@/lib/crm";
 import { OpeningShiftModal, ShiftCloseModal } from "./ShiftModals";
 import { MockQr } from "./MockQr";
+import { SalesReturnsModal } from "./SalesReturnsModal";
+import { printSaleReceipt, type TicketItem } from "./receiptPrint";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
   DISPLAY_CHANNEL,
@@ -51,6 +55,21 @@ interface Line {
   product: CatalogProduct;
   qty: number;
 }
+
+const EMPTY_STORE: StoreBrand = {
+  name: "Register",
+  slug: null,
+  address: null,
+  phone: null,
+  tin: null,
+  vatLabel: null,
+  receiptHeader: null,
+  receiptFooter: null,
+  logoUrl: null,
+  ptu: null,
+  min: null,
+  serial: null,
+};
 
 /** centavos → "₱1,234.50" */
 const peso = (cents: number) => formatPesoExact(cents / 100);
@@ -81,7 +100,8 @@ export function PosTerminal() {
   const session = useSession(["CASHIER", "MANAGER", "MERCHANT_OWNER"]);
   const { theme } = useTheme();
 
-  const [storeName, setStoreName] = useState("Register");
+  const [store, setStore] = useState<StoreBrand>(EMPTY_STORE);
+  const storeName = store.name;
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [paymentQrs, setPaymentQrs] = useState<PaymentQrMap>({ GCash: null, Maya: null, QRPH: null });
   const [catOrder, setCatOrder] = useState<string[]>([]);
@@ -90,13 +110,19 @@ export function PosTerminal() {
 
   const [cat, setCat] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  // Transient barcode-scan feedback ("not found" / "out of stock"); cleared on the
+  // next keystroke. Scanner success just drops the item in the cart silently.
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, Line>>({});
   const [discount, setDiscount] = useState<Discount | null>(null);
   const [cartOpenMobile, setCartOpenMobile] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
-  const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [salesOpen, setSalesOpen] = useState(false);
+  // The just-completed sale plus a snapshot of its lines, kept for the printed
+  // ticket (the cart itself is cleared the moment payment lands).
+  const [receipt, setReceipt] = useState<{ sale: Sale; items: TicketItem[] } | null>(null);
   // The settlement method currently staged in the checkout overlay (drives the
   // customer display's QR sheet). null when the overlay is closed.
   const [checkoutMethod, setCheckoutMethod] = useState<PaymentMethod | null>(null);
@@ -107,6 +133,13 @@ export function PosTerminal() {
   // Owner-set default opening float for this operator, pre-filling the X-Read gate.
   const [defaultFloatCents, setDefaultFloatCents] = useState(0);
   const [closeShiftOpen, setCloseShiftOpen] = useState(false);
+  // After a cashier closes their drawer we stay on the till and prompt for the
+  // next cashier (no full sign-out), so handover is a PIN away.
+  const [nextCashierOpen, setNextCashierOpen] = useState(false);
+  // Warm terminal (owner/manager): on open, ask who's on duty before ringing —
+  // they pick the cashier taking the till. Dismissable (they can operate it
+  // themselves). Cashiers cold-login as themselves, so they're never asked.
+  const [onDutyDismissed, setOnDutyDismissed] = useState(false);
   // Confirmation for sign-out / terminal-lock actions.
   const [confirm, setConfirm] = useState<{
     title: string;
@@ -123,7 +156,7 @@ export function PosTerminal() {
   const applyCatalog = useCallback(
     (data: Awaited<ReturnType<typeof getCatalog>>) => {
       if (data.ok) {
-        setStoreName(data.store.name);
+        setStore(data.store);
         setProducts(data.products);
         setPaymentQrs(data.paymentQrs);
         // Tab order: declared categories that actually have products, then
@@ -204,6 +237,7 @@ export function PosTerminal() {
         qty: l.qty,
         unitCents: l.product.priceCents,
         lineCents: l.product.priceCents * l.qty,
+        imageUrl: l.product.imageUrl,
       })),
       grossCents,
       discountCents,
@@ -222,10 +256,10 @@ export function PosTerminal() {
           : null,
       paid: receipt
         ? {
-            totalCents: receipt.totalCents,
-            method: receipt.paymentMethod,
-            reference: receipt.paymentRef,
-            changeCents: receipt.changeCents,
+            totalCents: receipt.sale.totalCents,
+            method: receipt.sale.paymentMethod,
+            reference: receipt.sale.paymentRef,
+            changeCents: receipt.sale.changeCents,
           }
         : null,
     };
@@ -276,6 +310,28 @@ export function PosTerminal() {
       return { ...c, [p.id]: { product: p, qty: cur + 1 } };
     });
   }
+  // Barcode scan: a USB/Bluetooth scanner types the code then sends Enter. Resolve
+  // it to a product — exact SKU match first (what a scanner emits), then a sole
+  // filtered result — add it to the cart and clear the box for the next scan. No
+  // match / out of stock surfaces a transient message instead of a silent no-op.
+  function scanToCart() {
+    const code = query.trim();
+    if (!code) return;
+    const lc = code.toLowerCase();
+    const bySku = products.find((p) => (p.sku ?? "").toLowerCase() === lc);
+    const target = bySku ?? (visible.length === 1 ? visible[0] : null);
+    if (!target) {
+      setScanMsg(`No product matches “${code}”.`);
+      return;
+    }
+    if (target.stock <= 0) {
+      setScanMsg(`${target.name} is out of stock.`);
+      return;
+    }
+    add(target);
+    setQuery("");
+    setScanMsg(null);
+  }
   function setQty(id: string, qty: number) {
     setCart((c) => {
       const line = c[id];
@@ -295,7 +351,13 @@ export function PosTerminal() {
   }
 
   function onPaid(sale: Sale) {
-    setReceipt(sale);
+    // Snapshot the cart lines for the printed ticket BEFORE clearing them.
+    const items: TicketItem[] = lines.map((l) => ({
+      name: l.product.name,
+      qty: l.qty,
+      unitCents: l.product.priceCents,
+    }));
+    setReceipt({ sale, items });
     setCheckoutOpen(false);
     setCartOpenMobile(false);
     clearCart();
@@ -316,9 +378,7 @@ export function PosTerminal() {
         }
       >
         <div className="flex items-center gap-3 text-ink-soft">
-          <span className="w-9 h-9 rounded-[10px] bg-ink dark:bg-[#0b1220] text-white grid place-items-center font-extrabold animate-pulse">
-            V
-          </span>
+          <BrandMark className="w-9 h-9 animate-pulse" />
           <span className="text-[14px] font-semibold">Locking terminal…</span>
         </div>
       </div>
@@ -352,15 +412,18 @@ export function PosTerminal() {
   const exitLabel = user.role === "CASHIER" ? "Lock terminal" : "Exit to dashboard";
 
   // After a Z-Read the shift is reconciled. The role decides what "done" means:
-  //  • CASHIER — a terminal operator: hard-lock the till, wipe the session, and
-  //    drop back to the Store ID / PIN screen (no cross-shift leakage).
+  //  • CASHIER — a terminal operator: keep the till on screen and immediately ask
+  //    "who's next?" via the cashier switcher, so the incoming cashier takes over
+  //    with a PIN (no full Store ID re-login between shifts). Their PIN switch
+  //    reloads the page as themselves and the X-Read gate prompts a fresh shift.
   //  • MERCHANT_OWNER / MANAGER — they closed the drawer themselves, they're not
-  //    bound to this register; skip the logout and return them straight to the
-  //    back office so they keep their session (no re-login friction).
+  //    bound to this register; return them straight to the back office.
   const isCashier = user.role === "CASHIER";
   const endShiftExit = () => {
     if (isCashier) {
-      void logout().then(() => (window.location.href = "/login"));
+      setCloseShiftOpen(false);
+      setShift(null);
+      setNextCashierOpen(true);
     } else {
       window.location.href = "/dashboard";
     }
@@ -419,9 +482,17 @@ export function PosTerminal() {
           </button>
 
           <div className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-[9px] bg-ink dark:bg-[#0b1220] text-white grid place-items-center font-extrabold text-[15px] tracking-tight">
-              V
-            </span>
+            {user.tenantLogoUrl ? (
+              // Store logo is a cross-origin uploads URL; plain <img> avoids Image config.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={user.tenantLogoUrl}
+                alt={storeName}
+                className="w-8 h-8 rounded-[8px] object-cover hairline"
+              />
+            ) : (
+              <BrandMark className="w-8 h-8" />
+            )}
             <div className="leading-tight">
               <div className="font-extrabold text-[15px] tracking-tightest">{storeName}</div>
               <div className="text-[11px] font-semibold text-ink-faint flex items-center gap-1.5">
@@ -432,6 +503,16 @@ export function PosTerminal() {
           </div>
 
           <div className="ml-auto flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setSalesOpen(true)}
+              title="Sales & returns"
+              aria-label="Sales and returns"
+              className="inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+            >
+              <Icon name="refresh" className="w-[18px] h-[18px]" strokeWidth={1.7} />
+              <span className="hidden lg:inline">Returns</span>
+            </button>
             <button
               type="button"
               onClick={() => window.open("/pos/customer-display", "vendopos-customer-display", "noopener")}
@@ -475,6 +556,8 @@ export function PosTerminal() {
             <PinSwitcher
               triggerLabel="Switch"
               triggerClassName="inline-flex items-center gap-1.5 bg-surface hairline rounded-[10px] px-3 py-2 text-[13px] font-semibold hover:border-brand-200 hover:text-brand-600 transition duration-150"
+              openShift={shift ? { expectedCashCents: shift.expectedCashCents } : null}
+              onCloseShift={() => void refreshShift().then(() => setCloseShiftOpen(true))}
             />
             <button
               type="button"
@@ -497,12 +580,28 @@ export function PosTerminal() {
               <Icon name="search" className="w-[16px] h-[16px] text-ink-faint absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search products…"
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  if (scanMsg) setScanMsg(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    scanToCart();
+                  }
+                }}
+                placeholder="Search or scan barcode…"
                 className="field-input rounded-[10px] pl-9 pr-3 py-2.5 text-[14px] w-full"
               />
             </label>
           </div>
+
+          {scanMsg && (
+            <div className="relative z-10 mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-rose-600">
+              <Icon name="ban" className="w-[15px] h-[15px]" strokeWidth={1.8} />
+              {scanMsg}
+            </div>
+          )}
 
           {!query && catOrder.length > 0 && (
             <div className="relative z-10 mt-3 flex gap-2 overflow-x-auto pb-1">
@@ -615,12 +714,32 @@ export function PosTerminal() {
       )}
 
       {/* Centered receipt overlay */}
-      {receipt && <ReceiptOverlay sale={receipt} storeName={storeName} onClose={newSale} />}
+      {receipt && (
+        <ReceiptOverlay
+          sale={receipt.sale}
+          items={receipt.items}
+          store={store}
+          cashierName={user.name}
+          onClose={newSale}
+        />
+      )}
+
+      {/* Sales & Returns desk (void / refund completed sales). */}
+      {salesOpen && (
+        <SalesReturnsModal
+          store={store}
+          onClose={() => setSalesOpen(false)}
+          onReversed={() => {
+            void refreshShift();
+            void reloadCatalog();
+          }}
+        />
+      )}
 
       {/* Shift opening gate (X-Read) — blocks the till until a shift is open.
           Cashiers only: owners/managers aren't reconciling a cash drawer, so
           they ring up directly without opening a shift. */}
-      {!shiftLoading && !shift && isCashier && (
+      {!shiftLoading && !shift && isCashier && !nextCashierOpen && (
         <OpeningShiftModal
           cashierName={user.name}
           defaultFloatCents={defaultFloatCents}
@@ -635,8 +754,36 @@ export function PosTerminal() {
           shift={shift}
           onCancel={() => setCloseShiftOpen(false)}
           onClosed={endShiftExit}
-          finishLabel={isCashier ? "Finish & lock terminal" : "Finish & return to dashboard"}
-          finishIcon={isCashier ? "lock" : "arrow"}
+          finishLabel={isCashier ? "Finish & hand over" : "Finish & return to dashboard"}
+          finishIcon={isCashier ? "users" : "arrow"}
+        />
+      )}
+
+      {/* On open (warm terminal): ask who's on duty before ringing up. The
+          chosen cashier PINs in, which reloads /pos as them and gates the
+          X-Read. Dismissable so an owner/manager can operate the till directly. */}
+      {!isCashier && !onDutyDismissed && !nextCashierOpen && (
+        <PinSwitcher
+          autoOpen
+          hideTrigger
+          openShift={null}
+          selectTitle="Who's on duty?"
+          selectSubtitle="Select the cashier taking this till."
+          onClose={() => setOnDutyDismissed(true)}
+        />
+      )}
+
+      {/* Cashier handover: after a Z-Read, ask who takes the till next. The
+          incoming cashier picks their profile + PIN; the switch reloads /pos as
+          them and the X-Read gate prompts a fresh shift. */}
+      {nextCashierOpen && (
+        <PinSwitcher
+          autoOpen
+          hideTrigger
+          openShift={null}
+          selectTitle="Next cashier"
+          selectSubtitle="Select the cashier taking over the till."
+          onClose={() => setNextCashierOpen(false)}
         />
       )}
 
@@ -1113,8 +1260,21 @@ function CheckoutOverlay({
 
 /* ------------------------------ receipt overlay ------------------------------ */
 
-function ReceiptOverlay({ sale, storeName, onClose }: { sale: Sale; storeName: string; onClose: () => void }) {
+function ReceiptOverlay({
+  sale,
+  items,
+  store,
+  cashierName,
+  onClose,
+}: {
+  sale: Sale;
+  items: TicketItem[];
+  store: StoreBrand;
+  cashierName: string;
+  onClose: () => void;
+}) {
   const { closing, dismiss } = useDismiss(onClose);
+  const storeName = store.name;
   return (
     <div className="fixed inset-0 z-[110] grid place-items-center px-5" role="dialog" aria-modal="true" aria-label="Receipt">
       <div className={"absolute inset-0 glass overlay-backdrop " + (closing ? "closing" : "")} />
@@ -1144,13 +1304,25 @@ function ReceiptOverlay({ sale, storeName, onClose }: { sale: Sale; storeName: s
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={dismiss}
-          className="mt-6 w-full rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3.5 font-semibold text-white shadow-btn tracking-tight transition duration-150 ease-in-out"
-        >
-          New sale
-        </button>
+        <div className="mt-6 grid grid-cols-[auto_1fr] gap-2.5">
+          <button
+            type="button"
+            onClick={() => printSaleReceipt({ store, sale, items, cashierName })}
+            title="Print receipt"
+            aria-label="Print receipt"
+            className="inline-flex items-center justify-center gap-2 rounded-[10px] bg-surface hairline px-4 py-3.5 font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+          >
+            <Icon name="receipt" className="w-[18px] h-[18px]" strokeWidth={1.8} />
+            Print
+          </button>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="w-full rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3.5 font-semibold text-white shadow-btn tracking-tight transition duration-150 ease-in-out"
+          >
+            New sale
+          </button>
+        </div>
       </div>
     </div>
   );

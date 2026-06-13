@@ -169,6 +169,9 @@ accountRouter.patch("/receipt", async (req, res) => {
       vatLabel: text(body.vatLabel, 40),
       invoicePrefix,
       showLogo: body.showLogo !== false,
+      ptu: text(body.ptu, 40),
+      min: text(body.min, 40),
+      serial: text(body.serial, 40),
     });
     res.json({ ok: true, settings: await getReceiptSettings(tenantId) });
   } catch (err) {
