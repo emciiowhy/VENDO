@@ -14,6 +14,7 @@ import {
   deleteSupplier,
   getProcurementSummary,
   getPurchaseOrder,
+  getReorderSuggestions,
   listPurchaseOrders,
   listSuppliers,
   receivePurchaseOrder,
@@ -79,6 +80,19 @@ procurementRouter.get("/summary", async (req, res) => {
   } catch (err) {
     console.error("[procurement] summary failed:", err);
     res.status(500).json({ ok: false, error: "Could not load your procurement summary." });
+  }
+});
+
+// ── Reorder suggestions ─────────────────────────────────────────────────────
+
+procurementRouter.get("/reorder-suggestions", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    res.json({ ok: true, suggestions: await getReorderSuggestions(tenantId) });
+  } catch (err) {
+    console.error("[procurement] reorder suggestions failed:", err);
+    res.status(500).json({ ok: false, error: "Could not compute reorder suggestions." });
   }
 });
 

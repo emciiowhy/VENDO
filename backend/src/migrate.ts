@@ -375,6 +375,10 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
 );
 
 CREATE INDEX IF NOT EXISTS purchase_order_items_po_idx ON purchase_order_items (po_id);
+-- Lets the "latest purchase cost per product" lookup (balance-sheet inventory
+-- valuation + reorder suggestions) seek instead of scanning the whole PO-items
+-- table once per product. Additive + idempotent.
+CREATE INDEX IF NOT EXISTS purchase_order_items_product_idx ON purchase_order_items (product_id);
 
 CREATE TABLE IF NOT EXISTS po_counters (
   tenant_id  UUID PRIMARY KEY REFERENCES tenants (id) ON DELETE CASCADE,
@@ -605,6 +609,13 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS vat_label        TEXT;   -- e.g. "V
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS invoice_prefix   TEXT;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS receipt_show_logo BOOLEAN NOT NULL DEFAULT TRUE;
 
+-- BIR machine-accreditation footer (printed on every receipt for a valid CAS/POS
+-- under PH rules). All optional — a store fills these from its BIR Permit to Use:
+-- Permit to Use No., Machine Identification No., and the unit's serial number.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS receipt_ptu      TEXT;   -- Permit to Use (PTU) No.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS receipt_min      TEXT;   -- Machine Identification No.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS receipt_serial   TEXT;   -- Machine serial number
+
 -- Personal profile for an owner/manager account (shown in the dashboard chrome).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone      TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
@@ -682,13 +693,110 @@ CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications (user_id, cre
 -- At most one UNREAD row per (user, dedupe_key): repeat events coalesce until read.
 CREATE UNIQUE INDEX IF NOT EXISTS notifications_unread_dedupe
   ON notifications (user_id, dedupe_key) WHERE read_at IS NULL;
+
+-- ---------------------------------------------------------------------------
+-- Stock-movement ledger — the source of truth for inventory on-hand.
+--
+-- Every change to \`products.stock\` posts an immutable, signed row here: a sale
+-- (-), a PO receive (+), manufacturing consume (-) / output (+), or a manual
+-- \`adjust\` (the delta of an owner edit). \`products.stock\` is kept as the fast
+-- cached on-hand; this ledger is what makes that number EXPLAINABLE and
+-- auditable — SUM(qty_delta) per product must equal the cached stock, and a
+-- drift between them is a detectable bug rather than a silent one.
+--
+-- \`balance_after\` snapshots on-hand immediately after the move (under the row
+-- lock that produced it), so the history reads as a running statement. Voids /
+-- returns (a later module) post here too — \`sale_void\` / \`return\` — which is
+-- why the inventory side of those is already solved once this lands. Strictly
+-- tenant-fenced like every other merchant table.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS stock_movements (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     UUID        NOT NULL REFERENCES tenants (id) ON DELETE CASCADE,
+  product_id    UUID        NOT NULL REFERENCES products (id) ON DELETE CASCADE,
+  qty_delta     INTEGER     NOT NULL,          -- signed: -3 sale, +50 receive
+  balance_after INTEGER     NOT NULL CHECK (balance_after >= 0),
+  reason        TEXT        NOT NULL CHECK (reason IN
+                  ('sale','sale_void','return','po_receive','produce_consume',
+                   'produce_output','adjust','count')),
+  ref_table     TEXT,                          -- 'sales' | 'purchase_orders' | 'production_runs' | null
+  ref_id        UUID,                          -- the sale / PO / run that caused the move
+  note          TEXT,
+  created_by    UUID        REFERENCES users (id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS stock_movements_tenant_idx  ON stock_movements (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS stock_movements_product_idx ON stock_movements (product_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS stock_movements_ref_idx     ON stock_movements (ref_table, ref_id);
+
+-- ---------------------------------------------------------------------------
+-- Void / Return — contra entries on the sales ledger.
+--
+-- A void (cancel a whole mistaken sale) or a return (give money back for some
+-- or all lines) is recorded as a NEGATIVE \`sales\` row of \`kind\` 'void' / 'return',
+-- linked to the original via \`reverses_sale_id\`. Modelling reversals as contra
+-- rows in the SAME table means every revenue SUM (shift Z-Read, finance P&L, CRM
+-- spend, Pulse) nets them out automatically — and a refund settles against the
+-- drawer/period it is processed in, which is what actually happens at the till
+-- (you can't reach back into a closed shift). The original row is never
+-- rewritten; only its lifecycle \`status\` flag is updated. Stock is restored
+-- through the stock-movement ledger (\`sale_void\` / \`return\` reasons), and any
+-- loyalty earned is reversed in the same transaction.
+--
+-- Because contra rows carry negative money and negative quantities, the original
+-- non-negative CHECK constraints on \`sales\` / \`sale_items\` are relaxed below.
+-- Normal sales remain positive by construction (the checkout path never writes a
+-- negative); the negatives only ever come from this reversal path.
+-- ---------------------------------------------------------------------------
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'completed'
+  CHECK (status IN ('completed', 'voided', 'partially_returned', 'returned'));
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'sale'
+  CHECK (kind IN ('sale', 'void', 'return'));
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS reverses_sale_id UUID REFERENCES sales (id) ON DELETE SET NULL;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS reversal_reason TEXT;
+
+-- Drop the inline non-negative money checks so contra rows can be negative.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sales_total_cents_check')
+    THEN ALTER TABLE sales DROP CONSTRAINT sales_total_cents_check; END IF;
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sales_subtotal_cents_check')
+    THEN ALTER TABLE sales DROP CONSTRAINT sales_subtotal_cents_check; END IF;
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sales_vat_cents_check')
+    THEN ALTER TABLE sales DROP CONSTRAINT sales_vat_cents_check; END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS sales_reverses_idx ON sales (reverses_sale_id);
+CREATE INDEX IF NOT EXISTS sales_status_idx ON sales (tenant_id, status);
+
+-- A reversal line points back at the original sale_item it unwinds, so we can
+-- track how much of each line has already been returned. Contra quantities are
+-- negative, so the original qty>0 check is relaxed to "non-zero".
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS reverses_sale_item_id UUID
+  REFERENCES sale_items (id) ON DELETE SET NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sale_items_qty_check')
+    THEN ALTER TABLE sale_items DROP CONSTRAINT sale_items_qty_check; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sale_items_qty_nonzero')
+    THEN ALTER TABLE sale_items ADD CONSTRAINT sale_items_qty_nonzero CHECK (qty <> 0); END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS sale_items_reverses_idx ON sale_items (reverses_sale_item_id);
+
+-- Per-Tenant monotonic serial for reversal references (VD-000001 / RV-000001),
+-- same locked-upsert trick as the invoice/PO/production serializers.
+CREATE TABLE IF NOT EXISTS reversal_counters (
+  tenant_id  UUID PRIMARY KEY REFERENCES tenants (id) ON DELETE CASCADE,
+  next_seq   BIGINT      NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications ready.",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements ready.",
   );
 }
 

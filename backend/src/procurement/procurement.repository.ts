@@ -1,4 +1,6 @@
 import { pool, query } from "../db.js";
+import { moveStock } from "../inventory/stockLedger.js";
+import { suggestReorderQty, type ReorderSuggestion } from "./procurement.reorder.js";
 import type {
   PoCreateInput,
   PurchaseOrderDetail,
@@ -344,11 +346,21 @@ export async function receivePurchaseOrder(
     );
     for (const it of itemsRes.rows) {
       if (!it.product_id) continue;
-      await client.query(
-        `UPDATE products SET stock = stock + $1, updated_at = now()
-          WHERE id = $2 AND tenant_id = $3`,
-        [it.qty, it.product_id, tenantId],
-      );
+      // Restock through the ledger (this also takes the product-row lock the bare
+      // increment previously skipped). A GONE product is one that was deleted
+      // after the PO was raised — its line FK is already nulled, so this is
+      // belt-and-braces; skip rather than fail the whole receive.
+      const moved = await moveStock(client, {
+        tenantId,
+        productId: it.product_id,
+        qtyDelta: it.qty,
+        reason: "po_receive",
+        refTable: "purchase_orders",
+        refId: id,
+      });
+      if (!moved.ok && moved.code !== "GONE") {
+        throw new Error(`stock ledger refused PO receive line ${it.product_id}: ${moved.code}`);
+      }
     }
 
     await client.query(
@@ -447,4 +459,50 @@ export async function getProcurementSummary(tenantId: string): Promise<Procureme
     onOrderValueCents: Number(r.on_order),
     receivedThisMonthCents: Number(r.received_month),
   };
+}
+
+// ── Reorder suggestions ────────────────────────────────────────────────────────
+
+/**
+ * Active products at or below their low-stock floor (or fully depleted), with a
+ * suggested order quantity and their latest known purchase cost. This is the
+ * read side of "low-stock → draft PO": the owner reviews these and creates a
+ * single draft purchase order from the selection.
+ */
+export async function getReorderSuggestions(tenantId: string): Promise<ReorderSuggestion[]> {
+  const { rows } = await query<{
+    id: string;
+    name: string;
+    sku: string | null;
+    stock: number;
+    threshold: number;
+    last_cost: number;
+  }>(
+    `WITH latest_cost AS (
+        SELECT DISTINCT ON (i.product_id) i.product_id, i.unit_cost_cents
+          FROM purchase_order_items i
+          JOIN purchase_orders po ON po.id = i.po_id
+         WHERE po.tenant_id = $1
+         ORDER BY i.product_id, po.created_at DESC
+      )
+      SELECT p.id, p.name, p.sku, p.stock,
+             p.low_stock_threshold AS threshold,
+             coalesce(lc.unit_cost_cents, 0) AS last_cost
+        FROM products p
+        LEFT JOIN latest_cost lc ON lc.product_id = p.id
+       WHERE p.tenant_id = $1
+         AND p.is_active = TRUE
+         AND ((p.low_stock_threshold > 0 AND p.stock <= p.low_stock_threshold) OR p.stock = 0)
+       ORDER BY (p.stock = 0) DESC, p.stock ASC, lower(p.name) ASC`,
+    [tenantId],
+  );
+  return rows.map((row) => ({
+    productId: row.id,
+    name: row.name,
+    sku: row.sku,
+    stock: row.stock,
+    threshold: row.threshold,
+    suggestedQty: suggestReorderQty(row.stock, row.threshold),
+    lastUnitCostCents: row.last_cost,
+  }));
 }

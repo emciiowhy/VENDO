@@ -19,6 +19,7 @@ import { STATUS_STYLE } from "./statusStyle";
 import { SupplierFormModal } from "./SupplierFormModal";
 import { PoFormModal } from "./PoFormModal";
 import { PoDetailDrawer } from "./PoDetailDrawer";
+import { ReorderModal } from "./ReorderModal";
 
 /**
  * Merchant Procurement console — suppliers + purchase orders, with receiving a
@@ -38,6 +39,7 @@ export function ProcurementConsole() {
   const [tab, setTab] = useState<Tab>("orders");
 
   const [poForm, setPoForm] = useState(false);
+  const [reorderOpen, setReorderOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [supplierForm, setSupplierForm] = useState<{ supplier: Supplier | null } | null>(null);
   const [confirmPo, setConfirmPo] = useState<PurchaseOrderSummary | null>(null);
@@ -106,7 +108,15 @@ export function ProcurementConsole() {
           <h2 className="text-[1.3rem] font-extrabold tracking-tightest">Procurement</h2>
           <p className="text-[13.5px] text-ink-soft">Order stock from suppliers — receiving a PO restocks your inventory.</p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setReorderOpen(true)}
+            className="inline-flex items-center gap-2 bg-paper hairline text-ink font-semibold text-[14px] px-4 py-2.5 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition duration-150"
+          >
+            <Icon name="box" className="w-[18px] h-[18px]" strokeWidth={1.7} />
+            Reorder low stock
+          </button>
           <button
             type="button"
             onClick={() => setSupplierForm({ supplier: null })}
@@ -190,6 +200,16 @@ export function ProcurementConsole() {
       )}
       {detailId && (
         <PoDetailDrawer id={detailId} onClose={() => setDetailId(null)} onChanged={() => void load()} />
+      )}
+      {reorderOpen && (
+        <ReorderModal
+          onClose={() => setReorderOpen(false)}
+          onCreated={() => {
+            setReorderOpen(false);
+            setTab("orders");
+            void load();
+          }}
+        />
       )}
       {confirmPo && (
         <ConfirmDialog

@@ -79,6 +79,33 @@ export interface FinanceSummary {
   trend: TrendPoint[];
 }
 
+// ── Balance sheet + cash flow (derived statements) ──────────────────────────
+
+export interface StatementLine {
+  label: string;
+  amountCents: number;
+}
+
+export interface BalanceSheet {
+  asOf: string;
+  assets: { items: StatementLine[]; totalCents: number };
+  liabilities: { items: StatementLine[]; totalCents: number };
+  equity: { items: StatementLine[]; totalCents: number };
+  balanced: boolean;
+}
+
+export interface CashFlow {
+  month: string;
+  monthLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  inflows: StatementLine[];
+  outflows: StatementLine[];
+  netChangeCents: number;
+  openingCashCents: number;
+  closingCashCents: number;
+}
+
 /** Fields the expense form collects; amount is in pesos (backend stores centavos). */
 export interface ExpenseFields {
   incurredOn: string;
@@ -119,6 +146,23 @@ export async function getFinanceSummary(months = 6): Promise<Result<{ summary: F
 export async function listExpenses(): Promise<Result<{ expenses: Expense[] }>> {
   try {
     return await readJson(await fetch(`${BASE}/expenses`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function getBalanceSheet(): Promise<Result<{ balanceSheet: BalanceSheet }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/balance-sheet`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function getCashFlow(month?: string): Promise<Result<{ cashFlow: CashFlow }>> {
+  const qs = month ? `?month=${month}` : "";
+  try {
+    return await readJson(await fetch(`${BASE}/cash-flow${qs}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }

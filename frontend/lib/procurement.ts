@@ -59,6 +59,17 @@ export interface ProcurementSummary {
   receivedThisMonthCents: number;
 }
 
+/** A low-stock product the system suggests reordering (see backend reorder helper). */
+export interface ReorderSuggestion {
+  productId: string;
+  name: string;
+  sku: string | null;
+  stock: number;
+  threshold: number;
+  suggestedQty: number;
+  lastUnitCostCents: number;
+}
+
 /** Fields the supplier form collects. */
 export interface SupplierFields {
   name: string;
@@ -125,6 +136,14 @@ export async function listSuppliers(): Promise<Result<{ suppliers: Supplier[] }>
 export async function listPurchaseOrders(): Promise<Result<{ purchaseOrders: PurchaseOrderSummary[] }>> {
   try {
     return await readJson(await fetch(`${BASE}/purchase-orders`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function getReorderSuggestions(): Promise<Result<{ suggestions: ReorderSuggestion[] }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/reorder-suggestions`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }
