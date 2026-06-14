@@ -130,6 +130,19 @@ body {
   background-size: 38px 38px;
 }
 
+/* ---- Scrollable tracks with no chrome ----
+   Hides the native scrollbar (and, on Windows, the vertical up/down arrow
+   buttons a forced overflow-y:auto would otherwise draw) while keeping the
+   element scrollable. Used by horizontal nav-tab tracks so a row of tabs can
+   overflow-scroll cleanly without painting a stray scrollbar rectangle. */
+.scrollbar-none {
+  -ms-overflow-style: none; /* legacy Edge / IE */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* Chromium / Safari */
+}
+
 /* ---- FAQ disclosure ---- */
 details > summary {
   list-style: none;

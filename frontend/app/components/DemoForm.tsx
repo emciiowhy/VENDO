@@ -30,6 +30,7 @@ const emptyForm: LeadPayload = {
   phone: "",
   businessType: "",
   message: "",
+  password: "",
 };
 
 function validate(data: LeadPayload): Record<string, string> {
@@ -41,6 +42,10 @@ function validate(data: LeadPayload): Record<string, string> {
     errors.email = "Please enter a valid email address.";
   if (data.phone && data.phone.replace(/\D/g, "").length < 7)
     errors.phone = "Please enter a valid phone number.";
+  // Password is optional, but if the prospect chooses to set one it must be
+  // strong enough to be a real sign-in credential.
+  if (data.password && data.password.length > 0 && data.password.length < 8)
+    errors.password = "Use at least 8 characters.";
   return errors;
 }
 
@@ -49,6 +54,9 @@ export function DemoForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<Extract<LeadResult, { ok: true }>["lead"] | null>(null);
+  // Whether the prospect set a password with this request — drives the success
+  // note ("you can sign in as soon as we approve you").
+  const [passwordChosen, setPasswordChosen] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
   function update<K extends keyof LeadPayload>(key: K, value: string) {
@@ -76,6 +84,7 @@ export function DemoForm() {
     setSubmitting(false);
 
     if (res.ok) {
+      setPasswordChosen(Boolean(form.password && form.password.length >= 8));
       setResult(res.lead);
     } else if (res.errors) {
       setErrors(res.errors);
@@ -88,6 +97,7 @@ export function DemoForm() {
     setForm(emptyForm);
     setErrors({});
     setResult(null);
+    setPasswordChosen(false);
     setServerError(null);
   }
 
@@ -128,6 +138,12 @@ export function DemoForm() {
                   </>
                 ) : null}
               </div>
+              {passwordChosen && (
+                <p className="mt-5 inline-flex items-center gap-2 text-[13px] font-semibold text-accent-600 bg-accent-50 rounded-[10px] px-4 py-2.5">
+                  <Icon name="lock" className="w-4 h-4 shrink-0" strokeWidth={1.9} />
+                  Password saved — you can sign in as soon as we approve your store.
+                </p>
+              )}
               <div className="mt-7">
                 <button
                   type="button"
@@ -219,6 +235,37 @@ export function DemoForm() {
                   placeholder="Tell us anything that would help us prepare for your demo…"
                   className="field-input rounded-[10px] px-3.5 py-3 text-[15px] resize-y"
                 />
+              </div>
+
+              <div
+                className={
+                  "field-wrap flex flex-col gap-2 sm:col-span-2" +
+                  (errors.password ? " invalid" : "")
+                }
+              >
+                <label htmlFor="password" className="text-[14px] font-bold text-ink">
+                  Create your password{" "}
+                  <span className="text-ink-faint font-medium">(optional)</span>
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={form.password ?? ""}
+                  onChange={(e) => update("password", e.target.value)}
+                  placeholder="At least 8 characters"
+                  autoComplete="new-password"
+                  className="field-input rounded-[10px] px-3.5 py-3 text-[15px]"
+                />
+                {errors.password ? (
+                  <span className="text-[12.5px] font-semibold text-rose-600">
+                    {errors.password}
+                  </span>
+                ) : (
+                  <span className="text-[12.5px] text-ink-soft">
+                    Set one now and you can sign in the moment we approve your store — no
+                    waiting for a password from us. You can also skip this and set it later.
+                  </span>
+                )}
               </div>
 
               <div className="sm:col-span-2 flex flex-col gap-3">

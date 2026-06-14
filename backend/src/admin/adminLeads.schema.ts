@@ -34,6 +34,16 @@ export const provisionSchema = z.object({
   plan: z.enum(PLANS, { errorMap: () => ({ message: "Choose a plan." }) }),
   ownerEmail: z.string().trim().toLowerCase().email("Enter a valid email.").max(200),
   ownerName: z.string().trim().min(1, "Owner name is required.").max(120),
+  // Optional. If the prospect already set a password with their demo request, the
+  // owner is created with it and this can be left blank; supplying one here
+  // overrides it. Blank + no lead password → a Google-only owner (the prior
+  // behaviour). The Super Admin never has to invent or hand out a password.
+  ownerPassword: z
+    .string()
+    .min(8, "Owner password must be at least 8 characters.")
+    .max(100, "Keep the password under 100 characters.")
+    .optional()
+    .or(z.literal("")),
 });
 
 export type ProvisionInput = z.infer<typeof provisionSchema>;
@@ -50,4 +60,10 @@ export interface AdminLead {
   /** Extra context the landing form captured, surfaced in the drawer. */
   businessType: string | null;
   message: string | null;
+  /**
+   * True when the prospect set their own owner password on the demo request.
+   * The Super Admin drawer uses this to show "owner already set a password" and
+   * keep the password field optional. The hash itself is never sent to the client.
+   */
+  hasOwnerPassword: boolean;
 }

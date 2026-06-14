@@ -27,13 +27,20 @@ adminComplianceRouter.get("/summary", async (req, res) => {
   }
 });
 
-/** GET /api/v1/admin/compliance/export?month=YYYY-MM — consolidated CSV. */
+/**
+ * GET /api/v1/admin/compliance/export?month=YYYY-MM[&tenantId=UUID] — CSV.
+ * With no tenantId it streams the consolidated platform rollup; with one it
+ * narrows to a single store's filing report (the per-row download action).
+ */
 adminComplianceRouter.get("/export", async (req, res) => {
   try {
     const month = typeof req.query.month === "string" ? req.query.month : undefined;
+    const tenantId = typeof req.query.tenantId === "string" ? req.query.tenantId : undefined;
     const window = resolveMonth(month);
-    const summary = await getPlatformComplianceSummary(window.periodStart, window.periodEnd);
-    const filename = `vendopos-platform-vat-${window.periodStart.slice(0, 7)}.csv`;
+    const summary = await getPlatformComplianceSummary(window.periodStart, window.periodEnd, tenantId);
+    const period = window.periodStart.slice(0, 7);
+    const slug = tenantId ? (summary.rows[0]?.tenant ?? "store").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "platform";
+    const filename = `vendopos-vat-${slug}-${period}.csv`;
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(toPlatformCsv(summary));

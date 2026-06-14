@@ -221,6 +221,39 @@ export async function impersonateTenant(tenantId: string): Promise<ImpersonateRe
   }
 }
 
+export type SignupPlan = "starter" | "business";
+
+export type SignupResult =
+  | { ok: true; user: SessionUser; redirectTo: string }
+  | { ok: false; error?: string; errors?: Record<string, string> };
+
+/**
+ * Self-service signup from the pricing page. On success the backend has already
+ * provisioned the tenant and set the session cookie, so the caller should do a
+ * full-page navigation to `redirectTo` (window.location) — that reload also
+ * resets the cached session in useSession, so the new owner identity is picked
+ * up cleanly, exactly like the password-login path.
+ */
+export async function signUp(input: {
+  businessName: string;
+  ownerName: string;
+  email: string;
+  password: string;
+  plan: SignupPlan;
+}): Promise<SignupResult> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(input),
+    });
+    return (await res.json()) as SignupResult;
+  } catch {
+    return { ok: false, error: "Could not reach the server. Check your connection and try again." };
+  }
+}
+
 export async function logout(): Promise<void> {
   try {
     await fetch(`${API_BASE_URL}/auth/logout`, { method: "POST", credentials: "include" });

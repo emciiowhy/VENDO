@@ -19,6 +19,21 @@ export const adminHealthRouter = Router();
 /** How often we sample metrics and drain new activity (ms). */
 const TICK_MS = 3_000;
 
+/**
+ * GET /metrics — a one-shot snapshot of the same infrastructure vitals the
+ * stream pushes (NeonDB pool occupancy + a fresh query round-trip). The Platform
+ * Overview reads this once on load rather than holding an SSE connection open
+ * just to print three numbers.
+ */
+adminHealthRouter.get("/metrics", requireRole("SUPER_ADMIN"), async (_req: Request, res: Response) => {
+  try {
+    res.json({ ok: true, metrics: await sampleServerMetrics() });
+  } catch (err) {
+    console.error("[admin/health] metrics sample failed:", err);
+    res.status(500).json({ ok: false, error: "Could not sample server metrics." });
+  }
+});
+
 adminHealthRouter.get("/stream", requireRole("SUPER_ADMIN"), async (req: Request, res: Response) => {
   // SSE handshake. CORP is relaxed like the uploads host so the cross-origin
   // (3000 → 4000) EventSource isn't blocked by helmet's same-origin default.

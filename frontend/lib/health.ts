@@ -8,6 +8,24 @@ import { API_BASE_URL } from "./api";
 
 export const HEALTH_STREAM_URL = `${API_BASE_URL}/api/v1/admin/health/stream`;
 
+const METRICS_URL = `${API_BASE_URL}/api/v1/admin/health/metrics`;
+
+type Result<T> = ({ ok: true } & T) | { ok: false; error?: string };
+
+/**
+ * One-shot infrastructure vitals (pool occupancy + a fresh query round-trip),
+ * for views that want the numbers once on load without holding an SSE stream
+ * open — e.g. the Platform Overview telemetry strip.
+ */
+export async function getServerMetrics(): Promise<Result<{ metrics: ServerMetrics }>> {
+  try {
+    const res = await fetch(METRICS_URL, { credentials: "include" });
+    return (await res.json()) as Result<{ metrics: ServerMetrics }>;
+  } catch {
+    return { ok: false, error: "Could not reach the server." };
+  }
+}
+
 export interface ActivityEvent {
   id: string;
   kind: "sale" | "product";

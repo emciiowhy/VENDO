@@ -1,4 +1,5 @@
 import { pool, query } from "../db.js";
+import { hashPassword } from "../auth/auth.crypto.js";
 import { notifyNewTenant } from "../notifications/notifications.repository.js";
 import type { AdminLead, LeadStatus, ProvisionInput } from "./adminLeads.schema.js";
 
@@ -17,6 +18,7 @@ interface LeadRow {
   requested_at: Date;
   business_type: string | null;
   message: string | null;
+  owner_password_hash: string | null;
 }
 
 function toAdminLead(row: LeadRow): AdminLead {
@@ -30,11 +32,13 @@ function toAdminLead(row: LeadRow): AdminLead {
     requestedAt: row.requested_at.toISOString(),
     businessType: row.business_type,
     message: row.message,
+    // Expose only whether a password exists — never the hash itself.
+    hasOwnerPassword: row.owner_password_hash !== null,
   };
 }
 
 const SELECT = `id, business_name, name, email, phone, status,
-  created_at AS requested_at, business_type, message`;
+  created_at AS requested_at, business_type, message, owner_password_hash`;
 
 /** Whole pipeline, most-recent first (pending naturally bubble up as newest). */
 export async function listLeads(): Promise<AdminLead[]> {
@@ -113,11 +117,19 @@ export async function provisionLead(
     );
     const tenant = tenantRes.rows[0];
 
-    // 3. Insert the owner, linking their (verified Google) email.
+    // 3. Insert the owner. The password is optional and resolved by precedence:
+    //    a password the Super Admin typed here (hashed now) wins; otherwise the
+    //    one the prospect set on their demo request is carried over; otherwise
+    //    null — a Google-only owner, exactly as before. Either way the operator
+    //    never has to invent or hand out a credential.
+    const ownerPasswordHash =
+      input.ownerPassword && input.ownerPassword.length >= 8
+        ? hashPassword(input.ownerPassword)
+        : leadRow.owner_password_hash ?? null;
     await client.query(
-      `INSERT INTO users (tenant_id, email, name, role, status)
-       VALUES ($1, $2, $3, 'MERCHANT_OWNER', 'active')`,
-      [tenant.id, input.ownerEmail, input.ownerName],
+      `INSERT INTO users (tenant_id, email, name, role, status, password_hash)
+       VALUES ($1, $2, $3, 'MERCHANT_OWNER', 'active', $4)`,
+      [tenant.id, input.ownerEmail, input.ownerName, ownerPasswordHash],
     );
 
     // 4. Mark the lead approved.

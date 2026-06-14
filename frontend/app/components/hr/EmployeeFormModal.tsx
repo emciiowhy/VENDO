@@ -41,6 +41,15 @@ export function EmployeeFormModal({
   const [email, setEmail] = useState(() => employee?.email ?? "");
   const [note, setNote] = useState(() => employee?.note ?? "");
   const [isActive, setIsActive] = useState(() => employee?.isActive ?? true);
+  // Optional dossier + financial-suite fields.
+  const [address, setAddress] = useState(() => employee?.address ?? "");
+  const [emergencyName, setEmergencyName] = useState(() => employee?.emergencyContactName ?? "");
+  const [emergencyPhone, setEmergencyPhone] = useState(() => employee?.emergencyContactPhone ?? "");
+  const [bankName, setBankName] = useState(() => employee?.bankName ?? "");
+  const [bankAccountName, setBankAccountName] = useState(() => employee?.bankAccountName ?? "");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [ptoBalanceDays, setPtoBalanceDays] = useState(() => (employee ? String(employee.ptoBalanceDays) : ""));
+  const [showMore, setShowMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,7 +76,16 @@ export function EmployeeFormModal({
       email,
       note,
       isActive,
+      address,
+      emergencyContactName: emergencyName,
+      emergencyContactPhone: emergencyPhone,
+      bankName,
+      bankAccountName,
     };
+    // Account number is write-only — send only when newly typed so we never
+    // overwrite the stored value with a blank. Same for PTO (blank would zero it).
+    if (bankAccountNumber.trim()) fields.bankAccountNumber = bankAccountNumber.trim();
+    if (ptoBalanceDays.trim()) fields.ptoBalanceDays = ptoBalanceDays.trim();
     const res = editing ? await updateEmployee(employee.id, fields) : await createEmployee(fields);
     if (res.ok) {
       push({ variant: "success", title: editing ? "Employee updated" : "Employee added" });
@@ -157,6 +175,54 @@ export function EmployeeFormModal({
             <span className="text-[12px] font-semibold text-ink-soft">Note (optional)</span>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5 resize-none" />
           </label>
+
+          <button
+            type="button"
+            onClick={() => setShowMore((v) => !v)}
+            className="flex w-full items-center justify-between rounded-[10px] bg-paper hairline px-3.5 py-2.5 text-[13px] font-semibold text-ink-soft hover:text-ink transition"
+          >
+            <span className="flex items-center gap-2">
+              <Icon name="layers" className="w-4 h-4" strokeWidth={1.8} />
+              Personal &amp; payroll details (optional)
+            </span>
+            <Icon name="chevron" className={"w-4 h-4 transition-transform " + (showMore ? "rotate-180" : "")} strokeWidth={1.8} />
+          </button>
+
+          {showMore && (
+            <div className="space-y-3.5 rounded-[12px] bg-paper/50 hairline p-3.5">
+              <Field label="Home address" value={address} onChange={setAddress} placeholder="12 Mabini St, Cebu City" />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Emergency contact" value={emergencyName} onChange={setEmergencyName} placeholder="Contact name" />
+                <Field label="Emergency phone" value={emergencyPhone} onChange={setEmergencyPhone} placeholder="0917 000 0000" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Bank" value={bankName} onChange={setBankName} placeholder="BPI / GCash" />
+                <Field label="Account name" value={bankAccountName} onChange={setBankAccountName} placeholder="Account holder" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[12px] font-semibold text-ink-soft">Account number</span>
+                  <input
+                    value={bankAccountNumber}
+                    onChange={(e) => setBankAccountNumber(e.target.value)}
+                    placeholder={employee?.bankAccountLast4 ? `•••• ${employee.bankAccountLast4}` : "Account number"}
+                    className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5 tabular-nums"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[12px] font-semibold text-ink-soft">PTO balance (days)</span>
+                  <input
+                    inputMode="decimal"
+                    value={ptoBalanceDays}
+                    onChange={(e) => setPtoBalanceDays(e.target.value)}
+                    placeholder="0"
+                    className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5 tabular-nums"
+                  />
+                </label>
+              </div>
+              <p className="text-[11px] text-ink-faint">The account number is stored securely and only ever shown as its last 4 digits.</p>
+            </div>
+          )}
 
           {editing && (
             <label className="flex items-center gap-2.5 cursor-pointer select-none">

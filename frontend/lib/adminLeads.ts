@@ -19,6 +19,8 @@ export interface Lead {
   requestedAt: string;
   businessType: string | null;
   message: string | null;
+  /** True when the prospect set their own owner password on the demo request. */
+  hasOwnerPassword: boolean;
 }
 
 export interface ProvisionPayload {
@@ -27,6 +29,12 @@ export interface ProvisionPayload {
   plan: Plan;
   ownerEmail: string;
   ownerName: string;
+  /**
+   * Optional. Leave blank to keep the password the owner set on their request
+   * (or to provision a Google-only owner when none was set). Supplying one here
+   * overrides it.
+   */
+  ownerPassword?: string;
 }
 
 export interface ProvisionedTenant {

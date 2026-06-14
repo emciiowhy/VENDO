@@ -224,9 +224,9 @@ const COMPANY: MenuDef = {
         title: "About VendoPOS",
         icon: "building",
         links: [
-          { label: "About Us", href: "/company/about" },
-          { label: "Careers", href: "/company/careers" },
-          { label: "Contact Us", href: "/company/contact" },
+          { label: "About Us", href: "/about" },
+          { label: "Careers", href: "/careers" },
+          { label: "Contact Us", href: "/contact" },
         ],
       },
     ],

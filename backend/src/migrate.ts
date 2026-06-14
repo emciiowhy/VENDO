@@ -29,7 +29,8 @@ CREATE INDEX IF NOT EXISTS leads_created_at_idx ON leads (created_at DESC);
 -- A Tenant is the isolated data boundary belonging to one Merchant. A user is
 -- an account that may sign in: the platform-wide SUPER_ADMIN (tenant_id NULL),
 -- or a MERCHANT_OWNER / MANAGER / CASHIER scoped to exactly one Tenant.
--- There is no self-serve sign-up — the Super Admin provisions these rows.
+-- Tenants are created two ways: an operator promoting a demo lead, or a prospect
+-- self-serving a trial from the pricing page (see auth/signup.repository.ts).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tenants (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,6 +42,12 @@ CREATE TABLE IF NOT EXISTS tenants (
                           CHECK (status IN ('active', 'suspended')),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Self-service trial window. A merchant who signs up from the pricing page (as
+-- opposed to being provisioned by an operator) gets a 14-day trial: this stamps
+-- when it ends. NULL = no trial (operator-provisioned, or converted to paid). An
+-- "active trial" is simply trial_ends_at > now().
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -115,6 +122,11 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE INDEX IF NOT EXISTS products_tenant_idx ON products (tenant_id);
 CREATE INDEX IF NOT EXISTS products_category_idx ON products (category_id);
+-- A blank SKU means "no SKU" and must be stored as NULL, never ''. An empty
+-- string is NOT NULL, so it sits inside the partial unique index below and the
+-- second SKU-less product in a Tenant would collide. Normalise any legacy ''
+-- rows (idempotent) before (re)building the index.
+UPDATE products SET sku = NULL WHERE sku = '';
 -- SKUs are unique within a Tenant when present.
 CREATE UNIQUE INDEX IF NOT EXISTS products_tenant_sku_key
   ON products (tenant_id, lower(sku)) WHERE sku IS NOT NULL;
@@ -140,6 +152,14 @@ END $$;
 -- One pipeline row per email (case-insensitive); the landing insert upserts.
 CREATE UNIQUE INDEX IF NOT EXISTS leads_email_key ON leads (lower(email));
 CREATE INDEX IF NOT EXISTS leads_status_idx ON leads (status);
+
+-- Optional owner password captured on the "Request a demo" form. When a prospect
+-- sets a password with their request it's stored here (scrypt hash, never the raw
+-- value) so that on approval the Super Admin can provision the owner WITHOUT
+-- issuing a password — the owner signs in immediately with Store ID + email +
+-- the password they chose. Optional end-to-end: a lead without it provisions a
+-- Google-only owner exactly as before, and the Super Admin may still set one.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS owner_password_hash TEXT;
 
 -- ---------------------------------------------------------------------------
 -- Sales ledger (POS checkout). A \`sales\` header carries the BIR-style invoice
@@ -491,6 +511,29 @@ CREATE TABLE IF NOT EXISTS employees (
 );
 
 CREATE INDEX IF NOT EXISTS employees_tenant_idx ON employees (tenant_id, lower(name));
+
+-- HR v2 additions (deep employee profile, retention, PTO, self-service). All
+-- additive + idempotent so a running tenant upgrades without a rebuild.
+--
+--   separated_on        the date an employee left (set when is_active flips to
+--                       false, cleared on re-activation). Makes monthly RETENTION
+--                       a real figure instead of a guess from is_active alone.
+--   pto_balance_days    accrued Paid Time Off the employee may still draw. Days
+--                       drawn are the count of 'Leave' attendance rows; the ESS
+--                       portal shows balance vs. used-YTD.
+--   bank_*              direct-deposit details for the payroll disbursement file
+--                       (the merchant's own staff data, tenant-fenced; the API
+--                       masks the account number to its last 4 on read).
+--   emergency_* / address  the personal dossier shown on the profile file.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS separated_on            DATE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS pto_balance_days        NUMERIC(6,2) NOT NULL DEFAULT 0
+  CHECK (pto_balance_days >= 0);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS bank_name               TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS bank_account_name       TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS bank_account_number     TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS address                 TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS emergency_contact_name  TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS emergency_contact_phone TEXT;
 
 CREATE TABLE IF NOT EXISTS attendance (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

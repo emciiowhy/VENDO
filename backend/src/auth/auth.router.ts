@@ -22,6 +22,7 @@ import {
   type LoginMethod,
 } from "./auth.repository.js";
 import { createPinRequest, listActiveCashiers } from "../staff/staff.repository.js";
+import { signUpMerchant, type SignupPlan } from "./signup.repository.js";
 import {
   clearSessionCookie,
   clientContext,
@@ -211,6 +212,62 @@ authRouter.post("/password-login", async (req, res) => {
   } catch (err) {
     console.error("[auth] password login failed:", err);
     return res.status(500).json({ ok: false, error: "Could not sign you in. Try again." });
+  }
+});
+
+// ── Self-service signup ─────────────────────────────────────────────────────
+// A prospect creates their own store from the pricing page (Starter/Business)
+// and is signed straight in on a 14-day trial. Enterprise is contact-sales only,
+// so it never reaches here. Distinct from the operator-driven lead promotion.
+
+const SIGNUP_PLANS = new Set<SignupPlan>(["starter", "business"]);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * POST /auth/signup — { businessName, ownerName, email, password, plan }.
+ * Validates the form, atomically provisions a fresh isolated tenant + owner +
+ * seeded demo workspace, then issues the owner's session cookie so there's zero
+ * friction into the dashboard. Field-level errors come back in `errors`.
+ */
+authRouter.post("/signup", async (req, res) => {
+  const body = req.body as Record<string, unknown>;
+  const businessName = String(body?.businessName ?? "").trim();
+  const ownerName = String(body?.ownerName ?? "").trim();
+  const email = String(body?.email ?? "").trim();
+  const password = String(body?.password ?? "");
+  const planRaw = String(body?.plan ?? "starter").trim().toLowerCase();
+  const plan: SignupPlan = SIGNUP_PLANS.has(planRaw as SignupPlan)
+    ? (planRaw as SignupPlan)
+    : "starter";
+
+  const errors: Record<string, string> = {};
+  if (businessName.length < 2) errors.businessName = "Enter your business name.";
+  if (ownerName.length < 2) errors.ownerName = "Enter your name.";
+  if (!EMAIL_RE.test(email)) errors.email = "Enter a valid email address.";
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ ok: false, errors });
+  }
+
+  try {
+    const result = await signUpMerchant({ businessName, ownerName, email, password, plan });
+    if (!result.ok) {
+      return res.status(409).json({
+        ok: false,
+        errors: { email: "An account with this email already exists — try signing in instead." },
+      });
+    }
+    await issueSession(res, req, result.session, "password");
+    return res.json({
+      ok: true,
+      user: result.session,
+      redirectTo: dashboardPathForRole(result.session.role),
+    });
+  } catch (err) {
+    console.error("[auth] signup failed:", err);
+    return res.status(500).json({ ok: false, error: "Could not create your account. Please try again." });
   }
 });
 

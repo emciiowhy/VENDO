@@ -29,8 +29,98 @@ export interface Employee {
   email: string | null;
   note: string | null;
   isActive: boolean;
+  separatedOn: string | null;
+  address: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  bankName: string | null;
+  bankAccountName: string | null;
+  bankAccountLast4: string | null;
+  ptoBalanceDays: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AttendanceDay {
+  date: string;
+  status: string;
+  hours: number;
+}
+
+export interface EmployeePayslip {
+  runId: string;
+  reference: string;
+  periodStart: string;
+  periodEnd: string;
+  payType: string;
+  payRateCents: number;
+  basisQty: number;
+  grossCents: number;
+  createdAt: string;
+}
+
+export interface HoursBreakdown {
+  daysPresent: number;
+  hoursWorked: number;
+  regularHours: number;
+  overtimeHours: number;
+  attendanceRatePct: number;
+}
+
+export interface PerformanceRow {
+  employeeId: string;
+  userId: string | null;
+  name: string;
+  position: string | null;
+  linked: boolean;
+  daysPresent: number;
+  hoursWorked: number;
+  regularHours: number;
+  overtimeHours: number;
+  attendanceRatePct: number;
+  salesCents: number;
+  txnCount: number;
+  salesPerHourCents: number;
+  shiftsClosed: number;
+  drawerVarianceCents: number;
+  drawerAccuracyPct: number | null;
+}
+
+export interface PerformanceReport {
+  from: string;
+  to: string;
+  rows: PerformanceRow[];
+}
+
+export interface RosterEntry {
+  shiftId: string;
+  userId: string | null;
+  name: string;
+  openingCents: number;
+  openedAt: string;
+}
+
+export interface HrOverview {
+  headcount: number;
+  activeHeadcount: number;
+  newHiresThisMonth: number;
+  separationsThisMonth: number;
+  retentionRatePct: number;
+  departments: { name: string; count: number }[];
+  employmentTypes: { type: string; count: number }[];
+  payTypes: { type: string; count: number }[];
+  presentToday: number;
+  roster: RosterEntry[];
+  pendingPinRequests: number;
+}
+
+export interface EmployeeDetail extends Employee {
+  month: string;
+  attendanceMonth: AttendanceDay[];
+  hours: HoursBreakdown;
+  ptoUsedYtd: number;
+  payslips: EmployeePayslip[];
+  performance: PerformanceRow | null;
 }
 
 export interface AttendanceRow {
@@ -85,6 +175,14 @@ export interface EmployeeFields {
   email: string;
   note: string;
   isActive: boolean;
+  // Optional dossier + financial-suite fields (sent only when present).
+  address?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  bankName?: string;
+  bankAccountName?: string;
+  bankAccountNumber?: string; // write-only; never returned by the API
+  ptoBalanceDays?: string; // days
 }
 
 export type Result<T> =
@@ -106,6 +204,35 @@ const NETWORK_ERR = { ok: false as const, error: "Could not reach the server. Ch
 export async function getHrSummary(): Promise<Result<{ summary: HrSummary }>> {
   try {
     return await readJson(await fetch(`${BASE}/summary`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function getHrOverview(): Promise<Result<{ overview: HrOverview }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/overview`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function getPerformance(from?: string, to?: string): Promise<Result<{ report: PerformanceReport }>> {
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", from);
+  if (to) qs.set("to", to);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  try {
+    return await readJson(await fetch(`${BASE}/performance${suffix}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function getEmployeeDetail(id: string, month?: string): Promise<Result<{ employee: EmployeeDetail }>> {
+  const suffix = month ? `?month=${month}` : "";
+  try {
+    return await readJson(await fetch(`${BASE}/employees/${id}${suffix}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }

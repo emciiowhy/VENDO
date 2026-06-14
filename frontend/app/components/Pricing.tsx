@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Icon } from "./Icon";
 
 type Plan = {
@@ -8,6 +9,8 @@ type Plan = {
   indicative: boolean;
   features: string[];
   featured?: boolean;
+  /** Self-service trial tier → routes to signup. Enterprise stays contact-sales. */
+  signupPlan?: "starter" | "business";
 };
 
 const plans: Plan[] = [
@@ -17,6 +20,7 @@ const plans: Plan[] = [
     price: "₱499",
     per: "/mo",
     indicative: true,
+    signupPlan: "starter",
     features: [
       "Point of Sale",
       "Inventory",
@@ -32,6 +36,7 @@ const plans: Plan[] = [
     per: "/mo",
     indicative: true,
     featured: true,
+    signupPlan: "business",
     features: [
       "Everything in Starter",
       "Procurement & Supply Chain",
@@ -117,23 +122,34 @@ export function Pricing() {
                   </li>
                 ))}
               </ul>
-              <a
-                href="#demo"
-                className={
-                  "mt-7 inline-flex justify-center items-center font-semibold py-3 rounded-[11px] transition " +
-                  (plan.featured
-                    ? "bg-brand-600 text-white shadow-btn hover:bg-brand-700"
-                    : "bg-white hairline text-ink hover:border-brand-200 hover:text-brand-600")
-                }
-              >
-                Request a Demo
-              </a>
+              {plan.signupPlan ? (
+                <Link
+                  href={`/auth/signup?plan=${plan.signupPlan}`}
+                  className={
+                    "mt-7 inline-flex justify-center items-center gap-2 font-semibold py-3 rounded-[11px] transition " +
+                    (plan.featured
+                      ? "bg-brand-600 text-white shadow-btn hover:bg-brand-700"
+                      : "bg-white hairline text-ink hover:border-brand-200 hover:text-brand-600")
+                  }
+                >
+                  Start Free Trial
+                  <Icon name="arrow" className="w-[17px] h-[17px]" strokeWidth={2} />
+                </Link>
+              ) : (
+                <a
+                  href="#demo"
+                  className="mt-7 inline-flex justify-center items-center font-semibold py-3 rounded-[11px] transition bg-white hairline text-ink hover:border-brand-200 hover:text-brand-600"
+                >
+                  Request a Demo
+                </a>
+              )}
             </div>
           ))}
         </div>
         <p className="mt-8 text-center text-[0.9rem] text-ink-soft">
           Prices shown in Philippine peso (₱) and are indicative placeholders pending finalisation.
-          No checkout — every plan starts with a demo.
+          Starter &amp; Business include a 14-day free trial — no card required. Enterprise starts with
+          a demo.
         </p>
       </div>
     </section>

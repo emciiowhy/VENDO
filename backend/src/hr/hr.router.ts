@@ -12,9 +12,11 @@ import {
   createPayrollRun,
   deleteEmployee,
   getAttendanceForDate,
-  getEmployee,
+  getEmployeeDetail,
+  getHrOverview,
   getHrSummary,
   getPayrollRun,
+  getPerformance,
   listEmployees,
   listPayrollRuns,
   updateEmployee,
@@ -49,6 +51,19 @@ function noTenant(res: Response) {
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_MONTH = /^\d{4}-\d{2}$/;
+
+/** Read & validate a YYYY-MM query param, defaulting to the current Manila month. */
+function monthParam(req: Request): string {
+  const m = req.query.month;
+  return typeof m === "string" && ISO_MONTH.test(m) ? m : new Date().toISOString().slice(0, 7);
+}
+
+/** Read a YYYY-MM-DD query param if valid, else null. */
+function dateParam(req: Request, key: string): string | null {
+  const v = req.query[key];
+  return typeof v === "string" && ISO_DATE.test(v) ? v : null;
+}
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +78,38 @@ hrRouter.get("/summary", async (req, res) => {
   }
 });
 
+// ── Executive overview hub ─────────────────────────────────────────────────────
+
+hrRouter.get("/overview", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    res.json({ ok: true, overview: await getHrOverview(tenantId) });
+  } catch (err) {
+    console.error("[hr] overview failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load the HR overview." });
+  }
+});
+
+// ── Performance matrix ─────────────────────────────────────────────────────────
+
+hrRouter.get("/performance", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  // Default to the trailing 30 days when no explicit window is given.
+  const today = new Date().toISOString().slice(0, 10);
+  const monthAgo = new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
+  const from = dateParam(req, "from") ?? monthAgo;
+  const to = dateParam(req, "to") ?? today;
+  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
+  try {
+    res.json({ ok: true, report: await getPerformance(tenantId, from, to) });
+  } catch (err) {
+    console.error("[hr] performance failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load performance analytics." });
+  }
+});
+
 // ── Employees ────────────────────────────────────────────────────────────────
 
 hrRouter.get("/employees", async (req, res) => {
@@ -73,6 +120,19 @@ hrRouter.get("/employees", async (req, res) => {
   } catch (err) {
     console.error("[hr] list employees failed:", err);
     res.status(500).json({ ok: false, error: "Could not load employees." });
+  }
+});
+
+hrRouter.get("/employees/:id", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const detail = await getEmployeeDetail(tenantId, req.params.id, monthParam(req));
+    if (!detail) return res.status(404).json({ ok: false, error: "Employee not found." });
+    res.json({ ok: true, employee: detail });
+  } catch (err) {
+    console.error("[hr] employee detail failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load the employee file." });
   }
 });
 

@@ -22,6 +22,21 @@ describe("HR routes require store-management auth", () => {
       .send({ periodStart: "2026-06-01", periodEnd: "2026-06-15" });
     expect(res.status).toBe(401);
   });
+  it("blocks the executive overview for the unauthenticated with 401", async () => {
+    expect((await request(app).get("/api/v1/hr/overview")).status).toBe(401);
+  });
+  it("blocks the performance matrix for the unauthenticated with 401", async () => {
+    expect((await request(app).get("/api/v1/hr/performance")).status).toBe(401);
+  });
+  it("blocks the employee deep-dive for the unauthenticated with 401", async () => {
+    expect((await request(app).get(`/api/v1/hr/employees/${UUID}`)).status).toBe(401);
+  });
+});
+
+describe("ESS self-service requires auth", () => {
+  it("blocks the self-service record for the unauthenticated with 401", async () => {
+    expect((await request(app).get("/api/v1/ess/me")).status).toBe(401);
+  });
 });
 
 describe("employeeCreateSchema", () => {
@@ -36,6 +51,20 @@ describe("employeeCreateSchema", () => {
   });
   it("rejects an unknown pay type", () => {
     expect(employeeCreateSchema.safeParse({ name: "X", payType: "Yearly" }).success).toBe(false);
+  });
+  it("accepts optional dossier, bank and PTO fields", () => {
+    const e = employeeCreateSchema.parse({
+      name: "Maria Santos",
+      address: "12 Mabini St, Cebu",
+      emergencyContactName: "Jose Santos",
+      emergencyContactPhone: "0917-000-0000",
+      bankName: "BPI",
+      bankAccountName: "Maria Santos",
+      bankAccountNumber: "1234567890",
+      ptoBalanceDays: "5",
+    });
+    expect(e.bankAccountNumber).toBe("1234567890");
+    expect(e.ptoBalanceDays).toBe(5);
   });
 });
 

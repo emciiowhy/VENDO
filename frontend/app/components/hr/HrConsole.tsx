@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Icon, type IconName } from "../Icon";
 import { useToast } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { HrOverview } from "./HrOverview";
+import { PerformanceMatrix } from "./PerformanceMatrix";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
 import {
   ATTENDANCE_STATUSES,
@@ -14,6 +17,7 @@ import {
   listPayrollRuns,
   saveAttendance,
   type AttendanceRow,
+  type AttendanceStatus,
   type Employee,
   type HrSummary,
   type PayrollRunSummary,
@@ -27,7 +31,7 @@ import { PayrollDetailDrawer } from "./PayrollDetailDrawer";
  * dataset. Attendance is marked per day; payroll derives gross pay from rates +
  * that attendance. Builds on the same staff the cashier/shift ledger uses.
  */
-type Tab = "employees" | "attendance" | "payroll";
+type Tab = "overview" | "employees" | "attendance" | "payroll" | "performance";
 
 const PAY_TAG: Record<string, string> = {
   Monthly: "bg-brand-50 text-brand-600",
@@ -43,7 +47,7 @@ type State =
 export function HrConsole() {
   const { push } = useToast();
   const [state, setState] = useState<State>({ status: "loading" });
-  const [tab, setTab] = useState<Tab>("employees");
+  const [tab, setTab] = useState<Tab>("overview");
   const [form, setForm] = useState<{ employee: Employee | null } | null>(null);
   const [confirm, setConfirm] = useState<Employee | null>(null);
   const [payrollModal, setPayrollModal] = useState(false);
@@ -112,19 +116,23 @@ export function HrConsole() {
 
       {state.status === "ready" && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {/* No "Present today" / on-duty KPI here: who's on the clock is a POS
+              concern, not the owner's — the owner isn't a cashier. */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Kpi icon="users" label="Employees" value={String(state.summary.headcount)} />
-            <Kpi icon="check" label="Present today" value={String(state.summary.presentToday)} tone="good" />
             <Kpi icon="refresh" label="Payroll runs this month" value={String(state.summary.payrollRunsThisMonth)} />
             <Kpi icon="peso" label="Last payroll (gross)" value={formatCentsWhole(state.summary.lastPayrollGrossCents)} />
           </div>
 
-          <div className="flex items-center gap-1 border-b border-ink/8">
+          <div className="flex items-center gap-1 border-b border-ink/8 overflow-x-auto overflow-y-hidden scrollbar-none">
+            <TabButton active={tab === "overview"} onClick={() => setTab("overview")} label="Overview" />
             <TabButton active={tab === "employees"} onClick={() => setTab("employees")} label={`Employees (${state.employees.length})`} />
             <TabButton active={tab === "attendance"} onClick={() => setTab("attendance")} label="Attendance" />
             <TabButton active={tab === "payroll"} onClick={() => setTab("payroll")} label={`Payroll (${state.runs.length})`} />
+            <TabButton active={tab === "performance"} onClick={() => setTab("performance")} label="Performance" />
           </div>
 
+          {tab === "overview" && <HrOverview />}
           {tab === "employees" && (
             <EmployeesTable
               employees={state.employees}
@@ -137,6 +145,7 @@ export function HrConsole() {
           {tab === "payroll" && (
             <PayrollTable runs={state.runs} onOpen={setDetailId} onRun={() => setPayrollModal(true)} />
           )}
+          {tab === "performance" && <PerformanceMatrix />}
         </>
       )}
 
@@ -218,7 +227,9 @@ function EmployeesTable({
             {employees.map((e) => (
               <tr key={e.id} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition">
                 <td className="px-5 py-3">
-                  <span className="font-semibold">{e.name}</span>
+                  <Link href={`/dashboard/hr/employees/${e.id}`} className="font-semibold hover:text-brand-600 transition">
+                    {e.name}
+                  </Link>
                   <span className="block text-[11.5px] text-ink-faint">{e.employmentType}</span>
                 </td>
                 <td className="px-3 py-3 text-ink-soft">{e.position ?? "—"}</td>
@@ -233,6 +244,14 @@ function EmployeesTable({
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center justify-end gap-1">
+                    <Link
+                      href={`/dashboard/hr/employees/${e.id}`}
+                      aria-label="Open profile"
+                      title="Open profile"
+                      className="grid place-items-center w-8 h-8 rounded-[9px] text-ink-faint hover:bg-brand-50 hover:text-brand-600 transition duration-150"
+                    >
+                      <Icon name="eye" className="w-[17px] h-[17px]" strokeWidth={1.7} />
+                    </Link>
                     <RowAction icon="pencil" label="Edit" onClick={() => onEdit(e)} />
                     <RowAction icon="trash" label="Remove" danger onClick={() => onAskDelete(e)} />
                   </div>
@@ -251,6 +270,103 @@ function EmployeesTable({
 function isoToday(): string {
   const d = new Date();
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+}
+
+// Tinted pill per status (token-based, so each retints with the theme). `dot` is
+// the leading status dot's fill. Off-duty = the muted, record-less default.
+const STATUS_STYLE: Record<AttendanceStatus, { pill: string; dot: string }> = {
+  Present: { pill: "bg-accent-50 text-accent-600", dot: "bg-accent-500" },
+  "Half-day": { pill: "bg-amber-50 text-amber-600", dot: "bg-amber-500" },
+  Leave: { pill: "bg-brand-50 text-brand-600", dot: "bg-brand-500" },
+  Absent: { pill: "bg-rose-50 text-rose-600", dot: "bg-rose-500" },
+};
+const OFF_DUTY_STYLE = { pill: "bg-paper hairline text-ink-faint", dot: "bg-ink-faint" };
+
+function asStatus(value: string | null): AttendanceStatus | null {
+  return value && (ATTENDANCE_STATUSES as readonly string[]).includes(value) ? (value as AttendanceStatus) : null;
+}
+
+/**
+ * Read-only status badge that doubles as the manual-override control. Attendance
+ * is logged automatically (a cashier opening a shift stamps them Present), so the
+ * badge is the resting state; clicking it opens a small themed menu to set Leave /
+ * Absent / Half-day / Present by hand for non-till staff or exceptions — replacing
+ * the old unstyled native <select>. Closes on outside-click or Escape.
+ */
+function StatusMenu({
+  value,
+  saving,
+  onPick,
+}: {
+  value: string | null;
+  saving: boolean;
+  onPick: (status: AttendanceStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const active = asStatus(value);
+  const style = active ? STATUS_STYLE[active] : OFF_DUTY_STYLE;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Adjust status"
+        className={"inline-flex items-center gap-1.5 rounded-full py-1 pl-2.5 pr-2 text-[12px] font-bold transition hover:brightness-95 " + style.pill}
+      >
+        <span className={"h-1.5 w-1.5 rounded-full " + style.dot} />
+        {saving ? "saving…" : active ?? "Off duty"}
+        <Icon name="chevron" className={"h-3.5 w-3.5 transition-transform duration-200 " + (open ? "rotate-180" : "")} strokeWidth={2.2} />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-20 mt-1.5 w-44 rounded-xl bg-surface-2 hairline shadow-soft p-1.5 step-in">
+          <p className="px-2 py-1 text-cap font-bold uppercase tracking-wide text-ink-faint">Set status manually</p>
+          {ATTENDANCE_STATUSES.map((s) => {
+            const isCurrent = s === active;
+            return (
+              <button
+                key={s}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  if (!isCurrent) onPick(s);
+                }}
+                className={
+                  "flex w-full items-center gap-2 rounded-[9px] px-2 py-1.5 text-[13px] font-semibold transition-colors hover:bg-paper " +
+                  (isCurrent ? "text-ink" : "text-ink-soft")
+                }
+              >
+                <span className={"h-2 w-2 rounded-full " + STATUS_STYLE[s].dot} />
+                {s}
+                {isCurrent && <Icon name="check" className="ml-auto h-4 w-4 text-accent-600" strokeWidth={2.2} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AttendanceTab({ hasEmployees }: { hasEmployees: boolean }) {
@@ -298,15 +414,26 @@ function AttendanceTab({ hasEmployees }: { hasEmployees: boolean }) {
   }
 
   if (!hasEmployees) {
-    return <EmptyState icon="users" title="No active employees" body="Add employees first, then mark their attendance here." cta="" onCta={() => {}} hideCta />;
+    return (
+      <EmptyState
+        icon="users"
+        title="No active employees"
+        body="Add employees first. Attendance then logs itself — opening a cashier shift marks that person Present for the day."
+        cta=""
+        onCta={() => {}}
+        hideCta
+      />
+    );
   }
 
   return (
-    <div className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+    <div className="rounded-xl2 bg-surface hairline shadow-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
         <div>
           <h3 className="font-extrabold tracking-tight">Daily attendance</h3>
-          <p className="text-[12.5px] text-ink-soft">Mark who worked, for payroll to use.</p>
+          <p className="text-[12.5px] text-ink-soft">
+            Present is logged automatically when a cashier opens a shift. Adjust by hand for leave, absences, or off-till staff.
+          </p>
         </div>
         <label className="flex items-center gap-2 text-[13px] font-semibold text-ink-soft">
           Date
@@ -315,33 +442,24 @@ function AttendanceTab({ hasEmployees }: { hasEmployees: boolean }) {
       </div>
 
       {loading ? (
-        <div className="px-5 pb-6 space-y-2 animate-pulse">
+        <div className="px-6 pb-6 space-y-2 animate-pulse">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-12 rounded-[10px] bg-paper" />
           ))}
         </div>
       ) : error ? (
-        <p className="px-5 pb-6 text-[13px] font-semibold text-rose-600">{error}</p>
+        <p className="px-6 pb-6 text-[13px] font-semibold text-rose-600">{error}</p>
       ) : (
         <div className="border-t border-ink/8">
           {rows.map((r) => (
-            <div key={r.employeeId} className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-ink/5 last:border-0">
+            <div
+              key={r.employeeId}
+              className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-ink/5 last:border-0 last:rounded-b-xl2 hover:bg-paper/60 transition-colors"
+            >
               <div className="min-w-[160px] flex-1">
                 <span className="font-semibold text-[14px]">{r.name}</span>
                 <span className="block text-[11.5px] text-ink-faint">{r.position ?? r.payType}</span>
               </div>
-              <select
-                value={r.status ?? ""}
-                onChange={(e) => void save(r, { status: e.target.value as AttendanceRow["status"] })}
-                className="field-input rounded-[10px] px-3 py-2 text-[13.5px] w-[130px]"
-              >
-                <option value="" disabled>
-                  Unmarked
-                </option>
-                {ATTENDANCE_STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
               {r.payType === "Hourly" && (
                 <label className="flex items-center gap-1.5 text-[12.5px] text-ink-soft">
                   <input
@@ -359,9 +477,7 @@ function AttendanceTab({ hasEmployees }: { hasEmployees: boolean }) {
                   hrs
                 </label>
               )}
-              <span className="w-[52px] text-right text-[11.5px] font-semibold">
-                {savingId === r.employeeId ? <span className="text-ink-faint">saving…</span> : r.status ? <span className="text-accent-600">✓</span> : null}
-              </span>
+              <StatusMenu value={r.status} saving={savingId === r.employeeId} onPick={(status) => void save(r, { status })} />
             </div>
           ))}
         </div>
@@ -463,13 +579,16 @@ function EmptyState({
 }
 
 function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  // Transparent background with an animating bottom active border that rides the
+  // shared track. `shrink-0 whitespace-nowrap` keeps every tab on one line so the
+  // row scrolls horizontally instead of wrapping or forcing a vertical scrollbar.
   return (
     <button
       type="button"
       onClick={onClick}
       className={
-        "px-4 py-2.5 text-[13.5px] font-semibold border-b-2 -mb-px transition duration-150 " +
-        (active ? "border-brand-500 text-brand-600" : "border-transparent text-ink-soft hover:text-ink")
+        "shrink-0 whitespace-nowrap bg-transparent px-4 py-2.5 text-[13.5px] font-semibold border-b-2 -mb-px transition-colors duration-200 " +
+        (active ? "border-brand-500 text-brand-600" : "border-transparent text-ink-soft hover:text-ink hover:border-ink/15")
       }
     >
       {label}
@@ -495,13 +614,19 @@ function RowAction({ icon, label, danger, onClick }: { icon: IconName; label: st
 }
 
 function Kpi({ icon, label, value, tone }: { icon: IconName; label: string; value: string; tone?: "good" }) {
+  // Premium KPI tile: an uppercase, letter-spaced top label paired with its icon,
+  // then a tight, oversized figure. Built on theme tokens so it reads crisp on the
+  // ivory canvas in light mode and as a floating charcoal card in dark mode, with
+  // the border firming up on hover.
   return (
-    <div className="rounded-xl2 bg-surface hairline shadow-card p-5">
-      <span className={"grid place-items-center w-9 h-9 rounded-[10px] " + (tone === "good" ? "bg-accent-50 text-accent-600" : "bg-brand-50 text-brand-600")}>
-        <Icon name={icon} className="w-[18px] h-[18px]" strokeWidth={1.7} />
-      </span>
-      <div className="mt-3 text-[1.7rem] leading-none font-extrabold tracking-tightest">{value}</div>
-      <div className="mt-1.5 text-[12.5px] text-ink-soft">{label}</div>
+    <div className="group rounded-xl2 bg-surface hairline shadow-card p-5 transition duration-200 hover:hairline-strong hover:shadow-soft">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-cap font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
+        <span className={"grid place-items-center w-8 h-8 rounded-[10px] transition-colors " + (tone === "good" ? "bg-accent-50 text-accent-600" : "bg-brand-50 text-brand-600")}>
+          <Icon name={icon} className="w-[17px] h-[17px]" strokeWidth={1.8} />
+        </span>
+      </div>
+      <div className="mt-3.5 text-stat font-extrabold tracking-tightest tabular-nums text-ink">{value}</div>
     </div>
   );
 }
@@ -509,8 +634,8 @@ function Kpi({ icon, label, value, tone }: { icon: IconName; label: string; valu
 function Skeleton() {
   return (
     <div className="space-y-5 animate-pulse">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="rounded-xl2 bg-surface hairline shadow-card h-[120px]" />
         ))}
       </div>

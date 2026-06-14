@@ -18,14 +18,21 @@ export function ImagePicker({
   file,
   onPick,
   onRemove,
+  maxBytes = 2 * 1024 * 1024,
 }: {
   name: string;
   existingUrl: string | null;
   file: File | null;
   onPick: (file: File) => void;
   onRemove: () => void;
+  /** Client-side size cap, in bytes. Mirrors the per-route backend limit so
+   *  oversized picks are rejected before a wasted upload round-trip. */
+  maxBytes?: number;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const maxMb = Math.round(maxBytes / (1024 * 1024));
+  // Inline "too large" message; cleared on a valid pick.
+  const [sizeError, setSizeError] = useState<string | null>(null);
 
   // Instant local preview for a freshly picked file; revoked on change/unmount.
   const blobUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
@@ -74,8 +81,14 @@ export function ImagePicker({
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) onPick(f);
             e.target.value = ""; // allow re-picking the same file
+            if (!f) return;
+            if (f.size > maxBytes) {
+              setSizeError(`Image must be under ${maxMb}MB`);
+              return;
+            }
+            setSizeError(null);
+            onPick(f);
           }}
         />
         <button
@@ -95,7 +108,10 @@ export function ImagePicker({
             Remove
           </button>
         )}
-        <p className="mt-2 text-[12px] text-ink-faint">PNG, JPG or WEBP · up to 2MB</p>
+        <p className="mt-2 text-[12px] text-ink-faint">PNG, JPG or WEBP · up to {maxMb}MB</p>
+        {sizeError && (
+          <p className="mt-1 text-[12px] font-semibold text-rose-600">{sizeError}</p>
+        )}
       </div>
     </div>
   );

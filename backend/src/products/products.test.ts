@@ -60,6 +60,33 @@ describe("Product payload validation (multipart fields arrive as strings)", () =
     });
     expect(parsed.success).toBe(false);
   });
+
+  // Regression: a blank SKU must normalise to undefined → NULL, otherwise the
+  // 2nd SKU-less product collides under the partial unique index and the API
+  // wrongly reports "A product with that SKU already exists."
+  it.each(["", "   "])("normalises a blank SKU (%j) to undefined, not ''", (sku) => {
+    const parsed = productCreateSchema.safeParse({
+      name: "No-SKU Item",
+      price: "100",
+      stock: "0",
+      lowStockThreshold: "0",
+      sku,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.sku).toBeUndefined();
+  });
+
+  it("keeps a real SKU (trimmed)", () => {
+    const parsed = productCreateSchema.safeParse({
+      name: "Espresso Beans",
+      price: "100",
+      stock: "0",
+      lowStockThreshold: "0",
+      sku: "  KNJ-ESP-002  ",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.sku).toBe("KNJ-ESP-002");
+  });
 });
 
 describe("Category payload validation", () => {

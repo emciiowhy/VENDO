@@ -67,7 +67,13 @@ export async function getPlatformCompliance(
   }
 }
 
-/** Absolute URL that streams the month's consolidated VAT rollup as a CSV. */
-export function platformComplianceCsvUrl(month: string): string {
-  return `${BASE}/export?month=${encodeURIComponent(month)}`;
+/**
+ * Absolute URL that streams a month's VAT rollup as a CSV. With no `tenantId`
+ * it's the consolidated platform file; with one it narrows to a single store's
+ * filing report (the per-row download action).
+ */
+export function platformComplianceCsvUrl(month: string, tenantId?: string): string {
+  const params = new URLSearchParams({ month });
+  if (tenantId) params.set("tenantId", tenantId);
+  return `${BASE}/export?${params.toString()}`;
 }

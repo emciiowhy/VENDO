@@ -108,3 +108,37 @@ describe("owner/manager password sign-in", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("self-service signup validation", () => {
+  const app = createApp();
+
+  // These assert the validation gate that runs BEFORE any DB work, so they need
+  // no Neon connection — a bad body is rejected at the door with field errors.
+
+  it("rejects an empty body with 400 and per-field errors", async () => {
+    const res = await request(app).post("/auth/signup").send({});
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+    expect(res.body.errors).toMatchObject({
+      businessName: expect.any(String),
+      ownerName: expect.any(String),
+      email: expect.any(String),
+      password: expect.any(String),
+    });
+  });
+
+  it("flags a malformed email and a too-short password", async () => {
+    const res = await request(app).post("/auth/signup").send({
+      businessName: "Kape ni Juan",
+      ownerName: "Juan dela Cruz",
+      email: "not-an-email",
+      password: "short",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.errors.email).toBeTruthy();
+    expect(res.body.errors.password).toBeTruthy();
+    // The valid fields don't raise an error.
+    expect(res.body.errors.businessName).toBeUndefined();
+    expect(res.body.errors.ownerName).toBeUndefined();
+  });
+});

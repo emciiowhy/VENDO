@@ -40,12 +40,19 @@ const booleanField = z
 
 export const productCreateSchema = z.object({
   name: z.string().trim().min(1, "Product name is required.").max(160),
+  // Optional. A blank (or whitespace-only) SKU must normalise to `undefined` so
+  // the repository persists NULL — the partial unique index
+  // `products_tenant_sku_key` (… WHERE sku IS NOT NULL) only allows multiple
+  // SKU-less products when they're NULL; an empty string '' falls *inside* the
+  // index and the 2nd such product trips "A product with that SKU already
+  // exists." The earlier `.optional().or("" → undefined)` never fired because
+  // `.optional()` already accepts "" as a valid string, so the `.or()` was dead.
   sku: z
     .string()
     .trim()
-    .max(64)
+    .max(64, "SKU must be 64 characters or fewer.")
     .optional()
-    .or(z.literal("").transform(() => undefined)),
+    .transform((v) => (v ? v : undefined)),
   categoryId: optionalUuid,
   // Wire value is pesos (e.g. "154.50"); after parse this holds integer centavos.
   price: pesosToCents,

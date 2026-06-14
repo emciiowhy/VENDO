@@ -80,7 +80,11 @@ interface SummaryDbRow {
 export async function getPlatformComplianceSummary(
   periodStart: string,
   periodEnd: string,
+  tenantId?: string,
 ): Promise<PlatformComplianceSummary> {
+  // Optional single-Tenant fence ($4): the platform rollup passes null and sees
+  // every active store; the per-Tenant report download narrows to one. Kept as a
+  // null-guarded predicate so the same query and totals logic serves both.
   const { rows } = await query<SummaryDbRow>(
     `SELECT t.id, t.name, t.plan,
             count(*) FILTER (WHERE s.kind = 'sale')             AS invoice_count,
@@ -97,9 +101,10 @@ export async function getPlatformComplianceSummary(
         AND (s.created_at AT TIME ZONE $3) >= $1::timestamp
         AND (s.created_at AT TIME ZONE $3) <  $2::timestamp
       WHERE t.status = 'active'
+        AND ($4::uuid IS NULL OR t.id = $4)
       GROUP BY t.id, t.name, t.plan
       ORDER BY vat DESC, t.name ASC`,
-    [periodStart, periodEnd, MNL],
+    [periodStart, periodEnd, MNL, tenantId ?? null],
   );
 
   const out: TenantComplianceRow[] = rows.map((r) => ({

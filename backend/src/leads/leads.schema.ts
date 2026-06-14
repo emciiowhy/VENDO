@@ -28,11 +28,24 @@ export const leadSchema = z.object({
     errorMap: () => ({ message: "Please select your business type." }),
   }),
   message: z.string().trim().max(2000).optional().or(z.literal("")),
+  // Optional: a prospect may choose their own owner password with the request,
+  // so the Super Admin doesn't have to issue one on approval. Empty string is
+  // treated as "not set" (the field is genuinely optional). Stored hashed.
+  password: z
+    .string()
+    .min(8, "Use at least 8 characters.")
+    .max(100, "Keep your password under 100 characters.")
+    .optional()
+    .or(z.literal("")),
 });
 
 export type LeadInput = z.infer<typeof leadSchema>;
 
-export interface Lead extends LeadInput {
+/**
+ * The persisted/returned Lead never carries the password back out — it's write-
+ * only (hashed at rest), so the stored record omits it.
+ */
+export interface Lead extends Omit<LeadInput, "password"> {
   id: string;
   createdAt: string;
 }

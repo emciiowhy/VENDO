@@ -14,18 +14,18 @@ const columns = [
   {
     title: "Company",
     links: [
-      { label: "About Us", href: "/company/about" },
-      { label: "Careers", href: "/company/careers" },
-      { label: "Contact", href: "/company/contact" },
+      { label: "About Us", href: "/about" },
+      { label: "Careers", href: "/careers" },
+      { label: "Contact", href: "/contact" },
       { label: "Request a Demo", href: "/#demo" },
     ],
   },
   {
     title: "Legal",
     links: [
-      { label: "Privacy Policy", href: "#" },
-      { label: "Terms of Service", href: "#" },
-      { label: "Data & Security", href: "#" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Data & Security", href: "/security" },
     ],
   },
 ];

@@ -11,6 +11,10 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  // Resolves relative Open Graph / Twitter image URLs against the deployed origin.
+  // Set NEXT_PUBLIC_APP_URL to the production domain at deploy time; falls back to
+  // localhost for dev.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "VendoPOS — One platform to run your whole business | POS + ERP for the Philippines",
   description:
     "VendoPOS is one multi-tenant POS + ERP built for Filipino businesses. BIR-ready receipts, GCash/Maya/QRPH payments, offline-capable, peso-first. Request a demo.",

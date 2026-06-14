@@ -12,6 +12,12 @@ export interface LeadPayload {
   phone: string;
   businessType: string;
   message?: string;
+  /**
+   * Optional. A prospect may choose their own owner password with the request,
+   * so the team can approve them without issuing one. Sent only when set;
+   * stored hashed server-side and never returned.
+   */
+  password?: string;
 }
 
 export type LeadResult =

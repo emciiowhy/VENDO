@@ -74,6 +74,12 @@ export function LeadsMatrix() {
   }, [leads, query, statusFilter]);
 
   const pending = useMemo(() => leads.filter((l) => l.status === "PENDING_DEMO").length, [leads]);
+  const provisioned = useMemo(() => leads.filter((l) => l.status === "APPROVED").length, [leads]);
+
+  /** Chips and the dropdown share one filter: clicking an active chip clears it. */
+  const toggleStatus = useCallback((status: LeadStatus) => {
+    setStatusFilter((cur) => (cur === status ? "all" : status));
+  }, []);
 
   /** Reflect a status change locally and keep the open drawer in sync. */
   function patchLead(id: string, status: LeadStatus) {
@@ -82,14 +88,35 @@ export function LeadsMatrix() {
   }
 
   return (
-    <section className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden max-w-[1180px]">
+    <section className="rounded-xl2 glass hairline shadow-soft overflow-hidden max-w-[1180px]">
       {/* Panel header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 sm:px-6 py-4 hairline-b">
-        <div>
+      <div className="flex flex-col gap-4 px-5 sm:px-6 py-4 hairline-b lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-3">
           <h2 className="text-[1.05rem] font-extrabold tracking-tight">Demo Requests Pipeline</h2>
-          <p className="text-[12.5px] text-ink-soft">
-            {pending} pending · {leads.length} total request{leads.length === 1 ? "" : "s"}
-          </p>
+          {/* Pipeline metrics: interactive status chips wired to the filter. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <PipelineChip
+              label="Pending Requests"
+              count={pending}
+              tone="amber"
+              active={statusFilter === "PENDING_DEMO"}
+              onClick={() => toggleStatus("PENDING_DEMO")}
+            />
+            <PipelineChip
+              label="Fully Provisioned"
+              count={provisioned}
+              tone="accent"
+              active={statusFilter === "APPROVED"}
+              onClick={() => toggleStatus("APPROVED")}
+            />
+            <PipelineChip
+              label="Total Pipeline"
+              count={leads.length}
+              tone="brand"
+              active={statusFilter === "all"}
+              onClick={() => setStatusFilter("all")}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2.5">
           <label className="relative">
@@ -156,40 +183,39 @@ export function LeadsMatrix() {
                 </td>
               </tr>
             )}
-            {filtered.map((l) => (
-              <tr key={l.id} className="hairline-b last:border-0 hover:bg-paper/70 transition duration-150">
-                <td className="px-6 py-3.5">
-                  <div className="font-bold tracking-tight">{l.businessName}</div>
-                  <div className="text-[12px] text-ink-faint">
-                    {l.contactName}
-                    {l.businessType ? <> · {l.businessType}</> : null}
-                  </div>
-                </td>
-                <td className="px-4 py-3.5 text-[13px] text-ink-soft">{l.email}</td>
-                <td className="px-4 py-3.5 text-[13px] text-ink-soft whitespace-nowrap">
-                  {formatDate(l.requestedAt)}
-                </td>
-                <td className="px-4 py-3.5">
-                  <LeadStatusBadge status={l.status} />
-                </td>
-                <td className="px-4 py-3.5 text-right">
-                  {l.status === "PENDING_DEMO" ? (
-                    <button
-                      type="button"
-                      onClick={() => setActive(l)}
-                      className="inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-[10px] px-3 py-1.5 text-[13px] font-semibold shadow-btn transition duration-150"
-                    >
-                      <Icon name="bolt" className="w-[15px] h-[15px]" strokeWidth={1.8} />
-                      Review Request
-                    </button>
-                  ) : (
-                    <span className="text-[12.5px] font-semibold text-ink-faint">
-                      {l.status === "APPROVED" ? "Provisioned" : "Declined"}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {filtered.map((l) => {
+              // Approved/declined leads are settled transactions — dim their data
+              // so the operator's eye lands on the rows that still need action.
+              const settled = l.status !== "PENDING_DEMO";
+              const tone = settled ? "opacity-60" : "";
+              return (
+                <tr
+                  key={l.id}
+                  className="hairline-b last:border-0 hover:bg-paper/70 transition-colors duration-150"
+                >
+                  <td className={"px-6 py-3.5 " + tone}>
+                    <div className="font-bold tracking-tight">{l.businessName}</div>
+                    <div className="text-[12px] text-ink-faint">
+                      {l.contactName}
+                      {l.businessType ? <> · {l.businessType}</> : null}
+                    </div>
+                  </td>
+                  <td className={"px-4 py-3.5 text-[13px] text-ink-soft " + tone}>{l.email}</td>
+                  <td className={"px-4 py-3.5 whitespace-nowrap " + tone}>
+                    <div className="text-[13px] text-ink-soft">{formatDate(l.requestedAt)}</div>
+                    <div className="text-[11.5px] text-ink-faint">{relativeTime(l.requestedAt)}</div>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <LeadStatusBadge status={l.status} />
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex justify-end">
+                      <LeadActionCell status={l.status} onProvision={() => setActive(l)} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -239,6 +265,105 @@ export function LeadStatusBadge({ status }: { status: LeadStatus }) {
   );
 }
 
+type ChipTone = "amber" | "accent" | "brand";
+
+const CHIP_TONE: Record<ChipTone, { dot: string; active: string }> = {
+  amber: { dot: "bg-amber-500", active: "bg-amber-50 text-amber-600 ring-1 ring-amber-500/30" },
+  accent: { dot: "bg-accent-500", active: "bg-accent-50 text-accent-600 ring-1 ring-accent-500/30" },
+  brand: { dot: "bg-brand-500", active: "bg-brand-50 text-brand-700 ring-1 ring-brand-500/30" },
+};
+
+/**
+ * A compact, toggleable pipeline counter. The figure leads (tight tracking,
+ * tabular figures) with a quiet label beneath the eye; the active state lifts a
+ * soft token wash so it reads as the currently-applied filter.
+ */
+function PipelineChip({
+  label,
+  count,
+  tone,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  tone: ChipTone;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const t = CHIP_TONE[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        "inline-flex items-center gap-2 rounded-[10px] pl-2.5 pr-3 py-1.5 transition duration-150 " +
+        (active
+          ? t.active
+          : "bg-paper hairline text-ink-soft hover:hairline-strong hover:text-ink")
+      }
+    >
+      <span className={"w-1.5 h-1.5 rounded-full shrink-0 " + t.dot} />
+      <span className="text-[15px] font-extrabold tracking-tightest tabular-nums leading-none">{count}</span>
+      <span className="text-[12px] font-semibold tracking-tight whitespace-nowrap">{label}</span>
+    </button>
+  );
+}
+
+/**
+ * The Action cell differentiates by state: a pending lead gets a crisp primary
+ * "Provision Tenant" button; a settled lead gets a read-only status badge with a
+ * soft wash (provisioned = settled-money accent, declined = a quiet rose).
+ */
+function LeadActionCell({
+  status,
+  onProvision,
+}: {
+  status: LeadStatus;
+  onProvision: () => void;
+}) {
+  if (status === "PENDING_DEMO") {
+    return (
+      <button
+        type="button"
+        onClick={onProvision}
+        className="inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-[10px] px-3 py-1.5 text-[13px] font-semibold shadow-btn transition duration-150"
+      >
+        <Icon name="bolt" className="w-[15px] h-[15px]" strokeWidth={1.8} />
+        Provision Tenant
+      </button>
+    );
+  }
+  const provisioned = status === "APPROVED";
+  return (
+    <span
+      className={
+        "inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-1 text-[12px] font-semibold " +
+        (provisioned ? "bg-accent-50 text-accent-600" : "bg-rose-50 text-rose-600")
+      }
+    >
+      <Icon name={provisioned ? "check" : "x"} className="w-[14px] h-[14px]" strokeWidth={2.2} />
+      {provisioned ? "Provisioned" : "Declined"}
+    </span>
+  );
+}
+
+/** "8d ago" — how long a request has sat in the queue, from its timestamp. */
+function relativeTime(iso: string): string {
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
 /* ----------------------------- provisioning drawer ----------------------------- */
 
 const FIELD = "field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14px] text-ink";
@@ -260,6 +385,10 @@ function ProvisionDrawer({
   const [plan, setPlan] = useState<Plan>("starter");
   const [ownerEmail, setOwnerEmail] = useState(lead.email);
   const [ownerName, setOwnerName] = useState(lead.contactName);
+  // Optional. The owner may have set their own password on the demo request
+  // (lead.hasOwnerPassword) — in which case this can stay blank and the operator
+  // never has to issue a credential.
+  const [ownerPassword, setOwnerPassword] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -280,7 +409,14 @@ function ProvisionDrawer({
     setBusy(true);
     setError(null);
     setFieldErrors({});
-    const res = await approveLead(lead.id, { storeName, slug, plan, ownerEmail, ownerName });
+    const res = await approveLead(lead.id, {
+      storeName,
+      slug,
+      plan,
+      ownerEmail,
+      ownerName,
+      ownerPassword: ownerPassword.trim() || undefined,
+    });
     if (res.ok) {
       onApproved(res.tenant.slug);
       return;
@@ -333,6 +469,12 @@ function ProvisionDrawer({
             <SummaryRow label="Email" value={lead.email} />
             <SummaryRow label="Phone" value={lead.phone} />
             {lead.businessType && <SummaryRow label="Business" value={lead.businessType} />}
+            {lead.hasOwnerPassword && (
+              <div className="flex items-center gap-2 pt-0.5 text-[12.5px] font-semibold text-accent-600">
+                <Icon name="lock" className="w-3.5 h-3.5 shrink-0" strokeWidth={1.9} />
+                Owner set their own password
+              </div>
+            )}
             {lead.message && (
               <p className="pt-1.5 text-[12.5px] text-ink-soft italic leading-relaxed">“{lead.message}”</p>
             )}
@@ -380,12 +522,32 @@ function ProvisionDrawer({
             <Field label="Owner name" error={fieldErrors.ownerName}>
               <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} className={FIELD} />
             </Field>
-            <Field label="Owner Google email" error={fieldErrors.ownerEmail} hint="The verified email they'll sign in with.">
+            <Field label="Owner email" error={fieldErrors.ownerEmail} hint="The email they'll sign in with (Google, or Store ID + email + password).">
               <input
                 value={ownerEmail}
                 onChange={(e) => setOwnerEmail(e.target.value)}
                 className={FIELD}
                 inputMode="email"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+            </Field>
+            <Field
+              label="Owner password (optional)"
+              error={fieldErrors.ownerPassword}
+              hint={
+                lead.hasOwnerPassword
+                  ? "This owner set their own password with the request. Leave blank to keep it, or type a new one to override."
+                  : "Optional — set a password so they can sign in with Store ID + email. Leave blank for Google-only sign-in."
+              }
+            >
+              <input
+                type="password"
+                value={ownerPassword}
+                onChange={(e) => setOwnerPassword(e.target.value)}
+                className={FIELD}
+                placeholder={lead.hasOwnerPassword ? "•••••••• (set by owner)" : "Leave blank or set a password"}
+                autoComplete="new-password"
                 autoCapitalize="none"
                 spellCheck={false}
               />

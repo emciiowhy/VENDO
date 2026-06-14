@@ -96,6 +96,7 @@ export function ProductFormModal({
             name={name}
             existingUrl={removeImage ? null : product?.imageUrl ?? null}
             file={file}
+            maxBytes={10 * 1024 * 1024}
             onPick={(f) => {
               setFile(f);
               setRemoveImage(false);

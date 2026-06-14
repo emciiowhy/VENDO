@@ -1,0 +1,1 @@
+import 'dotenv/config'; console.log('Your DB URL is:', process.env.DATABASE_URL);

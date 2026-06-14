@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Icon, IconSprite, type IconName } from "../Icon";
 import { BrandMark } from "../BrandMark";
 import { PinSwitcher } from "../auth/PinSwitcher";
@@ -136,10 +137,6 @@ export function PosTerminal() {
   // After a cashier closes their drawer we stay on the till and prompt for the
   // next cashier (no full sign-out), so handover is a PIN away.
   const [nextCashierOpen, setNextCashierOpen] = useState(false);
-  // Warm terminal (owner/manager): on open, ask who's on duty before ringing —
-  // they pick the cashier taking the till. Dismissable (they can operate it
-  // themselves). Cashiers cold-login as themselves, so they're never asked.
-  const [onDutyDismissed, setOnDutyDismissed] = useState(false);
   // Confirmation for sign-out / terminal-lock actions.
   const [confirm, setConfirm] = useState<{
     title: string;
@@ -523,6 +520,15 @@ export function PosTerminal() {
               <Icon name="monitor" className="w-[18px] h-[18px]" strokeWidth={1.7} />
               <span className="hidden lg:inline">Customer display</span>
             </button>
+            <Link
+              href="/me"
+              title="My record — hours, PTO & paystubs"
+              aria-label="My record"
+              className="inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+            >
+              <Icon name="clock" className="w-[18px] h-[18px]" strokeWidth={1.7} />
+              <span className="hidden lg:inline">My record</span>
+            </Link>
             <ThemeToggle />
             <div className="hidden sm:flex items-center gap-2.5 rounded-[10px] bg-surface hairline px-3 py-1.5">
               <span className="w-7 h-7 rounded-full bg-accent-500 text-white grid place-items-center font-bold text-[12px]">
@@ -756,20 +762,6 @@ export function PosTerminal() {
           onClosed={endShiftExit}
           finishLabel={isCashier ? "Finish & hand over" : "Finish & return to dashboard"}
           finishIcon={isCashier ? "users" : "arrow"}
-        />
-      )}
-
-      {/* On open (warm terminal): ask who's on duty before ringing up. The
-          chosen cashier PINs in, which reloads /pos as them and gates the
-          X-Read. Dismissable so an owner/manager can operate the till directly. */}
-      {!isCashier && !onDutyDismissed && !nextCashierOpen && (
-        <PinSwitcher
-          autoOpen
-          hideTrigger
-          openShift={null}
-          selectTitle="Who's on duty?"
-          selectSubtitle="Select the cashier taking this till."
-          onClose={() => setOnDutyDismissed(true)}
         />
       )}
 

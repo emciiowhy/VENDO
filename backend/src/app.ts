@@ -22,6 +22,7 @@ import { financeRouter } from "./finance/finance.router.js";
 import { procurementRouter } from "./procurement/procurement.router.js";
 import { manufacturingRouter } from "./manufacturing/manufacturing.router.js";
 import { hrRouter } from "./hr/hr.router.js";
+import { essRouter } from "./hr/ess.router.js";
 import { crmRouter } from "./crm/crm.router.js";
 import { accountRouter } from "./account/account.router.js";
 import { notificationsRouter } from "./notifications/notifications.router.js";
@@ -91,6 +92,7 @@ export function createApp() {
   app.use("/api/v1/procurement", procurementRouter);
   app.use("/api/v1/manufacturing", manufacturingRouter);
   app.use("/api/v1/hr", hrRouter);
+  app.use("/api/v1/ess", essRouter);
   app.use("/api/v1/crm", crmRouter);
   app.use("/api/v1/account", accountRouter);
   app.use("/api/v1/notifications", notificationsRouter);
