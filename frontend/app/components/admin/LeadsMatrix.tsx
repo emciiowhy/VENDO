@@ -224,10 +224,10 @@ export function LeadsMatrix() {
         <ProvisionDrawer
           lead={active}
           onClose={() => setActive(null)}
-          onApproved={(slug) => {
+          onApproved={(slug, ownerEmail) => {
             patchLead(active.id, "APPROVED");
             setActive(null);
-            flash(`Provisioned “${active.businessName}” at /${slug}.`);
+            flash(`Provisioned “${active.businessName}” at /${slug} — onboarding email sent to ${ownerEmail}.`);
             void reload();
           }}
           onRejected={() => {
@@ -376,7 +376,7 @@ function ProvisionDrawer({
 }: {
   lead: Lead;
   onClose: () => void;
-  onApproved: (slug: string) => void;
+  onApproved: (slug: string, ownerEmail: string) => void;
   onRejected: () => void;
 }) {
   const [storeName, setStoreName] = useState(lead.businessName);
@@ -418,7 +418,7 @@ function ProvisionDrawer({
       ownerPassword: ownerPassword.trim() || undefined,
     });
     if (res.ok) {
-      onApproved(res.tenant.slug);
+      onApproved(res.tenant.slug, res.onboardingEmailTo ?? ownerEmail);
       return;
     }
     setBusy(false);

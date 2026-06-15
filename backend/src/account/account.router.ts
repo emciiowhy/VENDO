@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireRole } from "../auth/auth.middleware.js";
-import { getPasswordHash } from "../auth/auth.repository.js";
+import { getPasswordHash, tenantNameById } from "../auth/auth.repository.js";
 import { verifyPassword } from "../auth/auth.crypto.js";
 import { uploadAccountImage } from "./account.upload.js";
 import { putAccountImage, removeAccountImage } from "./account.storage.js";
@@ -18,6 +18,7 @@ import {
   revokeOwnSession,
   setAvatarUrl,
   setLogoUrl,
+  setThemeColor,
   slugTakenByOther,
   updateOwnerProfile,
   updatePreferences,
@@ -129,6 +130,43 @@ accountRouter.delete("/store/logo", async (req, res) => {
   } catch (err) {
     console.error("[account] logo delete failed:", err);
     res.status(500).json({ ok: false, error: "Could not remove the logo." });
+  }
+});
+
+// ── Appearance / brand theme ──────────────────────────────────────────────────
+
+/** Validate `#rgb`/`#rrggbb` and normalise to lowercase `#rrggbb`, else null. */
+function normalizeHex(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  let s = v.trim().toLowerCase();
+  if (s && s[0] !== "#") s = "#" + s;
+  if (/^#[0-9a-f]{3}$/.test(s)) s = "#" + s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
+  return /^#[0-9a-f]{6}$/.test(s) ? s : null;
+}
+
+/**
+ * PATCH /account/theme — set or clear the store's brand accent colour.
+ * Body: `{ accent: "#rrggbb" | null }`. A null/empty accent resets to the
+ * default VendoPOS blue. Stored as the only source of truth; the workspace
+ * derives the full ramp from it client-side.
+ */
+accountRouter.patch("/theme", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const raw = (req.body as { accent?: unknown })?.accent;
+  let accent: string | null = null;
+  if (raw !== null && raw !== undefined && raw !== "") {
+    accent = normalizeHex(raw);
+    if (!accent) {
+      return res.status(400).json({ ok: false, error: "Enter a valid colour, e.g. #2b50ea." });
+    }
+  }
+  try {
+    await setThemeColor(tenantId, accent);
+    res.json({ ok: true, accent });
+  } catch (err) {
+    console.error("[account] theme update failed:", err);
+    res.status(500).json({ ok: false, error: "Could not save your theme." });
   }
 });
 
@@ -320,6 +358,12 @@ function csvCell(value: string | number): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/** Filesystem-safe slug of the store's name, for naming export downloads. */
+function storeSlug(name: string | null): string {
+  const slug = (name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || "store";
+}
+
 accountRouter.get("/export/:dataset", async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
@@ -332,8 +376,9 @@ accountRouter.get("/export/:dataset", async (req, res) => {
     const lines = [headers, ...rows].map((cols) => cols.map(csvCell).join(","));
     const csv = lines.join("\r\n");
     const stamp = new Date().toISOString().slice(0, 10);
+    const slug = storeSlug(await tenantNameById(tenantId));
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="vendopos-${dataset}-${stamp}.csv"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${slug}-${dataset}-${stamp}.csv"`);
     res.send(csv);
   } catch (err) {
     console.error("[account] export failed:", err);

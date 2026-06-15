@@ -19,6 +19,7 @@ import {
   setPasswordHash,
   startSession,
   tenantBrandById,
+  userAvatarById,
   type LoginMethod,
 } from "./auth.repository.js";
 import { createPinRequest, listActiveCashiers } from "../staff/staff.repository.js";
@@ -140,20 +141,28 @@ authRouter.get("/google/callback", async (req, res) => {
  */
 authRouter.get("/me", requireAuth, async (req, res) => {
   const user = req.user!;
-  // Enrich with the live store name from the DB (handles renames without a
-  // re-login, and keeps the tenant id as the only thing trusted from the JWT).
+  // Enrich with live DB values — the store name/logo and the user's own avatar —
+  // so a rename or a freshly-uploaded photo shows without a re-login, while the
+  // tenant id stays the only thing trusted from the JWT.
   let tenantName: string | null = null;
   let tenantLogoUrl: string | null = null;
-  if (user.tenantId) {
-    try {
-      const brand = await tenantBrandById(user.tenantId);
+  let themeColor: string | null = null;
+  let avatarUrl: string | null = null;
+  try {
+    const [brand, avatar] = await Promise.all([
+      user.tenantId ? tenantBrandById(user.tenantId) : Promise.resolve(null),
+      userAvatarById(user.userId),
+    ]);
+    if (brand) {
       tenantName = brand.name;
       tenantLogoUrl = brand.logoUrl;
-    } catch (err) {
-      console.error("[auth] tenant brand lookup failed:", err);
+      themeColor = brand.themeColor;
     }
+    avatarUrl = avatar;
+  } catch (err) {
+    console.error("[auth] session enrichment failed:", err);
   }
-  res.json({ ok: true, user: { ...user, tenantName, tenantLogoUrl } });
+  res.json({ ok: true, user: { ...user, tenantName, tenantLogoUrl, themeColor, avatarUrl } });
 });
 
 /** POST /auth/logout — revoke this device's session row and drop the cookie. */

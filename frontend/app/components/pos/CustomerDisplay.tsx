@@ -5,6 +5,7 @@ import { formatPesoExact } from "@/lib/format";
 import { resolveAssetUrl } from "@/lib/images";
 import { MockQr } from "./MockQr";
 import { BrandMark } from "../BrandMark";
+import { TenantTheme } from "../theme/TenantTheme";
 import {
   DISPLAY_CHANNEL,
   IDLE_SNAPSHOT,
@@ -93,7 +94,11 @@ export function CustomerDisplay() {
   const isActive = snap.status !== "idle" && snap.lines.length > 0;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0a0f1c] text-white flex flex-col selection:bg-brand-500/40">
+    <div
+      data-vp-theme=""
+      className="relative min-h-screen overflow-hidden bg-[#0a0f1c] text-white flex flex-col selection:bg-brand-500/40"
+    >
+      <TenantTheme accent={snap.accent} />
       <Ambient />
 
       {/* Brand header */}

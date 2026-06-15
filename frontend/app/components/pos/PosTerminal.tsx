@@ -8,6 +8,7 @@ import { PinSwitcher } from "../auth/PinSwitcher";
 import { useSession } from "../auth/useSession";
 import { useTheme } from "../theme/ThemeProvider";
 import { ThemeToggle } from "../theme/ThemeToggle";
+import { TenantTheme } from "../theme/TenantTheme";
 import { logout } from "@/lib/auth";
 import { formatPesoExact } from "@/lib/format";
 import { resolveAssetUrl } from "@/lib/images";
@@ -218,6 +219,7 @@ export function PosTerminal() {
   const displayChannel = useRef<BroadcastChannel | null>(null);
 
   const snapshot = useMemo<DisplaySnapshot>(() => {
+    const accent = session.status === "authed" ? session.user.themeColor ?? null : null;
     const status: DisplaySnapshot["status"] = receipt
       ? "paid"
       : checkoutOpen && checkoutMethod && checkoutMethod !== "Cash"
@@ -227,6 +229,7 @@ export function PosTerminal() {
           : "idle";
     return {
       storeName,
+      accent,
       status,
       lines: lines.map((l) => ({
         id: l.product.id,
@@ -261,7 +264,7 @@ export function PosTerminal() {
         : null,
     };
     // discountText is a module-level pure helper.
-  }, [storeName, lines, grossCents, discountCents, discount, vatCents, netCents, count, checkoutOpen, checkoutMethod, receipt, paymentQrs]);
+  }, [storeName, lines, grossCents, discountCents, discount, vatCents, netCents, count, checkoutOpen, checkoutMethod, receipt, paymentQrs, session]);
 
   const snapshotRef = useRef(snapshot);
 
@@ -369,6 +372,7 @@ export function PosTerminal() {
   if (session.status !== "authed") {
     return (
       <div
+        data-vp-theme=""
         className={
           "theme-root grid-bg min-h-screen grid place-items-center bg-paper text-ink " +
           (theme === "dark" ? "dark" : "")
@@ -456,11 +460,13 @@ export function PosTerminal() {
 
   return (
     <div
+      data-vp-theme=""
       className={
         "theme-root h-screen flex flex-col bg-paper text-ink overflow-hidden " +
         (theme === "dark" ? "dark" : "")
       }
     >
+      <TenantTheme accent={user.themeColor} />
       <IconSprite />
 
       {/* Lock bar */}

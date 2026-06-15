@@ -1,6 +1,7 @@
 import { pool, query } from "../db.js";
 import { hashPassword } from "../auth/auth.crypto.js";
 import { notifyNewTenant } from "../notifications/notifications.repository.js";
+import { sendOwnerOnboardingEmail } from "../notifications/onboardingEmail.js";
 import type { AdminLead, LeadStatus, ProvisionInput } from "./adminLeads.schema.js";
 
 /**
@@ -136,8 +137,20 @@ export async function provisionLead(
     await client.query(`UPDATE leads SET status = 'APPROVED' WHERE id = $1`, [leadId]);
 
     await client.query("COMMIT");
-    // Announce the new store to platform operators (best-effort).
+    // Announce the new store to platform operators (best-effort, in-app bell).
     void notifyNewTenant({ id: tenant.id, name: tenant.name });
+    // Email the new owner their onboarding steps + sign-in details. Fire-and-
+    // forget like the notification above: the store is already committed, so a
+    // mail hiccup must never roll it back. `hasPassword` decides whether the mail
+    // tells them to sign in with a password or with Google.
+    void sendOwnerOnboardingEmail({
+      ownerName: input.ownerName,
+      ownerEmail: input.ownerEmail,
+      storeName: tenant.name,
+      slug: tenant.slug,
+      plan: tenant.plan,
+      hasPassword: ownerPasswordHash !== null,
+    });
     return {
       ok: true,
       tenant,

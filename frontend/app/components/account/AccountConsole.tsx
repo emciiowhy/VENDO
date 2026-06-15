@@ -5,6 +5,7 @@ import { Icon, type IconName } from "../Icon";
 import { useDashUser } from "../dash/DashShell";
 import { SecurityCard } from "../dash/SecurityCard";
 import { StoreProfileCard } from "./StoreProfileCard";
+import { AppearanceCard } from "./AppearanceCard";
 import { ReceiptSettingsCard } from "./ReceiptSettingsCard";
 import { ProfileCard } from "./ProfileCard";
 import { PreferencesCard } from "./PreferencesCard";
@@ -19,11 +20,12 @@ import { DangerZoneCard } from "./DangerZoneCard";
  * sign in and which devices are active (Security), workspace preferences, and
  * your data (export + deactivate). The danger zone is owner-only.
  */
-type TabKey = "profile" | "store" | "receipt" | "security" | "preferences" | "data";
+type TabKey = "profile" | "store" | "appearance" | "receipt" | "security" | "preferences" | "data";
 
 const TABS: { key: TabKey; label: string; icon: IconName }[] = [
   { key: "profile", label: "Profile", icon: "users" },
   { key: "store", label: "Store", icon: "store" },
+  { key: "appearance", label: "Appearance", icon: "layers" },
   { key: "receipt", label: "Receipt", icon: "receipt" },
   { key: "security", label: "Security", icon: "lock" },
   { key: "preferences", label: "Preferences", icon: "gear" },
@@ -61,6 +63,7 @@ export function AccountConsole() {
       {/* Sections */}
       {tab === "profile" && <ProfileCard />}
       {tab === "store" && <StoreProfileCard />}
+      {tab === "appearance" && <AppearanceCard />}
       {tab === "receipt" && <ReceiptSettingsCard />}
       {tab === "security" && (
         <div className="space-y-5">

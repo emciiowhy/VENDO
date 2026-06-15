@@ -162,15 +162,28 @@ export async function tenantNameById(tenantId: string): Promise<string | null> {
   return rows[0]?.name ?? null;
 }
 
-/** The store's brand (name + uploaded logo URL) for the dashboard chrome. */
+/** The store's brand (name + logo + accent colour) for the dashboard chrome. */
 export async function tenantBrandById(
   tenantId: string,
-): Promise<{ name: string | null; logoUrl: string | null }> {
-  const { rows } = await query<{ name: string; logo_url: string | null }>(
-    `SELECT name, logo_url FROM tenants WHERE id = $1`,
+): Promise<{ name: string | null; logoUrl: string | null; themeColor: string | null }> {
+  const { rows } = await query<{ name: string; logo_url: string | null; theme_color: string | null }>(
+    `SELECT name, logo_url, theme_color FROM tenants WHERE id = $1`,
     [tenantId],
   );
-  return { name: rows[0]?.name ?? null, logoUrl: rows[0]?.logo_url ?? null };
+  return {
+    name: rows[0]?.name ?? null,
+    logoUrl: rows[0]?.logo_url ?? null,
+    themeColor: rows[0]?.theme_color ?? null,
+  };
+}
+
+/** The signed-in user's uploaded avatar URL (null when none) for the dashboard chrome. */
+export async function userAvatarById(userId: string): Promise<string | null> {
+  const { rows } = await query<{ avatar_url: string | null }>(
+    `SELECT avatar_url FROM users WHERE id = $1`,
+    [userId],
+  );
+  return rows[0]?.avatar_url ?? null;
 }
 
 /** Record a successful sign-in: stamp last login and remember the Google subject. */

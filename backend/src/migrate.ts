@@ -642,6 +642,11 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_hours   TEXT;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tin              TEXT;   -- BIR Taxpayer ID No.
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url         TEXT;   -- public asset link
 
+-- Per-tenant brand accent (the store's chosen theme colour). A single \`#rrggbb\`
+-- hex; the workspace derives the full brand ramp from it client-side. NULL = the
+-- default VendoPOS blue. Applied to the back-office + customer-facing display.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS theme_color      TEXT;
+
 -- Receipt / invoice customization (display-only; never affects the gap-free
 -- numbering). \`invoice_prefix\` is the serial prefix the POS stamps (default SI
 -- → SI-000123); changing it is safe because the per-Tenant counter keeps

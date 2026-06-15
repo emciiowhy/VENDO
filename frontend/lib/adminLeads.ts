@@ -79,7 +79,7 @@ export async function listLeads(): Promise<Result<{ leads: Lead[] }>> {
 export async function approveLead(
   id: string,
   payload: ProvisionPayload,
-): Promise<Result<{ tenant: ProvisionedTenant; lead: Lead }>> {
+): Promise<Result<{ tenant: ProvisionedTenant; lead: Lead; onboardingEmailTo?: string }>> {
   try {
     const res = await fetch(`${BASE}/${id}/approve`, {
       method: "POST",

@@ -22,6 +22,10 @@ export interface SessionUser {
   tenantName?: string | null;
   /** Owner-uploaded store logo URL from /auth/me (null when none / SUPER_ADMIN). */
   tenantLogoUrl?: string | null;
+  /** The signed-in user's own uploaded profile photo from /auth/me (null when none). */
+  avatarUrl?: string | null;
+  /** The store's brand accent (#rrggbb) from /auth/me; null/undefined → default blue. */
+  themeColor?: string | null;
 }
 
 /** Human-readable copy for the `?error=` codes the backend redirects with. */

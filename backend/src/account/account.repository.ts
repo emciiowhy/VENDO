@@ -22,6 +22,8 @@ export interface StoreProfile {
   businessHours: string | null;
   tin: string | null;
   logoUrl: string | null;
+  /** The store's chosen brand accent as `#rrggbb`, or null for the default. */
+  themeColor: string | null;
 }
 
 export async function getStoreProfile(tenantId: string): Promise<StoreProfile | null> {
@@ -37,8 +39,9 @@ export async function getStoreProfile(tenantId: string): Promise<StoreProfile | 
     business_hours: string | null;
     tin: string | null;
     logo_url: string | null;
+    theme_color: string | null;
   }>(
-    `SELECT id, name, slug, plan, status, address, phone, email, business_hours, tin, logo_url
+    `SELECT id, name, slug, plan, status, address, phone, email, business_hours, tin, logo_url, theme_color
        FROM tenants WHERE id = $1`,
     [tenantId],
   );
@@ -56,7 +59,13 @@ export async function getStoreProfile(tenantId: string): Promise<StoreProfile | 
     businessHours: r.business_hours,
     tin: r.tin,
     logoUrl: r.logo_url,
+    themeColor: r.theme_color,
   };
+}
+
+/** Set (or clear, with null) the store's brand accent colour. */
+export async function setThemeColor(tenantId: string, hex: string | null): Promise<void> {
+  await query(`UPDATE tenants SET theme_color = $2 WHERE id = $1`, [tenantId, hex]);
 }
 
 export interface StoreProfilePatch {

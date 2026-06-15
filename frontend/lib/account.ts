@@ -60,6 +60,8 @@ export interface StoreProfile {
   businessHours: string | null;
   tin: string | null;
   logoUrl: string | null;
+  /** The store's brand accent as `#rrggbb`, or null for the default blue. */
+  themeColor: string | null;
 }
 
 export interface StoreProfileInput {
@@ -77,6 +79,12 @@ export const saveStore = (input: StoreProfileInput) =>
   send<{ store: StoreProfile }>("/store", "PATCH", input);
 export const uploadLogo = (file: File) => upload<{ logoUrl: string }>("/store/logo", file);
 export const removeLogo = () => send<Record<string, never>>("/store/logo", "DELETE");
+
+// ── Appearance / brand theme ──────────────────────────────────────────────────
+
+/** Set the store's brand accent (`#rrggbb`), or pass null to reset to default. */
+export const saveTheme = (accent: string | null) =>
+  send<{ accent: string | null }>("/theme", "PATCH", { accent });
 
 // ── Receipt customization ─────────────────────────────────────────────────────
 

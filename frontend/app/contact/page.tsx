@@ -8,7 +8,7 @@ import { ContactForm } from "@/app/components/marketing/ContactForm";
 export const metadata: Metadata = {
   title: "Contact Us — VendoPOS",
   description:
-    "Talk to VendoPOS. Enterprise sales replies in under 2 hours; platform support in under 30 minutes. Reach our team in Metro Manila or send us a message.",
+    "Talk to VendoPOS. Enterprise sales replies in under 2 hours; platform support in under 30 minutes. Reach our team in Cebu or send us a message.",
   openGraph: {
     title: "Contact VendoPOS",
     description:
@@ -43,9 +43,9 @@ const CHANNELS: {
 
 /** Where to find us. */
 const DETAILS: { icon: IconName; label: string; value: string }[] = [
-  { icon: "home", label: "Headquarters", value: "Bonifacio Global City, Taguig, Metro Manila" },
+  { icon: "home", label: "Headquarters", value: "Cebu City, Philippines" },
   { icon: "clock", label: "Hours", value: "Mon–Sat · 8:00 AM – 8:00 PM PHT" },
-  { icon: "card", label: "Phone", value: "+63 (2) 8888 0199" },
+  { icon: "card", label: "Phone", value: "0915 515 2314" },
 ];
 
 export default function ContactPage() {

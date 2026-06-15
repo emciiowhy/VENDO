@@ -7,11 +7,13 @@ import { Icon, IconSprite, type IconName } from "../Icon";
 import { useSession } from "../auth/useSession";
 import { useTheme } from "../theme/ThemeProvider";
 import { ThemeToggle } from "../theme/ThemeToggle";
+import { AccentProvider, TenantTheme, useAccent } from "../theme/TenantTheme";
 import { ToastProvider } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { NotificationBell } from "./NotificationBell";
 import { BrandMark } from "../BrandMark";
 import { logout, type SessionUser } from "@/lib/auth";
+import { resolveAssetUrl } from "@/lib/images";
 
 export interface NavItem {
   label: string;
@@ -77,17 +79,21 @@ export function DashShell({
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
+  const avatarUrl = resolveAssetUrl(user.avatarUrl);
 
   return (
     <UserContext.Provider value={user}>
+      <AccentProvider initial={user.themeColor}>
       <ToastProvider>
       <IconSprite />
       <div
+        data-vp-theme=""
         className={
           "theme-root min-h-screen bg-paper text-ink lg:grid lg:grid-cols-[260px_1fr] " +
           (theme === "dark" ? "dark" : "")
         }
       >
+        <ShellAccentStyle />
         {/* Sidebar */}
         <aside
           className={
@@ -203,9 +209,20 @@ export function DashShell({
                       {ROLE_LABEL[user.role]}
                     </div>
                   </div>
-                  <span className="w-9 h-9 rounded-full bg-ink dark:bg-[#0b1220] text-white grid place-items-center font-bold text-[13px] tracking-tight">
-                    {initials || "U"}
-                  </span>
+                  {avatarUrl ? (
+                    // The user's own uploaded photo (cross-origin uploads URL);
+                    // plain <img> sidesteps next/image remote config.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={avatarUrl}
+                      alt={user.name}
+                      className="w-9 h-9 rounded-full object-cover hairline"
+                    />
+                  ) : (
+                    <span className="w-9 h-9 rounded-full bg-ink dark:bg-[#0b1220] text-white grid place-items-center font-bold text-[13px] tracking-tight">
+                      {initials || "U"}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -227,8 +244,15 @@ export function DashShell({
         />
       )}
       </ToastProvider>
+      </AccentProvider>
     </UserContext.Provider>
   );
+}
+
+/** Injects the live tenant accent (from the Appearance card / session) onto the shell. */
+function ShellAccentStyle() {
+  const { accent } = useAccent();
+  return <TenantTheme accent={accent} />;
 }
 
 /**

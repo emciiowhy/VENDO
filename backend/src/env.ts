@@ -62,6 +62,18 @@ export const env = {
     ),
   },
 
+  /**
+   * Transactional email (the Lead onboarding mail sent on provisioning).
+   * Provider-agnostic and optional: with RESEND_API_KEY unset the transport just
+   * logs the rendered message to the server console, so provisioning works with
+   * no setup. Set the key (https://resend.com → API Keys) to deliver for real,
+   * and EMAIL_FROM to a verified sender on your domain. See notifications/email.ts.
+   */
+  email: {
+    resendApiKey: optional("RESEND_API_KEY"),
+    from: optional("EMAIL_FROM", "VendoPOS <onboarding@vendopos.app>"),
+  },
+
   /** Application JWT signed after Google identifies the user. */
   jwtSecret: optional("JWT_SECRET"),
 

@@ -41,7 +41,14 @@ adminLeadsRouter.post("/:id/approve", async (req, res) => {
   try {
     const result = await provisionLead(req.params.id, parsed.data);
     if (result.ok) {
-      return res.status(201).json({ ok: true, tenant: result.tenant, lead: result.lead });
+      // `onboardingEmailTo` echoes the address the onboarding mail was dispatched
+      // to (fired best-effort inside provisionLead) so the drawer can confirm it.
+      return res.status(201).json({
+        ok: true,
+        tenant: result.tenant,
+        lead: result.lead,
+        onboardingEmailTo: parsed.data.ownerEmail,
+      });
     }
     switch (result.error.code) {
       case "NOT_FOUND":
