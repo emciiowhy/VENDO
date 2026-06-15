@@ -24,6 +24,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.1.1",
     "pg": "^8.13.1",
+    "resend": "^6.12.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -33,7 +34,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.9",
     "@types/multer": "^2.1.0",
-    "@types/node": "^22.10.5",
+    "@types/node": "^22.19.21",
     "@types/pg": "^8.11.10",
     "@types/supertest": "^6.0.2",
     "supertest": "^7.0.0",

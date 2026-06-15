@@ -1,3 +1,4 @@
+import { Resend } from "resend";
 import { env } from "../env.js";
 
 /**
@@ -10,6 +11,10 @@ import { env } from "../env.js";
  * var. Mirrors the rest of the codebase's optional-config posture (Google OAuth,
  * media storage): the API still boots and the surrounding flow still succeeds
  * when the integration is unset.
+ *
+ * Real delivery goes through the official `resend` SDK. The client is created
+ * lazily — only once a key is present, after the guard below — so the SDK never
+ * runs (and can never complain about a missing key) on a key-less boot.
  *
  * The function NEVER throws: a missing key, a network error, or a provider
  * rejection all resolve to `{ delivered: false }`, so a mail hiccup can never
@@ -56,24 +61,16 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailResult> {
   }
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: msg.to,
-        subject: msg.subject,
-        text: msg.text,
-        ...(msg.html ? { html: msg.html } : {}),
-      }),
+    const resend = new Resend(resendApiKey);
+    const { error } = await resend.emails.send({
+      from,
+      to: msg.to,
+      subject: msg.subject,
+      text: msg.text,
+      ...(msg.html ? { html: msg.html } : {}),
     });
-    if (!res.ok) {
-      console.error(
-        `[email] Resend rejected the send (${res.status}): ${await res.text().catch(() => "")}`,
-      );
+    if (error) {
+      console.error(`[email] Resend rejected the send (${error.name}): ${error.message}`);
       return { delivered: false, transport: "resend" };
     }
     return { delivered: true, transport: "resend" };

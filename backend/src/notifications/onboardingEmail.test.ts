@@ -26,15 +26,15 @@ describe("renderOnboardingEmail", () => {
 
   it("tells a password owner to sign in with their password", () => {
     const { text, html } = renderOnboardingEmail({ ...base, hasPassword: true });
-    expect(text).toContain("password you set");
+    expect(text).toContain("secure password you created");
     expect(text).not.toContain("Continue with Google");
-    expect(html).toContain("password you set");
+    expect(html).toContain("secure password you created");
   });
 
   it("tells a Google-only owner to continue with Google", () => {
     const { text } = renderOnboardingEmail({ ...base, hasPassword: false });
     expect(text).toContain("Continue with Google");
-    expect(text).not.toContain("password you set");
+    expect(text).not.toContain("secure password you created");
   });
 
   it("escapes HTML-significant characters in the HTML body", () => {

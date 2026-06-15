@@ -46,7 +46,7 @@ export function renderOnboardingEmail(d: OnboardingDetails): RenderedEmail {
   const loginUrl = `${env.frontendUrl.replace(/\/+$/, "")}/login`;
   const planLabel = PLAN_LABEL[d.plan] ?? d.plan;
   const signInStep = d.hasPassword
-    ? `Sign in with your email (${d.ownerEmail}) and the password you set.`
+    ? `Sign in with your email (${d.ownerEmail}) using the secure password you created during your demo request.`
     : `Choose “Continue with Google” and use ${d.ownerEmail}.`;
 
   const steps = [
