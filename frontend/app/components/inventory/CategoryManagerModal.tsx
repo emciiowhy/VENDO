@@ -141,8 +141,8 @@ export function CategoryManagerModal({
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center px-4 py-8 overflow-y-auto" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-[480px] rounded-xl2 bg-surface hairline shadow-soft">
+      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 bg-black/50 backdrop-blur-sm overlay-backdrop" />
+      <div className="relative w-full max-w-[480px] rounded-xl2 bg-surface hairline shadow-soft overlay-card">
         <div className="flex items-center justify-between px-6 py-4 hairline-b">
           <h3 className="text-[1.15rem] font-extrabold tracking-tightest">Manage categories</h3>
           <button type="button" onClick={onClose} aria-label="Close" className="text-ink-faint hover:text-ink transition p-1">

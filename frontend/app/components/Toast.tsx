@@ -80,7 +80,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {canPortal &&
         createPortal(
-          <div className={theme === "dark" ? "dark" : ""}>
+          // `text-ink` base colour so token-less toast text resolves the ink token
+          // outside .theme-root rather than body's light-mode ink. Mirrors PinSwitcher.
+          <div className={"text-ink " + (theme === "dark" ? "dark" : "")}>
             <div className="fixed top-4 right-4 z-[130] flex flex-col gap-2.5 w-[min(360px,calc(100vw-2rem))]">
               {toasts.map((t) => (
                 <ToastCard key={t.id} toast={t} onClose={() => remove(t.id)} />

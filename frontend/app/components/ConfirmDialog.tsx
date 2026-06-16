@@ -42,7 +42,11 @@ export function ConfirmDialog({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className={theme === "dark" ? "dark" : ""}>
+    // Portal lands on <body>, outside .theme-root — without `text-ink` the title
+    // (and any token-less text) inherits body's light-mode ink and goes dark-on-dark
+    // on the dark surface. Mirrors the PinSwitcher portal. The `.dark` class retints
+    // the token so the same `text-ink` reads correctly in both modes.
+    <div className={"text-ink " + (theme === "dark" ? "dark" : "")}>
       <div className="fixed inset-0 z-[125] grid place-items-center px-5" role="dialog" aria-modal="true" aria-label={title}>
         <button type="button" aria-label="Cancel" onClick={onCancel} className="absolute inset-0 bg-black/45 backdrop-blur-sm overlay-backdrop" />
         <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-6 overlay-card">

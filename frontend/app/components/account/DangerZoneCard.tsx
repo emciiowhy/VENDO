@@ -72,7 +72,9 @@ function DeactivateModal({ onClose }: { onClose: () => void }) {
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className={theme === "dark" ? "dark" : ""}>
+    // `text-ink` so the portaled title resolves the ink token instead of inheriting
+    // body's light-mode colour (dark-on-dark on the dark card). Mirrors PinSwitcher.
+    <div className={"text-ink " + (theme === "dark" ? "dark" : "")}>
       <div className="fixed inset-0 z-[125] grid place-items-center px-5" role="dialog" aria-modal="true">
         <button type="button" aria-label="Cancel" onClick={onClose} className="absolute inset-0 bg-black/45 backdrop-blur-sm overlay-backdrop" />
         <div className="relative w-full max-w-[400px] rounded-xl2 bg-surface hairline shadow-soft p-6 overlay-card">

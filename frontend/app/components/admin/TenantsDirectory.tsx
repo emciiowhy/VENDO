@@ -321,8 +321,8 @@ function TenantManageModal({
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center px-5 py-8" role="dialog" aria-modal="true">
-      <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-[560px] max-h-full overflow-y-auto rounded-xl2 bg-surface hairline shadow-soft">
+      <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm overlay-backdrop" />
+      <div className="relative w-full max-w-[560px] max-h-full overflow-y-auto rounded-xl2 bg-surface hairline shadow-soft overlay-card">
         {/* header */}
         <div className="flex items-start justify-between gap-4 px-6 py-5 hairline-b">
           <div className="flex items-start gap-3">

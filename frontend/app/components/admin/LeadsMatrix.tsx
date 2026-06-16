@@ -466,7 +466,7 @@ function ProvisionDrawer({
 
   return (
     <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="Review demo request">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm overlay-backdrop" />
       <aside className="slide-over absolute inset-y-0 right-0 w-full max-w-[440px] bg-surface hairline-l shadow-soft flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 px-6 py-5 hairline-b">

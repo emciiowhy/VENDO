@@ -39,8 +39,8 @@ export function PayrollDetailDrawer({ id, onClose }: { id: string; onClose: () =
 
   return (
     <div className="fixed inset-0 z-[120] flex justify-end" role="dialog" aria-modal="true" aria-label="Payroll detail">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/45 backdrop-blur-sm" />
-      <div className="relative w-full max-w-[480px] h-full bg-surface hairline shadow-soft overflow-y-auto">
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/45 backdrop-blur-sm overlay-backdrop" />
+      <div className="slide-over relative w-full max-w-[480px] h-full bg-surface hairline shadow-soft overflow-y-auto">
         {!run ? (
           <div className="p-6">
             {error ? (

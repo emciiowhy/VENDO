@@ -66,8 +66,8 @@ export function PasswordOnboarding() {
 
   return (
     <div className="fixed inset-0 z-[120] grid place-items-center px-5" role="dialog" aria-modal="true" aria-label="Set a password">
-      <button type="button" aria-label="Close" onClick={dismiss} className="absolute inset-0 bg-black/45 backdrop-blur-sm" />
-      <div className="relative w-full max-w-[420px] rounded-xl2 bg-surface hairline shadow-soft p-6">
+      <button type="button" aria-label="Close" onClick={dismiss} className="absolute inset-0 bg-black/45 backdrop-blur-sm overlay-backdrop" />
+      <div className="relative w-full max-w-[420px] rounded-xl2 bg-surface hairline shadow-soft p-6 overlay-card">
         <span className="grid place-items-center w-11 h-11 rounded-[12px] bg-brand-50 text-brand-600">
           <Icon name="lock" className="w-5 h-5" strokeWidth={1.8} />
         </span>

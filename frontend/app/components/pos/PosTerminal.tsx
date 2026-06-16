@@ -97,6 +97,16 @@ function useDismiss(onClose: () => void) {
     setClosing(true);
     window.setTimeout(onClose, 200);
   }, [onClose]);
+  // Esc closes with the same animated exit as a backdrop click, so every register
+  // overlay dismisses identically under the keyboard — matching the back-office
+  // modals (ConfirmDialog, ReorderModal) that already honour Esc.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") dismiss();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dismiss]);
   return { closing, dismiss };
 }
 
@@ -390,6 +400,7 @@ export function PosTerminal() {
     return (
       <div
         data-vp-theme=""
+        suppressHydrationWarning
         className={
           "theme-root grid-bg min-h-screen grid place-items-center bg-paper text-ink " +
           (theme === "dark" ? "dark" : "")
@@ -714,7 +725,7 @@ export function PosTerminal() {
 
       {cartOpenMobile && (
         <div className="lg:hidden fixed inset-0 z-[100] flex flex-col justify-end">
-          <button aria-label="Close" onClick={() => setCartOpenMobile(false)} className="absolute inset-0 bg-black/50" />
+          <button aria-label="Close" onClick={() => setCartOpenMobile(false)} className="absolute inset-0 bg-black/50 overlay-backdrop" />
           <div className="relative max-h-[88vh]">
             <CartPanel className="flex rounded-t-xl2" onClose={() => setCartOpenMobile(false)} {...cartProps} />
           </div>
@@ -1251,6 +1262,14 @@ function CheckoutOverlay({
                   <input
                     value={tendered}
                     onChange={(e) => setTendered(e.target.value.replace(/[^\d.]/g, ""))}
+                    onKeyDown={(e) => {
+                      // Enter settles the sale straight from the amount field — the
+                      // cashier never leaves the keyboard to reach the Charge button.
+                      if (e.key === "Enter" && !cashShort && !busy && netCents > 0) {
+                        e.preventDefault();
+                        void charge();
+                      }
+                    }}
                     inputMode="decimal"
                     autoFocus
                     placeholder="0.00"
@@ -1269,6 +1288,15 @@ function CheckoutOverlay({
                 <div className="flex items-center justify-between rounded-[10px] bg-accent-50 px-3.5 py-2 text-[13.5px] font-bold text-accent-600">
                   <span>Change due</span>
                   <span className="tabular-nums">{peso(changeCents)}</span>
+                </div>
+              )}
+              {/* Symmetric counterpart to "Change due": when the cash is short, say
+                  by exactly how much so the cashier asks for the right amount — not
+                  a silent disabled button. */}
+              {cashShort && tenderedCents > 0 && (
+                <div className="flex items-center justify-between rounded-[10px] bg-rose-50 px-3.5 py-2 text-[13.5px] font-bold text-rose-600">
+                  <span>Short by</span>
+                  <span className="tabular-nums">{peso(dueCents - tenderedCents)}</span>
                 </div>
               )}
             </div>
@@ -1311,6 +1339,12 @@ function CheckoutOverlay({
               <input
                 value={refCode}
                 onChange={(e) => setRefCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !busy && netCents > 0) {
+                    e.preventDefault();
+                    void charge();
+                  }
+                }}
                 inputMode="numeric"
                 placeholder="e.g. 4821"
                 className="field-input rounded-[10px] px-3.5 py-2.5 text-[14px] w-full tabular-nums tracking-[0.2em] transition duration-150 ease-in-out"

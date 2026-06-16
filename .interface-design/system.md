@@ -87,6 +87,32 @@ Hierarchy = size **+ weight + tracking + opacity**, never size alone. Text colou
 canvas + `hairline-r` separation (no separate "sidebar colour"), sticky `glass`
 top bar carrying page title + identity. Reused by `/admin` and `/dashboard`.
 
+## Modal & overlay motion (one entrance, no exceptions)
+
+Every dialog/overlay animates in the same way — a missing entrance reads as drift.
+
+- **Centered modals**: scrim gets `overlay-backdrop` (fade), card gets `overlay-card`
+  (pop-in). Applies whether the card is a `div` or a `form`.
+- **Right-anchored drawers**: scrim gets `overlay-backdrop`; the panel gets
+  `slide-over` (translateX in). Reference: `SubscribersDrawer`, `LeadsMatrix`.
+- **Animated exit** (`closing` + `.closing`) is the register-overlay pattern via
+  `useDismiss` in `PosTerminal` (Checkout/Receipt/Discount/Void). `useDismiss` also
+  binds **Esc → dismiss**, so every register overlay closes on Esc like the
+  back-office `ConfirmDialog`. Back-office modals are entrance-only (instant unmount)
+  — that's the accepted baseline, don't half-build an exit.
+- **Exception**: the `DashShell` mobile-nav sidebar is a transform-transition nav
+  drawer, not a modal — its scrim stays plain.
+
+## Register checkout micro-patterns
+
+- **Symmetric money chips**: cash short/over render mirrored chips — `bg-accent-50
+  text-accent-600` "Change due" vs `bg-rose-50 text-rose-600` "Short by". Never show
+  one without its counterpart; a short amount is a stated number, not a silent
+  disabled button.
+- **Enter settles**: the *Cash received* and *e-wallet reference* inputs charge on
+  Enter (guarded by the same condition as the Charge button) so a sale completes
+  without leaving the keyboard.
+
 ## Verifying changes visually
 
 Both back-office surfaces are auth-walled (`useSession` → `/auth/me`). Pattern used
