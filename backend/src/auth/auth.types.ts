@@ -15,6 +15,18 @@ export const ROLES: readonly Role[] = [
 ] as const;
 
 /**
+ * The original SUPER_ADMIN identity carried inside an impersonation session, so
+ * the admin can step back out to the platform console without re-authenticating.
+ * Lives ONLY inside the signed JWT (never a separate cookie or a client store),
+ * so it's tamper-proof and a normal merchant session can never carry one.
+ */
+export interface ImpersonatorClaim {
+  userId: string;
+  email: string;
+  name: string;
+}
+
+/**
  * The application session — what we sign into the JWT and hang off `req.user`.
  * `tenantId` is null only for the SUPER_ADMIN, who sits above all Tenants.
  */
@@ -31,6 +43,13 @@ export interface Session {
    * honoured until they expire, but can't be listed or revoked individually.
    */
   sid?: string;
+  /**
+   * Present ONLY while a SUPER_ADMIN is impersonating a tenant owner: the admin's
+   * own identity, used to restore their console session on "Return to Super
+   * Admin". Set exclusively by POST /auth/impersonate (which already gates on the
+   * SUPER_ADMIN role), so it can never appear on an ordinary login.
+   */
+  impersonator?: ImpersonatorClaim;
 }
 
 /**

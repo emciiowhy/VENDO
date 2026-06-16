@@ -47,6 +47,14 @@ export interface SessionUser {
   status?: TenantLifecycle | null;
   /** ISO timestamp the trial window ends/ended (for the recovery copy). */
   trialEndsAt?: string | null;
+  /**
+   * True only when a SUPER_ADMIN is viewing this tenant via impersonation. Drives
+   * the "Return to Super Admin" banner; absent/false for every normal login, so a
+   * merchant owner can never see (or trigger) the return path.
+   */
+  isImpersonating?: boolean;
+  /** The impersonating admin's display name, for the banner copy. */
+  impersonatorName?: string | null;
 }
 
 /** Human-readable copy for the `?error=` codes the backend redirects with. */
@@ -297,6 +305,25 @@ export async function signUp(input: {
       body: JSON.stringify(input),
     });
     return (await res.json()) as SignupResult;
+  } catch {
+    return { ok: false, error: "Could not reach the server. Check your connection and try again." };
+  }
+}
+
+/**
+ * Leave an impersonated tenant view and restore the Super Admin's own console
+ * session — the server reads the signed impersonator claim and swaps the cookie
+ * back. Like {@link impersonateTenant}, the caller must do a full-page navigation
+ * to `redirectTo` so the swapped cookie and the cached session both reset to the
+ * admin identity (router.push alone would keep the stale impersonated session).
+ */
+export async function stopImpersonation(): Promise<ImpersonateResult> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/impersonate/stop`, {
+      method: "POST",
+      credentials: "include",
+    });
+    return (await res.json()) as ImpersonateResult;
   } catch {
     return { ok: false, error: "Could not reach the server. Check your connection and try again." };
   }

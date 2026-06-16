@@ -6,6 +6,7 @@ import { Icon } from "../Icon";
 import { BrandMark } from "../BrandMark";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { logout, type SessionUser } from "@/lib/auth";
+import { ImpersonationBanner } from "./ImpersonationBanner";
 
 /**
  * The graceful billing/recovery view shown in place of the dashboard once a
@@ -27,10 +28,17 @@ export function TrialRecovery({ user, dark }: { user: SessionUser; dark: boolean
     <div
       data-vp-theme=""
       className={
-        "theme-root grid-bg min-h-screen grid place-items-center px-5 py-12 bg-paper text-ink " +
+        "theme-root grid-bg min-h-screen flex flex-col bg-paper text-ink " +
         (dark ? "dark" : "")
       }
     >
+      {/* Impersonation escape hatch — a SUPER_ADMIN must never be stranded inside
+          a tenant's full-screen recovery view. Present only on an impersonated
+          session, so a genuine trial-expired merchant never sees it. It sits at
+          the absolute top and the recovery card centres in the space below. */}
+      {user.isImpersonating && <ImpersonationBanner tenantName={user.tenantName ?? null} />}
+
+      <div className="flex flex-1 items-center justify-center px-5 py-12">
       <div className="w-full max-w-[480px]">
         <div className="flex items-center gap-2.5">
           <BrandMark className="w-8 h-8" />
@@ -95,6 +103,7 @@ export function TrialRecovery({ user, dark }: { user: SessionUser; dark: boolean
             Sign out
           </button>
         </div>
+      </div>
       </div>
 
       {signOutOpen && (

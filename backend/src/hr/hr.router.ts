@@ -23,6 +23,7 @@ import {
   updateEmployee,
   upsertAttendance,
 } from "./hr.repository.js";
+import { DEFAULT_HOURLY_RATE_CENTS, getLaborAnalytics } from "./timecard.repository.js";
 
 /**
  * Merchant HR — employees, attendance, payroll.
@@ -110,6 +111,32 @@ hrRouter.get("/performance", async (req, res) => {
   } catch (err) {
     console.error("[hr] performance failed:", err);
     res.status(500).json({ ok: false, error: "Could not load performance analytics." });
+  }
+});
+
+// ── Labor analytics (shift-clock hours vs. sales) ──────────────────────────────
+
+/** Read & clamp an optional ?rateCents= baseline hourly rate, else the default. */
+function rateParam(req: Request): number {
+  const raw = Number(req.query.rateCents);
+  if (!Number.isFinite(raw) || raw < 0) return DEFAULT_HOURLY_RATE_CENTS;
+  // Cap at ₱100,000/hr so a fat-fingered value can't overflow the payroll log.
+  return Math.min(Math.round(raw), 10_000_000);
+}
+
+hrRouter.get("/labor-analytics", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const today = new Date().toISOString().slice(0, 10);
+  const monthAgo = new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
+  const from = dateParam(req, "from") ?? monthAgo;
+  const to = dateParam(req, "to") ?? today;
+  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
+  try {
+    res.json({ ok: true, analytics: await getLaborAnalytics(tenantId, from, to, rateParam(req)) });
+  } catch (err) {
+    console.error("[hr] labor analytics failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load labor analytics." });
   }
 });
 

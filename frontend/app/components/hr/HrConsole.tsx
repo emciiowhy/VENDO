@@ -7,6 +7,7 @@ import { useToast } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { HrOverview } from "./HrOverview";
 import { PerformanceMatrix } from "./PerformanceMatrix";
+import { LaborAnalytics } from "./LaborAnalytics";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
 import {
   ATTENDANCE_STATUSES,
@@ -31,7 +32,7 @@ import { PayrollDetailDrawer } from "./PayrollDetailDrawer";
  * dataset. Attendance is marked per day; payroll derives gross pay from rates +
  * that attendance. Builds on the same staff the cashier/shift ledger uses.
  */
-type Tab = "overview" | "employees" | "attendance" | "payroll" | "performance";
+type Tab = "overview" | "employees" | "attendance" | "payroll" | "performance" | "labor";
 
 const PAY_TAG: Record<string, string> = {
   Monthly: "bg-brand-50 text-brand-600",
@@ -130,6 +131,7 @@ export function HrConsole() {
             <TabButton active={tab === "attendance"} onClick={() => setTab("attendance")} label="Attendance" />
             <TabButton active={tab === "payroll"} onClick={() => setTab("payroll")} label={`Payroll (${state.runs.length})`} />
             <TabButton active={tab === "performance"} onClick={() => setTab("performance")} label="Performance" />
+            <TabButton active={tab === "labor"} onClick={() => setTab("labor")} label="Labor analytics" />
           </div>
 
           {tab === "overview" && <HrOverview />}
@@ -146,6 +148,7 @@ export function HrConsole() {
             <PayrollTable runs={state.runs} onOpen={setDetailId} onRun={() => setPayrollModal(true)} />
           )}
           {tab === "performance" && <PerformanceMatrix />}
+          {tab === "labor" && <LaborAnalytics />}
         </>
       )}
 

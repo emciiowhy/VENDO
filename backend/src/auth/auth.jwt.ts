@@ -31,6 +31,9 @@ export function signSession(session: Session): string {
     email: session.email,
     name: session.name,
     ...(session.sid ? { sid: session.sid } : {}),
+    // The impersonator identity rides in the signed token so it can't be forged
+    // and never needs a second cookie. Present only on impersonation sessions.
+    ...(session.impersonator ? { impersonator: session.impersonator } : {}),
   };
   return jwt.sign(payload, secret(), {
     algorithm: "HS256",
@@ -47,6 +50,16 @@ export function verifySession(token: string | undefined | null): Session | null 
     if (typeof decoded !== "object" || decoded === null) return null;
     const d = decoded as Record<string, unknown>;
     if (typeof d.userId !== "string" || typeof d.role !== "string") return null;
+    // Decode the impersonator claim only when it's fully well-formed; a partial
+    // or malformed shape is dropped rather than trusted.
+    let impersonator: Session["impersonator"];
+    const imp = d.impersonator;
+    if (imp && typeof imp === "object") {
+      const i = imp as Record<string, unknown>;
+      if (typeof i.userId === "string" && typeof i.email === "string" && typeof i.name === "string") {
+        impersonator = { userId: i.userId, email: i.email, name: i.name };
+      }
+    }
     return {
       userId: d.userId,
       tenantId: (d.tenantId as string | null) ?? null,
@@ -54,6 +67,7 @@ export function verifySession(token: string | undefined | null): Session | null 
       email: String(d.email ?? ""),
       name: String(d.name ?? ""),
       ...(typeof d.sid === "string" ? { sid: d.sid } : {}),
+      ...(impersonator ? { impersonator } : {}),
     };
   } catch {
     return null;

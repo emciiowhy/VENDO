@@ -181,9 +181,24 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("[auth] session enrichment failed:", err);
   }
+  // Surface impersonation as a derived flag (+ the admin's name for the banner)
+  // and keep the raw impersonator claim server-side — the merchant view never
+  // needs the claim object itself.
+  const { impersonator, ...identity } = user;
   res.json({
     ok: true,
-    user: { ...user, tenantName, tenantLogoUrl, themeColor, avatarUrl, tier, status, trialEndsAt },
+    user: {
+      ...identity,
+      tenantName,
+      tenantLogoUrl,
+      themeColor,
+      avatarUrl,
+      tier,
+      status,
+      trialEndsAt,
+      isImpersonating: Boolean(impersonator),
+      impersonatorName: impersonator?.name ?? null,
+    },
   });
 });
 
@@ -380,11 +395,60 @@ authRouter.post("/impersonate", requireRole("SUPER_ADMIN"), async (req, res) => 
     console.info(
       `[auth] SUPER_ADMIN ${admin.userId} impersonating tenant ${tenantId} as owner ${owner.userId}`,
     );
-    await issueSession(res, req, owner, "impersonate");
+    // Stamp the admin's identity onto the owner session so they can step back out
+    // to the console later without re-authenticating (POST /impersonate/stop).
+    await issueSession(
+      res,
+      req,
+      { ...owner, impersonator: { userId: admin.userId, email: admin.email, name: admin.name } },
+      "impersonate",
+    );
     return res.json({ ok: true, redirectTo: dashboardPathForRole(owner.role) });
   } catch (err) {
     console.error("[auth] impersonate failed:", err);
     return res.status(500).json({ ok: false, error: "Could not open that store." });
+  }
+});
+
+/**
+ * POST /auth/impersonate/stop — leave an impersonated tenant view and restore the
+ * SUPER_ADMIN's own console session WITHOUT a re-login.
+ *
+ * The admin identity is read from the signed `impersonator` claim on the current
+ * session (set by /impersonate, which already gated on SUPER_ADMIN), so it can't
+ * be forged and an ordinary merchant session simply has no claim to act on. The
+ * impersonation device row is revoked on the way out and a fresh admin session is
+ * minted; the caller then does a full navigation to the returned path so the
+ * swapped cookie and the client session cache both reset cleanly.
+ */
+authRouter.post("/impersonate/stop", requireAuth, async (req, res) => {
+  const current = req.user!;
+  const imp = current.impersonator;
+  if (!imp) {
+    return res.status(400).json({ ok: false, error: "No impersonation session is active." });
+  }
+  try {
+    // Drop the impersonation device session before re-minting (best-effort).
+    if (current.sid) {
+      try {
+        await revokeSession(current.sid);
+      } catch (err) {
+        console.error("[auth] impersonation revoke failed:", err);
+      }
+    }
+    const adminSession: Session = {
+      userId: imp.userId,
+      tenantId: null,
+      role: "SUPER_ADMIN",
+      email: imp.email,
+      name: imp.name,
+    };
+    console.info(`[auth] SUPER_ADMIN ${imp.userId} returned from impersonation`);
+    await issueSession(res, req, adminSession, "impersonate");
+    return res.json({ ok: true, redirectTo: "/admin/tenants" });
+  } catch (err) {
+    console.error("[auth] impersonate stop failed:", err);
+    return res.status(500).json({ ok: false, error: "Could not return to the admin portal." });
   }
 });
 

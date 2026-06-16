@@ -27,10 +27,16 @@ import {
   type StoreBrand,
 } from "@/lib/pos";
 import { searchCustomers, type CustomerLite } from "@/lib/crm";
-import { OpeningShiftModal, ShiftCloseModal } from "./ShiftModals";
+import { ShiftCloseModal } from "./ShiftModals";
 import { MockQr } from "./MockQr";
 import { SalesReturnsModal } from "./SalesReturnsModal";
 import { printSaleReceipt, type TicketItem } from "./receiptPrint";
+import { buildSaleReceipt } from "@/lib/escpos";
+import { useThermalPrinter, type UseThermalPrinter } from "./useThermalPrinter";
+import { useBarcodeScanner } from "./useBarcodeScanner";
+import { ClockWidget } from "./ClockWidget";
+import { ActivationWizard } from "./ActivationWizard";
+import { getClockStatus } from "@/lib/timecard";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
   DISPLAY_CHANNEL,
@@ -144,6 +150,10 @@ export function PosTerminal() {
   // Shift reconciliation lifecycle (X-Read / Z-Read).
   const [shift, setShift] = useState<ActiveShift | null>(null);
   const [shiftLoading, setShiftLoading] = useState(true);
+  // Labor-clock state (distinct from the cash drawer above): whether the operator
+  // holds an open timecard. `null` until the first probe resolves — both this and
+  // an open drawer are required before the ActivationWizard releases the till.
+  const [clockedIn, setClockedIn] = useState<boolean | null>(null);
   // Owner-set default opening float for this operator, pre-filling the X-Read gate.
   const [defaultFloatCents, setDefaultFloatCents] = useState(0);
   const [closeShiftOpen, setCloseShiftOpen] = useState(false);
@@ -159,11 +169,42 @@ export function PosTerminal() {
     icon?: IconName;
     danger?: boolean;
   } | null>(null);
+  // The on-the-floor shift-clock sheet (labor time-tracking, distinct from the
+  // cash-drawer X/Z-Read shift above). Lifted here so its open state can suspend
+  // the barcode wedge like every other register overlay.
+  const [clockOpen, setClockOpen] = useState(false);
 
   const refreshShift = useCallback(async () => {
     const res = await getActiveShift();
     if (res.ok) setShift(res.shift);
   }, []);
+
+  // The mandatory activation gate. A cashier may only trade once they are BOTH
+  // on the labor clock AND holding an open cash drawer; until then the
+  // ActivationWizard owns the screen and the workspace behind it is inert.
+  // Owners/managers ring up directly (no personal drawer), so they're never
+  // gated — preserving the prior OpeningShiftModal behaviour.
+  const terminalLocked =
+    session.status === "authed" &&
+    session.user.role === "CASHIER" &&
+    !shiftLoading &&
+    clockedIn !== null &&
+    !(clockedIn && shift) &&
+    !nextCashierOpen;
+
+  // ── Hardware peripherals ───────────────────────────────────────────────────
+  // Thermal printer (WebUSB / Web Bluetooth) connection controller. Capability
+  // is detected post-mount inside the hook, so this is SSR-safe.
+  const thermal = useThermalPrinter();
+  // Global barcode/QR wedge capture: a hardware scanner can ring items from
+  // anywhere on the floor, not only the search box. Suspended while an overlay
+  // owns the screen so a stray scan can't mutate a cart the cashier can't see.
+  const scanOverlayOpen =
+    checkoutOpen || discountOpen || voidOpen || salesOpen || closeShiftOpen || nextCashierOpen || clockOpen || !!confirm || !!receipt || terminalLocked;
+  useBarcodeScanner({
+    onScan: (code) => addByScan(code),
+    enabled: session.status === "authed" && !loading && !scanOverlayOpen,
+  });
 
   const applyCatalog = useCallback(
     (data: Awaited<ReturnType<typeof getCatalog>>) => {
@@ -209,12 +250,16 @@ export function PosTerminal() {
     if (session.status !== "authed") return;
     let alive = true;
     void (async () => {
-      const res = await getActiveShift();
+      // Probe both gates the wizard cares about — the open drawer shift and the
+      // labor clock — in one pass. setState lands after the await (never in the
+      // effect body), keeping the set-state-in-effect rule satisfied.
+      const [shiftRes, clockRes] = await Promise.all([getActiveShift(), getClockStatus()]);
       if (!alive) return;
-      if (res.ok) {
-        setShift(res.shift);
-        setDefaultFloatCents(res.defaultFloatCents);
+      if (shiftRes.ok) {
+        setShift(shiftRes.shift);
+        setDefaultFloatCents(shiftRes.defaultFloatCents);
       }
+      setClockedIn(clockRes.ok ? clockRes.timecard !== null : false);
       setShiftLoading(false);
     })();
     return () => {
@@ -234,6 +279,7 @@ export function PosTerminal() {
 
   const snapshot = useMemo<DisplaySnapshot>(() => {
     const accent = session.status === "authed" ? session.user.themeColor ?? null : null;
+    const logoUrl = session.status === "authed" ? session.user.tenantLogoUrl ?? null : null;
     const status: DisplaySnapshot["status"] = receipt
       ? "paid"
       : checkoutOpen && checkoutMethod && checkoutMethod !== "Cash"
@@ -244,6 +290,7 @@ export function PosTerminal() {
     return {
       storeName,
       accent,
+      logoUrl,
       status,
       lines: lines.map((l) => ({
         id: l.product.id,
@@ -346,6 +393,24 @@ export function PosTerminal() {
     setQuery("");
     setScanMsg(null);
   }
+  // Hardware-scanner path (global wedge capture). No query context exists, so it
+  // resolves an exact SKU only — a miss surfaces the same transient message so
+  // the cashier knows to key the item manually.
+  function addByScan(code: string) {
+    const c = code.trim();
+    if (!c) return;
+    const hit = products.find((p) => (p.sku ?? "").toLowerCase() === c.toLowerCase());
+    if (!hit) {
+      setScanMsg(`No product matches “${c}”.`);
+      return;
+    }
+    if (hit.stock <= 0) {
+      setScanMsg(`${hit.name} is out of stock.`);
+      return;
+    }
+    add(hit);
+    setScanMsg(null);
+  }
   function setQty(id: string, qty: number) {
     const line = cart[id];
     if (!line) return;
@@ -390,6 +455,12 @@ export function PosTerminal() {
     clearCart();
     setCheckoutMethod(null);
     void refreshShift(); // roll the just-rung sale into the shift tallies
+    // Push the ticket straight to a connected thermal unit on settlement;
+    // best-effort, and the HTML receipt stays available as a fallback.
+    if (thermal.status === "connected") {
+      const cashierName = session.status === "authed" ? session.user.name : null;
+      void thermal.print(buildSaleReceipt({ store, sale, items, cashierName, kickDrawer: true }));
+    }
   }
   function newSale() {
     setReceipt(null);
@@ -400,7 +471,6 @@ export function PosTerminal() {
     return (
       <div
         data-vp-theme=""
-        suppressHydrationWarning
         className={
           "theme-root grid-bg min-h-screen grid place-items-center bg-paper text-ink " +
           (theme === "dark" ? "dark" : "")
@@ -497,8 +567,9 @@ export function PosTerminal() {
       <TenantTheme accent={user.themeColor} />
       <IconSprite />
 
-      {/* Lock bar */}
-      <header className="shrink-0 glass hairline-b">
+      {/* Lock bar — relative + raised z-index so it owns its own stacking layer,
+          fully separated from the catalog/search column below it. */}
+      <header className="relative z-20 shrink-0 glass hairline-b">
         <div className="flex items-center gap-3 px-5 h-[60px]">
           {/* Escape hatch */}
           <button
@@ -577,6 +648,7 @@ export function PosTerminal() {
               <Icon name="monitor" className="w-[18px] h-[18px]" strokeWidth={1.7} />
               <span className="hidden lg:inline">Customer display</span>
             </button>
+            <ClockWidget open={clockOpen} onOpenChange={setClockOpen} />
             <Link
               href="/me"
               title="My record — hours, PTO & paystubs"
@@ -634,8 +706,14 @@ export function PosTerminal() {
         </div>
       </header>
 
-      {/* Body */}
-      <div className="flex-1 min-h-0 grid lg:grid-cols-[1fr_380px]">
+      {/* Body — blurred and inert while the activation wizard holds the till. */}
+      <div
+        className={
+          "flex-1 min-h-0 grid lg:grid-cols-[1fr_380px] transition duration-200 " +
+          (terminalLocked ? "blur-sm pointer-events-none select-none" : "")
+        }
+        aria-hidden={terminalLocked}
+      >
         {/* Catalog */}
         <div className="flex flex-col min-h-0 p-4 sm:p-5">
           <div className="relative z-10 flex flex-wrap items-center gap-2.5">
@@ -790,6 +868,7 @@ export function PosTerminal() {
           items={receipt.items}
           store={store}
           cashierName={user.name}
+          thermal={thermal}
           onClose={newSale}
         />
       )}
@@ -806,14 +885,17 @@ export function PosTerminal() {
         />
       )}
 
-      {/* Shift opening gate (X-Read) — blocks the till until a shift is open.
-          Cashiers only: owners/managers aren't reconciling a cash drawer, so
-          they ring up directly without opening a shift. */}
-      {!shiftLoading && !shift && isCashier && !nextCashierOpen && (
-        <OpeningShiftModal
-          cashierName={user.name}
+      {/* Mandatory terminal-activation gate: Staff ➔ PIN ➔ Clock In ➔ Open
+          Drawer ➔ Active. Locks the workspace until the cashier is on the labor
+          clock AND has an open cash drawer. Cashiers only — owners/managers ring
+          up directly without a personal drawer. */}
+      {terminalLocked && (
+        <ActivationWizard
+          user={user}
+          clockedIn={clockedIn === true}
           defaultFloatCents={defaultFloatCents}
-          onOpened={(s) => setShift(s)}
+          onClockedIn={() => setClockedIn(true)}
+          onActivated={(s) => setShift(s)}
           onExit={exitTerminal}
         />
       )}
@@ -1160,15 +1242,19 @@ function CheckoutOverlay({
         onClick={dismiss}
         className={"absolute inset-0 glass overlay-backdrop " + (closing ? "closing" : "")}
       />
-      <div className={"relative w-full max-w-[420px] rounded-xl2 bg-surface hairline shadow-soft overlay-card " + (closing ? "closing" : "")}>
-        <div className="flex items-center justify-between px-6 py-4 hairline-b">
+      {/* Strict 3-zone flex column: the panel is capped at 88vh and clips its
+          own overflow, the header/footer are fixed (shrink-0), and only the body
+          scrolls — so an expanded e-wallet QR + reference can never push the
+          Charge button below the fold. */}
+      <div className={"relative flex flex-col w-full max-w-[420px] max-h-[88vh] overflow-hidden rounded-xl2 bg-surface hairline shadow-soft overlay-card " + (closing ? "closing" : "")}>
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 hairline-b">
           <h3 className="text-[1.15rem] font-extrabold tracking-tightest">Checkout</h3>
           <button type="button" onClick={dismiss} aria-label="Close" className="text-ink-faint hover:text-ink transition p-1">
             <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4">
           {/* Summary */}
           <div className="rounded-[12px] bg-paper hairline px-4 py-3 space-y-1 text-[13px]">
             <Row label={`Items (${count})`} value={peso(grossCents)} />
@@ -1304,15 +1390,16 @@ function CheckoutOverlay({
 
           {/* E-wallet QR + reference — slides open for GCash / Maya / QRPH */}
           {isEwallet && (
-            <div className="step-in space-y-3">
-              {/* Scan-to-pay QR (mirrored on the customer display). */}
-              <div className="rounded-[14px] bg-paper hairline p-4 flex items-center gap-4">
-                <div className="shrink-0 rounded-[12px] bg-white ring-1 ring-[rgba(11,18,32,0.1)] p-2 w-[112px] h-[112px] grid place-items-center">
+            <div className="step-in space-y-2.5">
+              {/* Scan-to-pay QR (mirrored on the customer display). Condensed
+                  padding/gaps keep the expanded form short on laptop heights. */}
+              <div className="rounded-[14px] bg-paper hairline p-3 flex items-center gap-3.5">
+                <div className="shrink-0 rounded-[12px] bg-white ring-1 ring-[rgba(11,18,32,0.1)] p-2 w-[96px] h-[96px] grid place-items-center">
                   {uploadedQr ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={uploadedQr} alt={`${method} payment QR`} className="w-full h-full object-contain" />
                   ) : (
-                    <MockQr seed={`${method}|${netCents}`} className="w-[96px] h-[96px] text-[#0b1220]" />
+                    <MockQr seed={`${method}|${netCents}`} className="w-[80px] h-[80px] text-[#0b1220]" />
                   )}
                 </div>
                 <div className="min-w-0">
@@ -1358,7 +1445,7 @@ function CheckoutOverlay({
           )}
         </div>
 
-        <div className="px-6 py-4 hairline-t">
+        <div className="shrink-0 px-6 py-4 hairline-t">
           <button
             type="button"
             onClick={() => void charge()}
@@ -1381,16 +1468,20 @@ function ReceiptOverlay({
   items,
   store,
   cashierName,
+  thermal,
   onClose,
 }: {
   sale: Sale;
   items: TicketItem[];
   store: StoreBrand;
   cashierName: string;
+  thermal: UseThermalPrinter;
   onClose: () => void;
 }) {
   const { closing, dismiss } = useDismiss(onClose);
   const storeName = store.name;
+  const sendThermal = () =>
+    void thermal.print(buildSaleReceipt({ store, sale, items, cashierName, kickDrawer: true }));
   return (
     <div className="fixed inset-0 z-[110] grid place-items-center px-5" role="dialog" aria-modal="true" aria-label="Receipt">
       <div className={"absolute inset-0 glass overlay-backdrop " + (closing ? "closing" : "")} />
@@ -1421,6 +1512,55 @@ function ReceiptOverlay({
           {sale.pointsRedeemed > 0 && <RcptRow label="Points redeemed" value={`−${sale.pointsRedeemed}`} />}
           {sale.pointsEarned > 0 && <RcptRow label="Points earned" value={`+${sale.pointsEarned}`} />}
         </div>
+
+        {/* Direct-to-device thermal printing (only when the browser supports a
+            transport). On settlement an already-connected unit prints
+            automatically; here the cashier can connect one or reprint. */}
+        {thermal.support.any && (
+          <div className="mt-4 rounded-[12px] bg-paper hairline px-3.5 py-3 text-left">
+            {thermal.status === "connected" ? (
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-accent-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-500" />
+                  {thermal.deviceName}
+                </span>
+                <button
+                  type="button"
+                  onClick={sendThermal}
+                  className="inline-flex items-center gap-1.5 rounded-[8px] bg-surface hairline px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft hover:text-brand-600 transition duration-150"
+                >
+                  <Icon name="receipt" className="w-[15px] h-[15px]" strokeWidth={1.8} />
+                  Reprint
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="mr-auto text-[12px] font-semibold text-ink-faint">Thermal printer</span>
+                {thermal.support.usb && (
+                  <button
+                    type="button"
+                    onClick={() => void thermal.connect("usb")}
+                    disabled={thermal.status === "connecting"}
+                    className="rounded-[8px] bg-surface hairline px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft hover:text-brand-600 transition duration-150 disabled:opacity-50"
+                  >
+                    USB
+                  </button>
+                )}
+                {thermal.support.bluetooth && (
+                  <button
+                    type="button"
+                    onClick={() => void thermal.connect("bluetooth")}
+                    disabled={thermal.status === "connecting"}
+                    className="rounded-[8px] bg-surface hairline px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft hover:text-brand-600 transition duration-150 disabled:opacity-50"
+                  >
+                    Bluetooth
+                  </button>
+                )}
+              </div>
+            )}
+            {thermal.error && <p className="mt-2 text-[12px] font-semibold text-rose-600">{thermal.error}</p>}
+          </div>
+        )}
 
         <div className="mt-6 grid grid-cols-[auto_1fr] gap-2.5">
           <button

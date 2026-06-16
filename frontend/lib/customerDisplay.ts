@@ -28,6 +28,12 @@ export interface DisplaySnapshot {
   storeName: string;
   /** The store's brand accent (#rrggbb) so the second screen matches; null = default. */
   accent: string | null;
+  /**
+   * The owner-uploaded store logo URL (already absolute, as the cashier pad
+   * receives it from /auth/me), or null to fall back to the VendoPOS brand mark.
+   * Mirrored through the snapshot — the display never fetches its own session.
+   */
+  logoUrl: string | null;
   status: DisplayStatus;
   lines: DisplayLine[];
   grossCents: number;
@@ -49,6 +55,7 @@ export interface DisplaySnapshot {
 export const IDLE_SNAPSHOT: DisplaySnapshot = {
   storeName: "VendoPOS",
   accent: null,
+  logoUrl: null,
   status: "idle",
   lines: [],
   grossCents: 0,

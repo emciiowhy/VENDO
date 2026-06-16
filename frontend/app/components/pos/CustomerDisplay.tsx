@@ -31,10 +31,16 @@ import {
  */
 const peso = (cents: number) => formatPesoExact(cents / 100);
 
-/** Live wall-clock, updated each second (rendered as h:mm AM/PM). */
-function useClock(): Date {
-  const [now, setNow] = useState(() => new Date());
+/**
+ * Live wall-clock, updated each second (rendered as h:mm AM/PM). Starts `null`
+ * so the server and first client render emit no time text — `new Date()` differs
+ * between the two and would otherwise be a hydration mismatch. The real clock
+ * lands one frame later in the mount effect.
+ */
+function useClock(): Date | null {
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
+    setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
@@ -43,6 +49,44 @@ function useClock(): Date {
 
 function clockText(d: Date): string {
   return d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * The tenant's uploaded logo on the customer screen, presented in a rounded,
+ * frosted square frame that pops against the display's dark backdrop. Falls back
+ * to the VendoPOS brand mark when the store has none — or when the image fails to
+ * load — at the same footprint, so the focal panel never shifts. The <img> is
+ * `object-contain` inside a fixed square box (with breathing-room padding), so a
+ * wide, tall, or square logo is always fully visible, centered, and never
+ * stretched or clipped.
+ *
+ * `className` sizes the outer square box. This is the fixed-dark customer surface
+ * (its root is hardcoded dark, not `.dark`-themed), so the frame uses white-alpha
+ * — the file's established idiom — rather than the themed ink/paper tokens.
+ */
+function DisplayLogo({ logoUrl, className }: { logoUrl: string | null; className: string }) {
+  const [broken, setBroken] = useState(false);
+  // Reset the error flag if the mirrored logo URL changes (e.g. a new session).
+  useEffect(() => setBroken(false), [logoUrl]);
+  return (
+    <div
+      className={
+        "grid place-items-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm " +
+        className
+      }
+    >
+      {!logoUrl || broken ? (
+        <BrandMark className="w-3/5 h-3/5" />
+      ) : (
+        <img
+          src={logoUrl}
+          alt=""
+          className="w-full h-full object-contain p-2"
+          onError={() => setBroken(true)}
+        />
+      )}
+    </div>
+  );
 }
 
 export function CustomerDisplay() {
@@ -104,7 +148,7 @@ export function CustomerDisplay() {
       {/* Brand header */}
       <header className="relative z-10 shrink-0 flex items-center justify-between px-8 lg:px-10 py-6 border-b border-white/10">
         <div className="flex items-center gap-3.5">
-          <BrandMark className="w-10 h-10" />
+          <DisplayLogo logoUrl={snap.logoUrl} className="w-12 h-12" />
           <div className="leading-tight">
             <div className="text-[19px] font-extrabold tracking-tightest">{snap.storeName}</div>
             <div className="flex items-center gap-1.5 text-[12px] font-semibold text-white/45">
@@ -129,9 +173,13 @@ export function CustomerDisplay() {
           )}
           <div className="text-right tabular-nums">
             <div className="text-[10.5px] font-bold tracking-widest uppercase text-white/35">
-              {now.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })}
+              {now
+                ? now.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })
+                : ""}
             </div>
-            <div className="text-[20px] font-extrabold leading-none mt-0.5">{clockText(now)}</div>
+            <div className="text-[20px] font-extrabold leading-none mt-0.5">
+              {now ? clockText(now) : ""}
+            </div>
           </div>
         </div>
       </header>
@@ -140,7 +188,7 @@ export function CustomerDisplay() {
       {isActive ? (
         <ActiveScreen snap={snap} justAdded={justAdded} />
       ) : (
-        <IdleScreen storeName={snap.storeName} now={now} />
+        <IdleScreen storeName={snap.storeName} now={now} logoUrl={snap.logoUrl} />
       )}
 
       {/* E-wallet QR presentation sheet */}
@@ -190,7 +238,15 @@ const IDLE_MESSAGES = [
   "Every sale comes with a BIR-ready receipt.",
 ];
 
-function IdleScreen({ storeName, now }: { storeName: string; now: Date }) {
+function IdleScreen({
+  storeName,
+  now,
+  logoUrl,
+}: {
+  storeName: string;
+  now: Date | null;
+  logoUrl: string | null;
+}) {
   const [msg, setMsg] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setMsg((m) => (m + 1) % IDLE_MESSAGES.length), 4200);
@@ -200,11 +256,10 @@ function IdleScreen({ storeName, now }: { storeName: string; now: Date }) {
   return (
     <div className="relative z-10 flex-1 grid place-items-center px-8 text-center">
       <div className="cd-float">
-        <div className="relative mx-auto w-28 h-28">
-          <span className="absolute inset-0 rounded-[28px] bg-brand-500/25 cd-ring" />
-          <span className="absolute inset-0 rounded-[28px] bg-brand-500/15 grid place-items-center backdrop-blur-sm ring-1 ring-white/10">
-            <BrandMark className="w-14 h-14" />
-          </span>
+        <div className="relative mx-auto grid place-items-center w-36 h-36">
+          {/* Animated brand halo glowing out from behind the framed logo. */}
+          <span className="absolute inset-0 rounded-[2rem] bg-brand-500/25 cd-ring" />
+          <DisplayLogo logoUrl={logoUrl} className="relative w-32 h-32" />
         </div>
         <p className="mt-9 text-[12px] font-bold tracking-[0.2em] uppercase text-brand-200/90">
           Welcome to
@@ -218,11 +273,13 @@ function IdleScreen({ storeName, now }: { storeName: string; now: Date }) {
           </p>
         </div>
         <div className="mt-10 text-[15px] font-semibold text-white/30 tabular-nums">
-          {now.toLocaleDateString("en-PH", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-          })}
+          {now
+            ? now.toLocaleDateString("en-PH", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })
+            : ""}
         </div>
       </div>
     </div>

@@ -23,6 +23,7 @@ import { procurementRouter } from "./procurement/procurement.router.js";
 import { manufacturingRouter } from "./manufacturing/manufacturing.router.js";
 import { hrRouter } from "./hr/hr.router.js";
 import { essRouter } from "./hr/ess.router.js";
+import { timecardRouter } from "./hr/timecard.router.js";
 import { crmRouter } from "./crm/crm.router.js";
 import { accountRouter } from "./account/account.router.js";
 import { notificationsRouter } from "./notifications/notifications.router.js";
@@ -94,6 +95,10 @@ export function createApp() {
   app.use("/api/v1/admin/compliance", adminComplianceRouter);
   app.use("/api/v1/pos", posRouter);
   app.use("/api/v1/merchant/payment-qrs", paymentQrRouter);
+  // The shift clock is cashier-accessible, so it MUST mount before the
+  // owner/manager-only merchantRouter — otherwise that router's role guard would
+  // 403 a cashier's clock-in before this more-specific path is ever reached.
+  app.use("/api/v1/merchant/shifts", timecardRouter);
   app.use("/api/v1/merchant", merchantRouter);
   app.use("/api/v1/inventory", inventoryAlertsRouter);
   app.use("/api/v1/inventory", stockMovementsRouter);

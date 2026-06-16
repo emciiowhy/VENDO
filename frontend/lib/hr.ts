@@ -164,6 +164,42 @@ export interface HrSummary {
   lastPayrollGrossCents: number;
 }
 
+// ── Labor analytics (shift-clock hours vs. sales) ──────────────────────────
+
+export interface ActiveStaffMember {
+  userId: string;
+  name: string;
+  clockIn: string;
+  elapsedMinutes: number;
+}
+
+export interface CashierEfficiencyRow {
+  userId: string;
+  name: string;
+  laborMinutes: number;
+  laborHours: number;
+  orders: number;
+  revenueCents: number;
+  revenuePerHourCents: number;
+  avgOrderCents: number;
+  minutesPerOrder: number;
+  payCents: number;
+}
+
+export interface LaborAnalytics {
+  from: string;
+  to: string;
+  hourlyRateCents: number;
+  laborMinutes: number;
+  laborHours: number;
+  grossSalesCents: number;
+  laborCostCents: number;
+  laborCostPct: number;
+  salesPerLaborHourCents: number;
+  activeStaff: ActiveStaffMember[];
+  cashiers: CashierEfficiencyRow[];
+}
+
 export interface EmployeeFields {
   name: string;
   position: string;
@@ -224,6 +260,23 @@ export async function getPerformance(from?: string, to?: string): Promise<Result
   const suffix = qs.toString() ? `?${qs}` : "";
   try {
     return await readJson(await fetch(`${BASE}/performance${suffix}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function getLaborAnalytics(
+  from?: string,
+  to?: string,
+  rateCents?: number,
+): Promise<Result<{ analytics: LaborAnalytics }>> {
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", from);
+  if (to) qs.set("to", to);
+  if (rateCents !== undefined) qs.set("rateCents", String(rateCents));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  try {
+    return await readJson(await fetch(`${BASE}/labor-analytics${suffix}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }

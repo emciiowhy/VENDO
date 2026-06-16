@@ -301,6 +301,41 @@ ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id UUID REFERENCES cashier_shif
 CREATE INDEX IF NOT EXISTS sales_shift_idx ON sales (shift_id);
 
 -- ---------------------------------------------------------------------------
+-- Labor time-tracking — shift clock punches (timecards).
+--
+-- DISTINCT from \`cashier_shifts\` (which reconciles the cash DRAWER via X/Z-Read):
+-- a timecard records on-the-floor LABOR HOURS — when a worker punched in and out.
+-- One row per clock-in; \`clock_out\` stays NULL while the worker is on the clock
+-- (status 'ACTIVE') and is stamped at punch-out (status 'COMPLETED'). Scope is
+-- derived strictly from the verified session (tenant_id + user_id), never the
+-- request body, so one worker can never punch on another's behalf or across
+-- tenants. A user may hold at most ONE active timecard per tenant at a time
+-- (partial unique index), which makes a double clock-in impossible — the second
+-- punch hits the index, not a race. Accrued hours feed the owner's Labor
+-- Analytics (labor-to-sales, cashier efficiency, the payroll log). Strictly
+-- tenant-fenced like every merchant table.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS timecards (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID        NOT NULL REFERENCES tenants (id) ON DELETE CASCADE,
+  user_id     UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  clock_in    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  clock_out   TIMESTAMPTZ,
+  status      TEXT        NOT NULL DEFAULT 'ACTIVE'
+                          CHECK (status IN ('ACTIVE', 'COMPLETED')),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- A completed card must carry its punch-out; an active one must not. Keeps the
+  -- status column and the clock_out timestamp from ever drifting out of sync.
+  CONSTRAINT timecards_status_clockout_chk CHECK ((status = 'COMPLETED') = (clock_out IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS timecards_tenant_idx ON timecards (tenant_id, clock_in DESC);
+CREATE INDEX IF NOT EXISTS timecards_user_idx ON timecards (tenant_id, user_id, clock_in DESC);
+-- At most ONE active (clocked-in) timecard per user within a tenant.
+CREATE UNIQUE INDEX IF NOT EXISTS timecards_one_active_per_user
+  ON timecards (tenant_id, user_id) WHERE status = 'ACTIVE';
+
+-- ---------------------------------------------------------------------------
 -- Cashier PIN reset requests.
 --
 -- Cashiers don't set their own PINs — a forgotten PIN raises a request that the
@@ -919,7 +954,7 @@ async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs ready.",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs ready.",
   );
 }
 

@@ -15,6 +15,7 @@ import { TrialRecovery } from "./TrialRecovery";
 import { BrandMark } from "../BrandMark";
 import { TierCaption } from "./TierBadge";
 import { logout, type SessionUser } from "@/lib/auth";
+import { ImpersonationBanner } from "./ImpersonationBanner";
 import { resolveAssetUrl } from "@/lib/images";
 import { asTier, featureAllowed, type Feature } from "@/lib/tiers";
 
@@ -213,6 +214,11 @@ export function DashShell({
 
         {/* Main column */}
         <div className="flex min-h-screen flex-col">
+          {/* Impersonation escape hatch — only ever present on a SUPER_ADMIN's
+              impersonated tenant view (never a real merchant login). */}
+          {user.isImpersonating && (
+            <ImpersonationBanner tenantName={user.tenantName ?? null} />
+          )}
           <header className="sticky top-0 z-10 glass hairline-b">
             <div className="flex items-center gap-4 px-5 sm:px-8 h-[68px]">
               <button
@@ -341,18 +347,12 @@ function StoreBrand({ user, brandSub }: { user: SessionUser; brandSub: string })
 
 function BrandLoader({ dark }: { dark: boolean }) {
   // Carry the stored theme so a dark-mode user doesn't get a white flash before
-  // the authenticated shell mounts (bg-paper retints via the .dark token).
-  //
-  // Unlike the authenticated shell, this loader IS server-rendered (the session
-  // guard starts unresolved on both server and client), so `dark` differs
-  // between the two: the server has no localStorage and always reports light,
-  // while the client reads the stored "dark". That one-token className delta on
-  // this root is the intended client value — suppressHydrationWarning silences
-  // the otherwise-correct mismatch. Children theme via CSS .dark variants, so
-  // their markup is identical and needs no suppression.
+  // the authenticated shell mounts (bg-paper retints via the .dark token). This
+  // loader IS server-rendered, but `dark` is now deterministic on the server and
+  // first client render (ThemeProvider seeds "light" and reconciles post-mount),
+  // so the two agree and no suppressHydrationWarning is needed.
   return (
     <div
-      suppressHydrationWarning
       className={
         "theme-root grid-bg min-h-screen grid place-items-center bg-paper text-ink " +
         (dark ? "dark" : "")
