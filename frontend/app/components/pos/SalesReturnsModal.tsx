@@ -203,6 +203,10 @@ export function SalesReturnsModal({
       paymentRef: detail.paymentRef,
       tenderedCents: detail.tenderedCents,
       changeCents: detail.changeCents,
+      // Loyalty isn't part of the sale-detail payload; a reprint reissues the
+      // money figures exactly and omits the points footer.
+      pointsEarned: 0,
+      pointsRedeemed: 0,
       createdAt: detail.createdAt,
     };
     printSaleReceipt({

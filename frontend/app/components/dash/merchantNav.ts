@@ -10,6 +10,7 @@ export const MERCHANT_NAV: NavGroup[] = [
   {
     items: [
       { label: "Dashboard", icon: "home", href: "/dashboard" },
+      { label: "Summary", icon: "chart", href: "/dashboard/summary" },
       { label: "Point of Sale", icon: "pos", href: "/pos" },
       { label: "Inventory", icon: "box", href: "/dashboard/inventory" },
       { label: "Checkout QR", icon: "wallet", href: "/dashboard/payments" },
@@ -18,17 +19,20 @@ export const MERCHANT_NAV: NavGroup[] = [
   },
   {
     heading: "Modules",
+    // Each carries its gating `feature`: below the required tier the sidebar link
+    // renders locked (muted + lock badge) and the page shows the upgrade card.
     items: [
-      { label: "Finance", icon: "chart", href: "/dashboard/finance" },
-      { label: "Procurement", icon: "truck", href: "/dashboard/procurement" },
-      { label: "Manufacturing", icon: "factory", href: "/dashboard/manufacturing" },
-      { label: "HR", icon: "users", href: "/dashboard/hr" },
-      { label: "CRM", icon: "heart", href: "/dashboard/crm" },
+      { label: "Finance", icon: "chart", href: "/dashboard/finance", feature: "finance_accounting" },
+      { label: "Procurement", icon: "truck", href: "/dashboard/procurement", feature: "procurement_supply_chain" },
+      { label: "Manufacturing", icon: "factory", href: "/dashboard/manufacturing", feature: "manufacturing_bom" },
+      { label: "HR", icon: "users", href: "/dashboard/hr", feature: "human_resources_payroll" },
+      { label: "CRM", icon: "heart", href: "/dashboard/crm", feature: "customer_relationship_crm" },
     ],
   },
   {
     items: [
       { label: "Cashiers", icon: "users", href: "/dashboard/staff" },
+      { label: "Audit log", icon: "shield", href: "/dashboard/audit" },
       { label: "My record", icon: "clock", href: "/me" },
       { label: "Account", icon: "gear", href: "/dashboard/account" },
     ],

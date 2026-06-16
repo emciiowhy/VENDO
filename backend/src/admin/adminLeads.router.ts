@@ -42,12 +42,16 @@ adminLeadsRouter.post("/:id/approve", async (req, res) => {
     const result = await provisionLead(req.params.id, parsed.data);
     if (result.ok) {
       // `onboardingEmailTo` echoes the address the onboarding mail was dispatched
-      // to (fired best-effort inside provisionLead) so the drawer can confirm it.
+      // to (sent best-effort inside provisionLead) so the drawer can confirm it;
+      // `mailDelivered` reports whether it actually reached the transport, so the
+      // UI can warn instead of falsely promising an email that a Resend rejection
+      // silently dropped.
       return res.status(201).json({
         ok: true,
         tenant: result.tenant,
         lead: result.lead,
         onboardingEmailTo: parsed.data.ownerEmail,
+        mailDelivered: result.mailDelivered,
       });
     }
     switch (result.error.code) {

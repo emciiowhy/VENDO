@@ -42,6 +42,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
     address: string | null;
     phone: string | null;
     tin: string | null;
+    business_style: string | null;
     vat_label: string | null;
     receipt_header: string | null;
     receipt_footer: string | null;
@@ -51,7 +52,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
     receipt_min: string | null;
     receipt_serial: string | null;
   }>(
-    `SELECT name, slug, address, phone, tin, vat_label, receipt_header, receipt_footer,
+    `SELECT name, slug, address, phone, tin, business_style, vat_label, receipt_header, receipt_footer,
             logo_url, receipt_show_logo, receipt_ptu, receipt_min, receipt_serial
        FROM tenants WHERE id = $1`,
     [tenantId],
@@ -94,6 +95,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
       address: s?.address ?? null,
       phone: s?.phone ?? null,
       tin: s?.tin ?? null,
+      businessStyle: s?.business_style ?? null,
       vatLabel: s?.vat_label ?? null,
       receiptHeader: s?.receipt_header ?? null,
       receiptFooter: s?.receipt_footer ?? null,
@@ -204,6 +206,26 @@ export async function createOrder(
       });
     }
 
+    // Resolve + LOCK the CRM customer first (when one is attached), so a loyalty
+    // redemption reads a balance that no concurrent sale can spend underneath us.
+    // Only a customer that genuinely belongs to this Tenant is honoured — a
+    // tampered client can neither attach another store's customer nor redeem
+    // their points.
+    let customerId: string | null = null;
+    let loyaltyBalance = 0;
+    if (input.customerId) {
+      const owns = await client.query<{ loyalty_points: number }>(
+        `SELECT loyalty_points FROM customers
+          WHERE id = $1 AND tenant_id = $2 AND is_active = TRUE
+          FOR UPDATE`,
+        [input.customerId, tenantId],
+      );
+      if (owns.rows[0]) {
+        customerId = input.customerId;
+        loyaltyBalance = owns.rows[0].loyalty_points;
+      }
+    }
+
     // Apply a cart-level discount (server-authoritative). `percent` clamps to
     // 0–100; `fixed` is centavos, never below zero net.
     const grossCents = totalCents;
@@ -218,6 +240,28 @@ export async function createOrder(
       }
       discountLabel = input.discount.label?.trim() || null;
     }
+
+    // Loyalty redemption (1 pt = ₱1). Clamp the requested points to the live
+    // balance AND to what's still payable after any manual discount, so points
+    // can never drive the total below zero or overdraw the account. The redeemed
+    // value folds into the cart discount — a single figure the books and the
+    // refund path already understand — and the points are deducted below, in this
+    // same transaction.
+    let pointsRedeemed = 0;
+    if (customerId && input.redeemPoints && input.redeemPoints > 0) {
+      const payableAfterDiscount = Math.max(0, grossCents - discountCents);
+      pointsRedeemed = Math.min(
+        input.redeemPoints,
+        loyaltyBalance,
+        Math.floor(payableAfterDiscount / 100),
+      );
+      if (pointsRedeemed > 0) {
+        discountCents += pointsRedeemed * 100;
+        const redeemLabel = `${pointsRedeemed} pt${pointsRedeemed === 1 ? "" : "s"} redeemed`;
+        discountLabel = discountLabel ? `${discountLabel} + ${redeemLabel}` : redeemLabel;
+      }
+    }
+
     const netCents = Math.max(0, grossCents - discountCents);
 
     // Cash settlement must cover the net total.
@@ -240,6 +284,9 @@ export async function createOrder(
 
     const vatCents = Math.round((netCents * VAT_NUM) / VAT_DEN);
     const subtotalCents = netCents - vatCents;
+    // Points earned accrue on what was actually paid (net of every discount,
+    // redemption included) — 1 point per ₱100.
+    const pointsEarned = customerId ? Math.floor(netCents / 10_000) : 0;
 
     // Serialized BIR-style invoice reference (per Tenant). The per-tenant
     // counter row is locked by this upsert for the rest of the transaction, so
@@ -266,23 +313,12 @@ export async function createOrder(
     const prefix = prefixRes.rows[0]?.invoice_prefix?.trim() || "SI";
     const reference = `${prefix}-${String(Number(seqRes.rows[0].next_seq)).padStart(6, "0")}`;
 
-    // Only link a customer that genuinely belongs to this Tenant (a tampered
-    // client can't attach a sale to another store's customer).
-    let customerId: string | null = null;
-    if (input.customerId) {
-      const owns = await client.query(
-        `SELECT 1 FROM customers WHERE id = $1 AND tenant_id = $2 AND is_active = TRUE`,
-        [input.customerId, tenantId],
-      );
-      if ((owns.rowCount ?? 0) > 0) customerId = input.customerId;
-    }
-
     const saleRes = await client.query<{ id: string; created_at: Date }>(
       `INSERT INTO sales
          (tenant_id, cashier_user_id, reference, subtotal_cents, vat_cents, total_cents,
           payment_method, tendered_cents, change_cents, payment_ref, discount_cents, discount_label,
-          shift_id, customer_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          shift_id, customer_id, points_earned, points_redeemed)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING id, created_at`,
       [
         tenantId,
@@ -299,6 +335,8 @@ export async function createOrder(
         discountLabel,
         shiftId,
         customerId,
+        pointsEarned,
+        pointsRedeemed,
       ],
     );
     const saleId = saleRes.rows[0].id;
@@ -333,14 +371,17 @@ export async function createOrder(
       }
     }
 
-    // Loyalty: 1 point per ₱100 of net sale, accrued in the same transaction.
+    // Loyalty settles in this same transaction: deduct any points the customer
+    // redeemed and credit the points earned (1 pt / ₱100 of net). The row was
+    // locked above and `pointsRedeemed` was clamped to the balance, so the net
+    // change can never drive the account negative.
     if (customerId) {
-      const points = Math.floor(netCents / 10_000);
-      if (points > 0) {
+      const delta = pointsEarned - pointsRedeemed;
+      if (delta !== 0) {
         await client.query(
-          `UPDATE customers SET loyalty_points = loyalty_points + $1, updated_at = now()
+          `UPDATE customers SET loyalty_points = GREATEST(0, loyalty_points + $1), updated_at = now()
             WHERE id = $2 AND tenant_id = $3`,
-          [points, customerId, tenantId],
+          [delta, customerId, tenantId],
         );
       }
     }
@@ -363,6 +404,8 @@ export async function createOrder(
         paymentRef: input.referenceCode ?? null,
         tenderedCents,
         changeCents,
+        pointsEarned,
+        pointsRedeemed,
         createdAt: saleRes.rows[0].created_at.toISOString(),
       },
     };

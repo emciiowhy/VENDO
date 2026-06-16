@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
+import { requireFeature } from "../auth/tier.middleware.js";
 import { produceSchema, recipeCreateSchema, recipeUpdateSchema } from "./manufacturing.schema.js";
 import {
   createRecipe,
@@ -24,6 +25,9 @@ import {
 export const manufacturingRouter = Router();
 
 manufacturingRouter.use(requireRole("MERCHANT_OWNER", "MANAGER"));
+// Manufacturing (BOM + production) is an ENTERPRISE-tier module per the matrix —
+// a STARTER or BUSINESS store is 403'd.
+manufacturingRouter.use(requireFeature("manufacturing_bom"));
 
 function fieldErrors(error: ZodError): Record<string, string> {
   const out: Record<string, string> = {};

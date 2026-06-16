@@ -6,11 +6,19 @@
  * secure HTTP-only session cookie rides along cross-origin.
  */
 import { API_BASE_URL } from "./api";
+import type { Tier } from "./tiers";
 
 /** The href the "Sign in with Google" button points at. */
 export const GOOGLE_SIGN_IN_URL = `${API_BASE_URL}/auth/google`;
 
 export type Role = "SUPER_ADMIN" | "MERCHANT_OWNER" | "MANAGER" | "CASHIER";
+
+/**
+ * The store's subscription lifecycle (mirror of the backend's tenant.status).
+ * 'trial' / 'active' are usable; 'trial_expired' routes the workspace to the
+ * recovery view; 'suspended' can't sign in at all (so it's never seen here).
+ */
+export type TenantLifecycle = "trial" | "active" | "trial_expired" | "suspended";
 
 export interface SessionUser {
   userId: string;
@@ -26,6 +34,19 @@ export interface SessionUser {
   avatarUrl?: string | null;
   /** The store's brand accent (#rrggbb) from /auth/me; null/undefined → default blue. */
   themeColor?: string | null;
+  /**
+   * The store's subscription TIER from /auth/me — the feature-gating level the
+   * UI reads to hide premium controls. Null for the Super Admin (no store);
+   * absent/null is treated as STARTER (most restrictive) by the gating helpers.
+   */
+  tier?: Tier | null;
+  /**
+   * The store's trial lifecycle from /auth/me, read live so a lapse trips the
+   * recovery view on the next heartbeat. Null for the Super Admin (no store).
+   */
+  status?: TenantLifecycle | null;
+  /** ISO timestamp the trial window ends/ended (for the recovery copy). */
+  trialEndsAt?: string | null;
 }
 
 /** Human-readable copy for the `?error=` codes the backend redirects with. */
@@ -40,15 +61,38 @@ export const LOGIN_ERRORS: Record<string, string> = {
   exchange_failed: "We couldn’t complete sign-in. Please try again in a moment.",
 };
 
-export async function getSession(): Promise<SessionUser | null> {
+/**
+ * The outcome of a /auth/me probe, kept richer than `SessionUser | null` so a
+ * caller can tell three cases apart:
+ *  • `authed`   — a live session; `user` carries the ground-truth tier/identity.
+ *  • `unauthed` — the server confirmed there is no session (401 / ok:false).
+ *  • `error`    — the server was unreachable or replied unparseably.
+ *
+ * Background revalidation leans on this distinction: an `error` is a transient
+ * blip that must NOT tear down an already-established session, whereas only an
+ * `unauthed` should bounce the operator to /login. See useSession.
+ */
+export type SessionProbe =
+  | { status: "authed"; user: SessionUser }
+  | { status: "unauthed" }
+  | { status: "error" };
+
+export async function fetchSession(): Promise<SessionProbe> {
   try {
     const res = await fetch(`${API_BASE_URL}/auth/me`, { credentials: "include" });
-    if (!res.ok) return null;
+    if (res.status === 401) return { status: "unauthed" };
+    if (!res.ok) return { status: "error" };
     const data = (await res.json()) as { ok: boolean; user?: SessionUser };
-    return data.ok && data.user ? data.user : null;
+    if (data.ok && data.user) return { status: "authed", user: data.user };
+    return { status: "unauthed" };
   } catch {
-    return null;
+    return { status: "error" };
   }
+}
+
+export async function getSession(): Promise<SessionUser | null> {
+  const probe = await fetchSession();
+  return probe.status === "authed" ? probe.user : null;
 }
 
 export interface Store {

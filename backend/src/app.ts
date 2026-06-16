@@ -27,6 +27,7 @@ import { crmRouter } from "./crm/crm.router.js";
 import { accountRouter } from "./account/account.router.js";
 import { notificationsRouter } from "./notifications/notifications.router.js";
 import { publicRouter } from "./public/public.router.js";
+import { enforceTrialStatus } from "./billing/trial.middleware.js";
 
 /**
  * Builds the Express application. Kept separate from the server bootstrap so
@@ -76,6 +77,15 @@ export function createApp() {
   app.use("/auth", authRouter);
   app.use("/api/v1/public", publicRouter);
   app.use("/api/leads", leadsRouter);
+
+  // Trial checkpoint — fence a lapsed-trial store out of every authenticated
+  // merchant module below this line (402 + recovery marker). Mounted AFTER the
+  // public, auth and lead-capture seams so sign-in, /auth/me and the marketing
+  // site stay reachable for an expired store (the owner must be able to get back
+  // in to recover), and BEFORE the merchant/admin route block. It's a no-op for
+  // unauthenticated requests and for tenant-less Super Admin sessions.
+  app.use(enforceTrialStatus());
+
   app.use("/api/inventory", productsRouter);
   app.use("/api/v1/admin/leads", adminLeadsRouter);
   app.use("/api/v1/admin/tenants", adminTenantsRouter);

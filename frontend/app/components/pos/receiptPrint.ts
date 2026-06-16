@@ -41,7 +41,13 @@ function header(store: StoreBrand): string {
   if (store.receiptHeader) lines.push(`<div class="muted">${esc(store.receiptHeader)}</div>`);
   if (store.address) lines.push(`<div class="muted">${esc(store.address)}</div>`);
   if (store.phone) lines.push(`<div class="muted">${esc(store.phone)}</div>`);
-  if (store.tin) lines.push(`<div class="muted">${esc(store.vatLabel || "VAT REG TIN")}: ${esc(store.tin)}</div>`);
+  // BIR identity rows. A valid invoice carries the seller's TIN and Business
+  // Style; both print as fixed labelled rows — with a blank placeholder when the
+  // store hasn't filled them yet — so the ticket reads as a compliant form.
+  lines.push(
+    `<div class="muted">${esc(store.vatLabel || "VAT REG TIN")}: ${esc(store.tin || "________________")}</div>`,
+  );
+  lines.push(`<div class="muted">Business Style: ${esc(store.businessStyle || "________________")}</div>`);
   return `<div class="center">${lines.join("")}</div>`;
 }
 
@@ -180,6 +186,13 @@ export function printSaleReceipt(args: {
     parts.push(row("Change", formatCents(sale.changeCents ?? 0)));
   }
   if (sale.paymentRef) parts.push(row(`${sale.paymentMethod} ref`, `••${sale.paymentRef}`));
+  // Loyalty footer — points spent and earned on this sale (when a customer is
+  // attached). A walk-in sale carries zero on both and prints neither.
+  if (sale.pointsRedeemed > 0 || sale.pointsEarned > 0) {
+    parts.push(`<div class="rule"></div>`);
+    if (sale.pointsRedeemed > 0) parts.push(row("Points redeemed", `-${sale.pointsRedeemed}`));
+    if (sale.pointsEarned > 0) parts.push(row("Points earned", `+${sale.pointsEarned}`));
+  }
   const foot = store.receiptFooter || "This serves as your Sales Invoice. Thank you!";
   parts.push(`<div class="foot">${esc(foot)}</div>`);
   parts.push(accreditation(store));

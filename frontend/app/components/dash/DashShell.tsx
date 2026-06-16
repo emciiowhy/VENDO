@@ -11,9 +11,12 @@ import { AccentProvider, TenantTheme, useAccent } from "../theme/TenantTheme";
 import { ToastProvider } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { NotificationBell } from "./NotificationBell";
+import { TrialRecovery } from "./TrialRecovery";
 import { BrandMark } from "../BrandMark";
+import { TierCaption } from "./TierBadge";
 import { logout, type SessionUser } from "@/lib/auth";
 import { resolveAssetUrl } from "@/lib/images";
+import { asTier, featureAllowed, type Feature } from "@/lib/tiers";
 
 export interface NavItem {
   label: string;
@@ -21,6 +24,12 @@ export interface NavItem {
   href: string;
   /** Visual-only tiles for modules not yet built — shown muted, not linked. */
   soon?: boolean;
+  /**
+   * Tier-gated module: when the signed-in store's tier doesn't unlock this
+   * feature, the link renders muted with a lock badge. It still navigates — the
+   * destination page shows the <UpgradeCard /> — so the gate is discoverable.
+   */
+  feature?: Feature;
 }
 
 export interface NavGroup {
@@ -74,6 +83,13 @@ export function DashShell({
     return <BrandLoader dark={theme === "dark"} />;
   }
   const user = session.user;
+
+  // Trial lapsed: the workspace is fenced (the module APIs 402), so swap the
+  // whole dashboard for the graceful billing/recovery view. SUPER_ADMIN has no
+  // tenant status, so the platform console is never affected.
+  if (user.status === "trial_expired") {
+    return <TrialRecovery user={user} dark={theme === "dark"} />;
+  }
   const initials = user.name
     .split(/\s+/)
     .slice(0, 2)
@@ -130,6 +146,23 @@ export function DashShell({
                             soon
                           </span>
                         </div>
+                      );
+                    }
+                    // Premium module the current tier can't reach: render muted with
+                    // a lock badge. Still a link — the page shows the upgrade card.
+                    if (item.feature && !featureAllowed(asTier(user.tier), item.feature)) {
+                      return (
+                        <Link
+                          key={item.label}
+                          href={item.href}
+                          onClick={() => setMobileOpen(false)}
+                          title="Upgrade to unlock"
+                          className={base + " text-ink-faint hover:text-ink hover:bg-paper"}
+                        >
+                          <Icon name={item.icon} className="w-[18px] h-[18px]" strokeWidth={1.6} />
+                          {item.label}
+                          <Icon name="lock" className="ml-auto w-[14px] h-[14px]" strokeWidth={1.9} />
+                        </Link>
                       );
                     }
                     return (
@@ -299,6 +332,8 @@ function StoreBrand({ user, brandSub }: { user: SessionUser; brandSub: string })
       <div className="leading-tight min-w-0">
         <div className="font-extrabold text-[16px] tracking-tightest truncate">{storeName}</div>
         <div className="text-[11px] font-semibold text-ink-faint">{brandSub}</div>
+        {/* Live store tier, read straight from the session (no extra fetch). */}
+        <TierCaption tier={asTier(user.tier)} className="mt-1" />
       </div>
     </>
   );

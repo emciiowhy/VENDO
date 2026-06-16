@@ -2,6 +2,7 @@
 
 import { DashShell } from "../../components/dash/DashShell";
 import { MERCHANT_NAV } from "../../components/dash/merchantNav";
+import { FeatureGate } from "../../components/FeatureGate";
 import { CrmConsole } from "../../components/crm/CrmConsole";
 
 /**
@@ -17,7 +18,9 @@ export default function CrmPage() {
       nav={MERCHANT_NAV}
       allow={["MERCHANT_OWNER", "MANAGER"]}
     >
-      <CrmConsole />
+      <FeatureGate feature="customer_relationship_crm">
+        <CrmConsole />
+      </FeatureGate>
     </DashShell>
   );
 }

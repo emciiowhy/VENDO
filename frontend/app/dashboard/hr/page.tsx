@@ -2,6 +2,7 @@
 
 import { DashShell } from "../../components/dash/DashShell";
 import { MERCHANT_NAV } from "../../components/dash/merchantNav";
+import { FeatureGate } from "../../components/FeatureGate";
 import { HrConsole } from "../../components/hr/HrConsole";
 
 /**
@@ -17,7 +18,9 @@ export default function HrPage() {
       nav={MERCHANT_NAV}
       allow={["MERCHANT_OWNER", "MANAGER"]}
     >
-      <HrConsole />
+      <FeatureGate feature="human_resources_payroll">
+        <HrConsole />
+      </FeatureGate>
     </DashShell>
   );
 }

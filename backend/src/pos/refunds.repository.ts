@@ -184,8 +184,9 @@ export async function reverseSale(
       discount_cents: number;
       payment_method: string;
       customer_id: string | null;
+      points_redeemed: number;
     }>(
-      `SELECT id, status, total_cents, discount_cents, payment_method, customer_id
+      `SELECT id, status, total_cents, discount_cents, payment_method, customer_id, points_redeemed
          FROM sales
         WHERE id = $1 AND tenant_id = $2 AND kind = 'sale'
         FOR UPDATE`,
@@ -351,16 +352,30 @@ export async function reverseSale(
       }
     }
 
-    // Reverse loyalty accrued on the original (1 pt / ₱100), clamped at zero. A
-    // void unwinds the whole sale's points; a return unwinds the refunded share.
+    // Unwind loyalty on the original, clamped at zero. Two opposing legs settle
+    // in one update:
+    //   • earned points (1 pt / ₱100) are reversed — the whole sale's on a void,
+    //     the refunded share on a return (recomputed from the refund basis, so
+    //     historical sales with no stored points behave exactly as before).
+    //   • redeemed points (those the customer SPENT on the sale) are restored —
+    //     in full on a void, pro-rata by the returned gross share on a return —
+    //     so cancelling a sale gives the customer their spent points back.
     if (sale.customer_id) {
       const basis = mode.kind === "void" ? sale.total_cents : refundNet;
-      const pts = Math.floor(basis / 10_000);
-      if (pts > 0) {
+      const earnedReverse = Math.floor(basis / 10_000);
+      const origGross = sale.total_cents + sale.discount_cents;
+      const redeemRestore =
+        mode.kind === "void"
+          ? sale.points_redeemed
+          : origGross > 0
+            ? Math.floor((sale.points_redeemed * returnedGross) / origGross)
+            : 0;
+      const delta = redeemRestore - earnedReverse;
+      if (delta !== 0) {
         await client.query(
-          `UPDATE customers SET loyalty_points = GREATEST(0, loyalty_points - $1), updated_at = now()
+          `UPDATE customers SET loyalty_points = GREATEST(0, loyalty_points + $1), updated_at = now()
             WHERE id = $2 AND tenant_id = $3`,
-          [pts, sale.customer_id, tenantId],
+          [delta, sale.customer_id, tenantId],
         );
       }
     }

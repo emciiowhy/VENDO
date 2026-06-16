@@ -43,6 +43,7 @@ const plans: Plan[] = [
       "Customer Relationship (CRM)",
       "Finance & Accounting",
       "Multi-staff roles",
+      "Custom Branding",
     ],
   },
   {
@@ -60,7 +61,15 @@ const plans: Plan[] = [
   },
 ];
 
-export function Pricing() {
+/**
+ * The public pricing section.
+ *
+ * `isFirstPurchase` drives a first-time-buyer promo: when true, the self-serve
+ * tiers (Starter & Business) surface a striking promotional badge. Enterprise is
+ * never discounted here — it's a contact-sales concierge funnel — so the badge is
+ * scoped to plans with a `signupPlan`.
+ */
+export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean }) {
   return (
     <section id="pricing" className="py-28">
       <div className="max-w-[1160px] mx-auto px-6">
@@ -105,6 +114,15 @@ export function Pricing() {
               >
                 Indicative — not final
               </span>
+              {/* First-time-buyer promo — self-serve tiers only (never Enterprise). */}
+              {isFirstPurchase && plan.signupPlan && (
+                <div className="mt-4 flex items-center gap-2 rounded-[10px] bg-brand-600 text-white px-3.5 py-2.5 shadow-btn">
+                  <Icon name="bolt" className="w-[16px] h-[16px] shrink-0" strokeWidth={2.1} />
+                  <span className="text-[12.5px] font-bold tracking-tight leading-snug">
+                    First-time Buyer: 20% OFF your first 3 months
+                  </span>
+                </div>
+              )}
               <ul className="mt-7 space-y-3.5 flex-1">
                 {plan.features.map((f, i) => (
                   <li
@@ -136,12 +154,13 @@ export function Pricing() {
                   <Icon name="arrow" className="w-[17px] h-[17px]" strokeWidth={2} />
                 </Link>
               ) : (
-                <a
-                  href="#demo"
-                  className="mt-7 inline-flex justify-center items-center font-semibold py-3 rounded-[11px] transition bg-white hairline text-ink hover:border-brand-200 hover:text-brand-600"
+                <Link
+                  href="/enterprise"
+                  className="mt-7 inline-flex justify-center items-center gap-2 font-semibold py-3 rounded-[11px] transition bg-white hairline text-ink hover:border-brand-200 hover:text-brand-600"
                 >
-                  Request a Demo
-                </a>
+                  Talk to our team
+                  <Icon name="arrow" className="w-[17px] h-[17px]" strokeWidth={2} />
+                </Link>
               )}
             </div>
           ))}

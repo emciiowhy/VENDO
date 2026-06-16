@@ -2,6 +2,7 @@
 
 import { DashShell } from "../../components/dash/DashShell";
 import { MERCHANT_NAV } from "../../components/dash/merchantNav";
+import { FeatureGate } from "../../components/FeatureGate";
 import { FinanceConsole } from "../../components/finance/FinanceConsole";
 
 /**
@@ -18,7 +19,9 @@ export default function FinancePage() {
       nav={MERCHANT_NAV}
       allow={["MERCHANT_OWNER", "MANAGER"]}
     >
-      <FinanceConsole />
+      <FeatureGate feature="finance_accounting">
+        <FinanceConsole />
+      </FeatureGate>
     </DashShell>
   );
 }

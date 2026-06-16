@@ -5,12 +5,18 @@ import Link from "next/link";
 import { Icon, type IconName } from "../Icon";
 import { formatCents, formatCentsWhole, formatCount } from "@/lib/format";
 import { useDashUser } from "./DashShell";
+import { FeatureGate } from "../FeatureGate";
 import { PasswordOnboarding } from "./PasswordOnboarding";
 import { useToast } from "../Toast";
+import { asTier, featureAllowed } from "@/lib/tiers";
 import {
   getDashboardPulse,
+  getReorderForecast,
   getStockAlerts,
   type DashboardPulse,
+  type ForecastItem,
+  type ForecastUrgency,
+  type ReorderForecast,
   type StockAlert,
 } from "@/lib/merchant";
 import { MERCHANT_EVENTS_URL, type LowStockEvent } from "@/lib/merchantEvents";
@@ -178,6 +184,10 @@ export function MerchantHome() {
 }
 
 function Live({ pulse, alerts }: { pulse: DashboardPulse; alerts: StockAlert[] }) {
+  const user = useDashUser();
+  // Only surface the "Quick Draft PO" deep-link when the store can actually
+  // reach Procurement — otherwise it would lead straight to an upgrade wall.
+  const canDraftPo = featureAllowed(asTier(user.tier), "procurement_supply_chain");
   return (
     <>
       {alerts.length > 0 && <LowStockBanner alerts={alerts} />}
@@ -227,7 +237,7 @@ function Live({ pulse, alerts }: { pulse: DashboardPulse; alerts: StockAlert[] }
           ) : (
             <div className="mt-4 space-y-3">
               {alerts.slice(0, 5).map((s) => (
-                <div key={s.id} className="flex items-center gap-3">
+                <div key={s.id} className="flex items-center gap-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="text-note font-semibold truncate">{s.name}</div>
                     <div className="text-fine text-ink-faint">reorder at {s.lowStockThreshold}</div>
@@ -240,6 +250,17 @@ function Live({ pulse, alerts }: { pulse: DashboardPulse; alerts: StockAlert[] }
                   >
                     {s.depleted ? "out" : `${s.stock} left`}
                   </span>
+                  {canDraftPo && (
+                    <Link
+                      href={`/dashboard/procurement?reorder=${s.id}`}
+                      title="Quick draft purchase order"
+                      aria-label={`Draft a purchase order for ${s.name}`}
+                      className="shrink-0 inline-flex items-center gap-1 rounded-[8px] bg-paper hairline px-2 py-1 text-cap font-bold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+                    >
+                      <Icon name="truck" className="w-[14px] h-[14px]" strokeWidth={1.7} />
+                      Draft PO
+                    </Link>
+                  )}
                 </div>
               ))}
               {alerts.length > 5 && (
@@ -260,7 +281,221 @@ function Live({ pulse, alerts }: { pulse: DashboardPulse; alerts: StockAlert[] }
         <TopSellers items={pulse.topItems} />
         <TaxCard pulse={pulse} />
       </div>
+
+      {/* Premium AI layer — predictive restock + checkout upselling. Gated to
+          ENTERPRISE: lower tiers never mount this (they see the "Upgrade to
+          Unlock" callout instead), so the forecast fetch only fires for an
+          entitled store. */}
+      <FeatureGate feature="predictive_inventory">
+        <AiInsights pulse={pulse} />
+      </FeatureGate>
     </>
+  );
+}
+
+/** High-contrast status tag per backend urgency tier (escalating fill). */
+const URGENCY_TAG: Record<ForecastUrgency, { label: string; className: string }> = {
+  out: { label: "Out of stock", className: "bg-rose-600 text-white" },
+  critical: { label: "Critical", className: "bg-amber-600 text-white" },
+  soon: { label: "Reorder soon", className: "bg-brand-600 text-white" },
+  low: { label: "Low", className: "bg-ink text-white" },
+};
+
+type AiState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; forecast: ReorderForecast };
+
+/**
+ * The ENTERPRISE AI insights panel. The predictive restock column is the live
+ * read of the server forecast (GET /api/v1/merchant/analytics/forecast) — the
+ * single source of truth, computed from real trailing-window selling pace — so
+ * there's no client-side heuristic to drift from it. The fetch only runs because
+ * the parent <FeatureGate> already confirmed ENTERPRISE; should the endpoint
+ * still 403 (a tier mismatch), it fails soft to a calm message, never a throw.
+ * The upsell column stays a light pulse-derived hint (no AI-upsell endpoint yet).
+ */
+function AiInsights({ pulse }: { pulse: DashboardPulse }) {
+  const [state, setState] = useState<AiState>({ status: "loading" });
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const res = await getReorderForecast();
+      if (!alive) return;
+      if (res.ok) setState({ status: "ready", forecast: res.forecast });
+      else
+        setState({
+          status: "error",
+          message: res.error ?? "Could not load the inventory forecast.",
+        });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const top = pulse.topItems;
+  const upsell = top.length >= 2 ? { anchor: top[0], pair: top[1] } : null;
+
+  return (
+    <div className="rounded-xl2 bg-surface hairline-strong shadow-soft p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid place-items-center w-9 h-9 rounded-[10px] bg-brand-50 text-brand-600">
+            <Icon name="bolt" className="w-[18px] h-[18px]" strokeWidth={1.8} />
+          </span>
+          <div>
+            <h3 className="font-extrabold tracking-tight">AI insights</h3>
+            <p className="text-fine text-ink-faint">Predictive restock &amp; checkout upselling</p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 text-brand-700 px-3 py-1 text-[11.5px] font-bold tracking-tight">
+          <Icon name="shield" className="w-3.5 h-3.5" strokeWidth={2} />
+          Enterprise
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        {/* Predictive restock — endpoint-driven */}
+        <div className="rounded-[12px] bg-paper hairline p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-note font-bold">
+              <Icon name="trend" className="w-4 h-4 text-brand-600" strokeWidth={1.9} />
+              Predictive restock
+            </div>
+            {state.status === "ready" && state.forecast.items.length > 0 && (
+              <span className="text-cap font-bold text-brand-700 bg-brand-50 rounded-full px-2.5 py-0.5">
+                {state.forecast.summary.atRisk} to reorder
+              </span>
+            )}
+          </div>
+
+          {state.status === "loading" && <RestockSkeleton />}
+
+          {state.status === "error" && (
+            <p className="mt-4 mb-2 text-center text-fine font-semibold text-rose-600">
+              {state.message}
+            </p>
+          )}
+
+          {state.status === "ready" &&
+            (state.forecast.items.length === 0 ? (
+              <p className="mt-4 mb-2 text-center text-fine text-ink-soft">
+                Stock levels look healthy — nothing forecast to run out soon.
+              </p>
+            ) : (
+              <>
+                <div className="mt-3 space-y-2.5">
+                  {state.forecast.items.slice(0, 5).map((item) => (
+                    <RestockRow key={item.productId} item={item} />
+                  ))}
+                </div>
+                {state.forecast.items.length > 5 && (
+                  <Link
+                    href="/dashboard/procurement"
+                    className="mt-3 block text-fine font-semibold text-brand-600 hover:text-brand-700"
+                  >
+                    +{state.forecast.items.length - 5} more to forecast →
+                  </Link>
+                )}
+                <p className="mt-3 text-cap text-ink-faint">
+                  At today&apos;s pace over the last {state.forecast.windowDays} days.
+                </p>
+              </>
+            ))}
+        </div>
+
+        {/* AI upsell — light pulse-derived hint (no dedicated endpoint yet) */}
+        <div className="rounded-[12px] bg-paper hairline p-4">
+          <div className="flex items-center gap-2 text-note font-bold">
+            <Icon name="heart" className="w-4 h-4 text-accent-600" strokeWidth={1.9} />
+            Suggested upsell
+          </div>
+          {upsell ? (
+            <div className="mt-3">
+              <p className="text-note text-ink-soft">
+                Prompt cashiers to pair{" "}
+                <span className="font-bold text-ink">{upsell.anchor.name}</span> with{" "}
+                <span className="font-bold text-ink">{upsell.pair.name}</span> at checkout —
+                today&apos;s two strongest sellers.
+              </p>
+              <div className="mt-3 flex items-center gap-2 text-fine font-semibold text-ink-faint">
+                <span className="rounded-full bg-surface hairline px-2.5 py-1">
+                  {upsell.anchor.name} · {upsell.anchor.qty}×
+                </span>
+                <Icon name="plus" className="w-3.5 h-3.5" strokeWidth={2} />
+                <span className="rounded-full bg-surface hairline px-2.5 py-1">
+                  {upsell.pair.name} · {upsell.pair.qty}×
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-4 mb-2 text-center text-fine text-ink-soft">
+              Not enough sales yet today to suggest a pairing.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One forecast line: name + projection on the left, status tag + order qty right. */
+function RestockRow({ item }: { item: ForecastItem }) {
+  const tag = URGENCY_TAG[item.urgency];
+  const projection =
+    item.daysToStockout === null
+      ? "no recent sales"
+      : item.daysToStockout === 0
+        ? "out now"
+        : `~${item.daysToStockout} ${item.daysToStockout === 1 ? "day" : "days"} left`;
+  return (
+    <div className="flex items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-note font-semibold truncate">{item.name}</div>
+        <div className="text-fine text-ink-faint">
+          {projection} · {item.dailyVelocity}/day
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <span
+          className={
+            "rounded-full px-2.5 py-0.5 text-cap font-bold tracking-tight " + tag.className
+          }
+        >
+          {tag.label}
+        </span>
+        <span className="w-[64px] text-right text-fine font-bold tabular-nums text-ink">
+          order {item.suggestedOrderQty}
+        </span>
+        <Link
+          href={`/dashboard/procurement?reorder=${item.productId}`}
+          title="Quick draft purchase order"
+          aria-label={`Draft a purchase order for ${item.name}`}
+          className="grid place-items-center w-7 h-7 rounded-[8px] bg-surface hairline text-ink-faint hover:text-brand-600 hover:border-brand-200 transition duration-150"
+        >
+          <Icon name="truck" className="w-[15px] h-[15px]" strokeWidth={1.7} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/** Calm placeholder while the forecast endpoint resolves. */
+function RestockSkeleton() {
+  return (
+    <div className="mt-3 space-y-2.5 animate-pulse">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="h-3 w-2/3 rounded bg-surface hairline" />
+            <div className="h-2.5 w-1/3 rounded bg-surface hairline" />
+          </div>
+          <div className="h-5 w-20 rounded-full bg-surface hairline" />
+        </div>
+      ))}
+    </div>
   );
 }
 

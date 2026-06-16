@@ -15,6 +15,7 @@ import { resolveAssetUrl } from "@/lib/images";
 import {
   getActiveShift,
   getCatalog,
+  recordAudit,
   submitOrder,
   type ActiveShift,
   type CatalogProduct,
@@ -64,6 +65,7 @@ const EMPTY_STORE: StoreBrand = {
   address: null,
   phone: null,
   tin: null,
+  businessStyle: null,
   vatLabel: null,
   receiptHeader: null,
   receiptFooter: null,
@@ -138,12 +140,14 @@ export function PosTerminal() {
   // After a cashier closes their drawer we stay on the till and prompt for the
   // next cashier (no full sign-out), so handover is a PIN away.
   const [nextCashierOpen, setNextCashierOpen] = useState(false);
-  // Confirmation for sign-out / terminal-lock actions.
+  // Confirmation for sign-out / terminal-lock / drawer actions.
   const [confirm, setConfirm] = useState<{
     title: string;
     message: string;
     confirmLabel: string;
     onConfirm: () => void;
+    icon?: IconName;
+    danger?: boolean;
   } | null>(null);
 
   const refreshShift = useCallback(async () => {
@@ -333,16 +337,29 @@ export function PosTerminal() {
     setScanMsg(null);
   }
   function setQty(id: string, qty: number) {
-    setCart((c) => {
-      const line = c[id];
-      if (!line) return c;
-      const capped = Math.min(qty, line.product.stock);
-      if (capped <= 0) {
+    const line = cart[id];
+    if (!line) return;
+    const capped = Math.min(qty, line.product.stock);
+    if (capped <= 0) {
+      // The line is being voided out of the active cart — a sensitive action the
+      // owner can audit. Best-effort telemetry; never blocks the register.
+      void recordAudit({
+        action: "void_item",
+        itemName: line.product.name,
+        itemQty: line.qty,
+        valueCents: line.product.priceCents * line.qty,
+      });
+      setCart((c) => {
         const next = { ...c };
         delete next[id];
         return next;
-      }
-      return { ...c, [id]: { ...line, qty: capped } };
+      });
+      return;
+    }
+    setCart((c) => {
+      const cur = c[id];
+      if (!cur) return c;
+      return { ...c, [id]: { ...cur, qty: capped } };
     });
   }
   function clearCart() {
@@ -506,6 +523,29 @@ export function PosTerminal() {
           </div>
 
           <div className="ml-auto flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() =>
+                setConfirm({
+                  title: "Open cash drawer?",
+                  message:
+                    "This “No Sale” drawer kick is recorded in the audit log for the owner to review.",
+                  confirmLabel: "Open drawer",
+                  icon: "wallet",
+                  danger: false,
+                  onConfirm: () => {
+                    void recordAudit({ action: "open_drawer", detail: "No Sale drawer kick" });
+                    setConfirm(null);
+                  },
+                })
+              }
+              title="Open cash drawer (No Sale)"
+              aria-label="Open cash drawer"
+              className="inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+            >
+              <Icon name="wallet" className="w-[18px] h-[18px]" strokeWidth={1.7} />
+              <span className="hidden lg:inline">Open drawer</span>
+            </button>
             <button
               type="button"
               onClick={() => setSalesOpen(true)}
@@ -689,7 +729,6 @@ export function PosTerminal() {
           discountCents={discountCents}
           discountLabel={discountText(discount)}
           netCents={netCents}
-          vatCents={vatCents}
           count={count}
           discount={discount}
           paymentQrs={paymentQrs}
@@ -719,6 +758,14 @@ export function PosTerminal() {
           count={count}
           onClose={() => setVoidOpen(false)}
           onConfirm={() => {
+            // Cancelling a transaction mid-ring is auditable shrinkage surface —
+            // record it before the cart is cleared.
+            void recordAudit({
+              action: "cancel_transaction",
+              itemQty: count,
+              valueCents: netCents,
+              detail: `${count} item${count === 1 ? "" : "s"} cleared before payment`,
+            });
             clearCart();
             setVoidOpen(false);
           }}
@@ -791,8 +838,8 @@ export function PosTerminal() {
           title={confirm.title}
           message={confirm.message}
           confirmLabel={confirm.confirmLabel}
-          icon="logout"
-          danger
+          icon={confirm.icon ?? "logout"}
+          danger={confirm.danger ?? true}
           onCancel={() => setConfirm(null)}
           onConfirm={confirm.onConfirm}
         />
@@ -1020,7 +1067,6 @@ function CheckoutOverlay({
   discountCents,
   discountLabel,
   netCents,
-  vatCents,
   count,
   discount,
   paymentQrs,
@@ -1034,7 +1080,6 @@ function CheckoutOverlay({
   discountCents: number;
   discountLabel: string | null;
   netCents: number;
-  vatCents: number;
   count: number;
   discount: Discount | null;
   paymentQrs: PaymentQrMap;
@@ -1048,18 +1093,30 @@ function CheckoutOverlay({
   const [tendered, setTendered] = useState("");
   const [refCode, setRefCode] = useState("");
   const [customer, setCustomer] = useState<CustomerLite | null>(null);
+  const [redeem, setRedeem] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isEwallet = method !== "Cash";
   // The owner's uploaded scan-to-pay code for the staged rail, if any.
   const uploadedQr = isEwallet ? resolveAssetUrl(paymentQrs[method as EwalletQrMethod]) : null;
+
+  // Loyalty redemption (1 pt = ₱1). Capped at the customer's balance AND at the
+  // payable so it can't overdraw or drive the total negative — mirrors the
+  // server, which re-derives and clamps it authoritatively. Derived (not stored)
+  // so it self-corrects if the customer or cart changes.
+  const maxRedeemablePoints = customer ? Math.min(customer.loyaltyPoints, Math.floor(netCents / 100)) : 0;
+  const redeemPoints = redeem ? maxRedeemablePoints : 0;
+  const redeemCents = redeemPoints * 100;
+  const dueCents = Math.max(0, netCents - redeemCents);
+  const dueVatCents = Math.round((dueCents * 12) / 112);
+
   const tenderedCents = Math.round((Number(tendered) || 0) * 100);
-  const cashShort = method === "Cash" && tenderedCents < netCents;
-  const changeCents = method === "Cash" ? Math.max(0, tenderedCents - netCents) : 0;
+  const cashShort = method === "Cash" && tenderedCents < dueCents;
+  const changeCents = method === "Cash" ? Math.max(0, tenderedCents - dueCents) : 0;
 
   const addBill = (php: number) => setTendered((p) => String((Number(p) || 0) + php));
-  const setExact = () => setTendered(String(netCents / 100));
+  const setExact = () => setTendered(String(dueCents / 100));
 
   async function charge() {
     if (cashShort) return;
@@ -1072,6 +1129,7 @@ function CheckoutOverlay({
       referenceCode: isEwallet && refCode ? refCode : undefined,
       discount: discount ?? undefined,
       customerId: customer?.id,
+      redeemPoints: redeemPoints > 0 ? redeemPoints : undefined,
     });
     if (res.ok) {
       onPaid(res.sale);
@@ -1109,15 +1167,41 @@ function CheckoutOverlay({
                 <span className="tabular-nums">−{peso(discountCents)}</span>
               </div>
             )}
-            <Row label="VAT (12% incl.)" value={peso(vatCents)} muted />
+            {redeemCents > 0 && (
+              <div className="flex items-center justify-between text-accent-600 font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <Icon name="heart" className="w-[14px] h-[14px]" strokeWidth={1.8} />
+                  {redeemPoints} pt{redeemPoints === 1 ? "" : "s"} redeemed
+                </span>
+                <span className="tabular-nums">−{peso(redeemCents)}</span>
+              </div>
+            )}
+            <Row label="VAT (12% incl.)" value={peso(dueVatCents)} muted />
             <div className="flex items-center justify-between pt-1.5 mt-1 hairline-t">
               <span className="text-[14px] font-bold">Total due</span>
-              <span className="text-[1.35rem] font-extrabold tracking-tightest">{peso(netCents)}</span>
+              <span className="text-[1.35rem] font-extrabold tracking-tightest">{peso(dueCents)}</span>
             </div>
           </div>
 
           {/* Customer (optional) — attach for loyalty + purchase history */}
-          <CheckoutCustomer customer={customer} onChange={setCustomer} />
+          <CheckoutCustomer
+            customer={customer}
+            onChange={(c) => {
+              setCustomer(c);
+              setRedeem(false); // a fresh customer starts with no redemption staged
+            }}
+          />
+
+          {/* Loyalty redemption — only when the attached customer has points */}
+          {customer && customer.loyaltyPoints > 0 && (
+            <RedeemPoints
+              points={customer.loyaltyPoints}
+              maxRedeemable={maxRedeemablePoints}
+              redeeming={redeem}
+              redeemCents={redeemCents}
+              onToggle={() => setRedeem((r) => !r)}
+            />
+          )}
 
           {/* Payment method */}
           <div>
@@ -1248,7 +1332,7 @@ function CheckoutOverlay({
             className="w-full inline-flex items-center justify-center gap-2 rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3.5 font-semibold text-white shadow-btn tracking-tight transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Icon name="check" className="w-[18px] h-[18px]" strokeWidth={2} />
-            {busy ? "Processing…" : cashShort ? "Insufficient cash" : `Charge ${peso(netCents)}`}
+            {busy ? "Processing…" : cashShort ? "Insufficient cash" : `Charge ${peso(dueCents)}`}
           </button>
         </div>
       </div>
@@ -1300,6 +1384,8 @@ function ReceiptOverlay({
               <RcptRow label="Change" value={peso(sale.changeCents ?? 0)} strong />
             </>
           )}
+          {sale.pointsRedeemed > 0 && <RcptRow label="Points redeemed" value={`−${sale.pointsRedeemed}`} />}
+          {sale.pointsEarned > 0 && <RcptRow label="Points earned" value={`+${sale.pointsEarned}`} />}
         </div>
 
         <div className="mt-6 grid grid-cols-[auto_1fr] gap-2.5">
@@ -1560,6 +1646,56 @@ function CheckoutCustomer({
       {open && q.trim() && results.length === 0 && (
         <p className="mt-1.5 text-[12px] text-ink-faint">No match — sell as walk-in, or add them in CRM.</p>
       )}
+    </div>
+  );
+}
+
+/* ----------------------------- redeem points ----------------------------- */
+
+/**
+ * Loyalty redemption toggle for the checkout overlay. Shown only when the
+ * attached customer has points; tapping applies the maximum redeemable (1 pt =
+ * ₱1, capped to the payable) as a discount the server re-derives and deducts.
+ */
+function RedeemPoints({
+  points,
+  maxRedeemable,
+  redeeming,
+  redeemCents,
+  onToggle,
+}: {
+  points: number;
+  maxRedeemable: number;
+  redeeming: boolean;
+  redeemCents: number;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[10px] bg-accent-50 px-3.5 py-2.5">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 text-[13px] font-bold text-accent-700">
+          <Icon name="heart" className="w-[15px] h-[15px]" strokeWidth={1.8} />
+          Loyalty points
+        </div>
+        <div className="text-[12px] text-accent-600">
+          {redeeming
+            ? `Redeeming −${peso(redeemCents)}`
+            : `${points} pt${points === 1 ? "" : "s"} available · worth ${peso(points * 100)}`}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={!redeeming && maxRedeemable <= 0}
+        className={
+          "shrink-0 rounded-[9px] px-3 py-2 text-[12.5px] font-bold tracking-tight transition duration-150 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed " +
+          (redeeming
+            ? "bg-surface hairline text-ink-soft hover:text-rose-600 hover:border-rose-200"
+            : "bg-accent-500 text-white hover:bg-accent-600 shadow-btn")
+        }
+      >
+        {redeeming ? "Remove" : `Redeem ${maxRedeemable} pt${maxRedeemable === 1 ? "" : "s"}`}
+      </button>
     </div>
   );
 }

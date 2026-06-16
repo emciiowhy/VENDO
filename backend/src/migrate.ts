@@ -39,15 +39,49 @@ CREATE TABLE IF NOT EXISTS tenants (
   plan        TEXT        NOT NULL DEFAULT 'starter'
                           CHECK (plan IN ('starter', 'business', 'enterprise')),
   status      TEXT        NOT NULL DEFAULT 'active'
-                          CHECK (status IN ('active', 'suspended')),
+                          CHECK (status IN ('trial', 'active', 'trial_expired', 'suspended')),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Self-service trial window. A merchant who signs up from the pricing page (as
--- opposed to being provisioned by an operator) gets a 14-day trial: this stamps
--- when it ends. NULL = no trial (operator-provisioned, or converted to paid). An
--- "active trial" is simply trial_ends_at > now().
-ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+-- Self-service trial lifecycle. A merchant who signs up from the pricing page (as
+-- opposed to being provisioned by an operator) gets a 14-day trial: these stamp
+-- when it started and when it ends. NULL = no trial (operator-provisioned, or
+-- converted to paid). The lifecycle is carried explicitly on the status column:
+--   'trial'         — inside the 14-day window, full access.
+--   'active'        — a paying store (operator-provisioned, or upgraded).
+--   'trial_expired' — the window lapsed; the trial checkpoint blocks module
+--                     routes (402) and the workspace shows the recovery view.
+--   'suspended'     — administratively disabled; cannot sign in at all.
+-- The lapse is applied lazily on access (see billing/trial.ts), so 'trial' stays
+-- the resting state and only flips to 'trial_expired' once a request lands after
+-- trial_ends_at — which is also the single seam that fires the recovery email.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_starts_at TIMESTAMPTZ;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_ends_at   TIMESTAMPTZ;
+
+-- Widen the status CHECK on already-provisioned databases (a fresh DB gets the
+-- four-value CHECK inline above; an existing one still carries the old two-value
+-- constraint, which would reject a 'trial' / 'trial_expired' write). Drop + re-add
+-- so both paths converge on the same lifecycle set. Same pattern as leads_status.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tenants_status_check') THEN
+    ALTER TABLE tenants DROP CONSTRAINT tenants_status_check;
+  END IF;
+  ALTER TABLE tenants ADD CONSTRAINT tenants_status_check
+    CHECK (status IN ('trial', 'active', 'trial_expired', 'suspended'));
+END $$;
+
+-- Subscription TIER — the feature-gating layer (see backend/src/lib/tiers.ts).
+-- Distinct from the lowercase billing plan above (which drives price/MRR and
+-- product caps): tier decides which premium CAPABILITIES a store may reach —
+-- STARTER (core POS) < BUSINESS (custom themes + SPSF analytics) < ENTERPRISE
+-- (predictive inventory + AI upsell). Defaults to STARTER for every fresh
+-- registration / public demo signup, then backfilled from the plan a store
+-- already bought so the two never disagree (plan is the single knob; tier is its
+-- uppercase projection). Kept in lockstep on every write — see signup +
+-- lead-promotion repositories.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'STARTER'
+  CHECK (tier IN ('STARTER', 'BUSINESS', 'ENTERPRISE'));
+UPDATE tenants SET tier = upper(plan) WHERE tier <> upper(plan);
 
 CREATE TABLE IF NOT EXISTS users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -619,6 +653,15 @@ CREATE INDEX IF NOT EXISTS customers_tenant_idx ON customers (tenant_id, lower(n
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers (id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS sales_customer_idx ON sales (customer_id);
 
+-- Loyalty booked on each sale. \`points_earned\` is accrued at checkout (1 pt per
+-- ₱100 of net), \`points_redeemed\` is spent at checkout as a peso discount on the
+-- same sale (1 pt = ₱1, folded into discount_cents). Stored on the row so a
+-- void/return can restore the spent points and unwind the earned ones exactly,
+-- rather than re-deriving them. Both default 0 — walk-in sales, contra rows and
+-- every historical sale carry zero, so the reversal maths are unchanged for them.
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS points_earned   INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS points_redeemed INTEGER NOT NULL DEFAULT 0;
+
 -- ---------------------------------------------------------------------------
 -- Owner Account hub — store profile, receipt customization, personal profile,
 -- preferences, login auditing and device sessions.
@@ -640,6 +683,7 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS phone            TEXT;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS email            TEXT;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_hours   TEXT;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tin              TEXT;   -- BIR Taxpayer ID No.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_style   TEXT;   -- BIR "Business Style" (trade name / line of business)
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url         TEXT;   -- public asset link
 
 -- Per-tenant brand accent (the store's chosen theme colour). A single \`#rrggbb\`
@@ -838,13 +882,44 @@ CREATE TABLE IF NOT EXISTS reversal_counters (
   next_seq   BIGINT      NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ---------------------------------------------------------------------------
+-- POS terminal audit log — cashier accountability & shrinkage control.
+--
+-- The sensitive actions a cashier can take on the LIVE terminal that never
+-- reach the sales ledger — voiding a line out of the open cart, cancelling a
+-- transaction mid-ring before payment, or kicking the cash drawer open with no
+-- sale ("No Sale") — are captured here as an immutable, append-only telemetry
+-- trail. Committed voids/returns of real sales already exist as contra rows on
+-- \`sales\`; THIS table covers the pre-commit floor actions that otherwise leave
+-- no trace, so the owner can audit unauthorised cashier activity (a classic
+-- source of stock/cash shrinkage) from the back office. \`value_cents\` snapshots
+-- the peso amount implicated (the voided line's value, the abandoned cart's
+-- net, or 0 for a drawer pop). Strictly tenant-fenced like every merchant table.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pos_audit_logs (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID        NOT NULL REFERENCES tenants (id) ON DELETE CASCADE,
+  cashier_user_id UUID        REFERENCES users (id) ON DELETE SET NULL,
+  cashier_name    TEXT        NOT NULL,                 -- snapshot at event time
+  action          TEXT        NOT NULL CHECK (action IN
+                    ('void_item', 'cancel_transaction', 'open_drawer')),
+  item_name       TEXT,                                 -- voided line name, when applicable
+  item_qty        INTEGER,                              -- voided/abandoned units, when applicable
+  value_cents     INTEGER     NOT NULL DEFAULT 0,       -- peso value implicated (centavos)
+  detail          TEXT,                                 -- free-text context (e.g. a reason)
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS pos_audit_logs_tenant_idx  ON pos_audit_logs (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS pos_audit_logs_cashier_idx ON pos_audit_logs (cashier_user_id, created_at DESC);
 `;
 
 async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements ready.",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs ready.",
   );
 }
 

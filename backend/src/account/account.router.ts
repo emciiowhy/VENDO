@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireRole } from "../auth/auth.middleware.js";
+import { requireFeature } from "../auth/tier.middleware.js";
 import { getPasswordHash, tenantNameById } from "../auth/auth.repository.js";
 import { verifyPassword } from "../auth/auth.crypto.js";
 import { uploadAccountImage } from "./account.upload.js";
@@ -149,8 +150,12 @@ function normalizeHex(v: unknown): string | null {
  * Body: `{ accent: "#rrggbb" | null }`. A null/empty accent resets to the
  * default VendoPOS blue. Stored as the only source of truth; the workspace
  * derives the full ramp from it client-side.
+ *
+ * Custom branding (presets + custom hex) is a BUSINESS-tier capability, so the
+ * tier guard rejects a STARTER store with a 403 before any write — the
+ * server-side enforcement behind the hidden Appearance panel on the frontend.
  */
-accountRouter.patch("/theme", async (req, res) => {
+accountRouter.patch("/theme", requireFeature("custom_branding"), async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
   const raw = (req.body as { accent?: unknown })?.accent;

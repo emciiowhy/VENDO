@@ -477,9 +477,12 @@ export async function getReorderSuggestions(tenantId: string): Promise<ReorderSu
     stock: number;
     threshold: number;
     last_cost: number;
+    last_supplier_id: string | null;
+    last_supplier_name: string | null;
   }>(
-    `WITH latest_cost AS (
-        SELECT DISTINCT ON (i.product_id) i.product_id, i.unit_cost_cents
+    `WITH latest_po AS (
+        SELECT DISTINCT ON (i.product_id)
+               i.product_id, i.unit_cost_cents, po.supplier_id
           FROM purchase_order_items i
           JOIN purchase_orders po ON po.id = i.po_id
          WHERE po.tenant_id = $1
@@ -487,9 +490,12 @@ export async function getReorderSuggestions(tenantId: string): Promise<ReorderSu
       )
       SELECT p.id, p.name, p.sku, p.stock,
              p.low_stock_threshold AS threshold,
-             coalesce(lc.unit_cost_cents, 0) AS last_cost
+             coalesce(lp.unit_cost_cents, 0) AS last_cost,
+             lp.supplier_id        AS last_supplier_id,
+             sup.name              AS last_supplier_name
         FROM products p
-        LEFT JOIN latest_cost lc ON lc.product_id = p.id
+        LEFT JOIN latest_po lp  ON lp.product_id = p.id
+        LEFT JOIN suppliers sup ON sup.id = lp.supplier_id
        WHERE p.tenant_id = $1
          AND p.is_active = TRUE
          AND ((p.low_stock_threshold > 0 AND p.stock <= p.low_stock_threshold) OR p.stock = 0)
@@ -504,5 +510,7 @@ export async function getReorderSuggestions(tenantId: string): Promise<ReorderSu
     threshold: row.threshold,
     suggestedQty: suggestReorderQty(row.stock, row.threshold),
     lastUnitCostCents: row.last_cost,
+    lastSupplierId: row.last_supplier_id,
+    lastSupplierName: row.last_supplier_name,
   }));
 }

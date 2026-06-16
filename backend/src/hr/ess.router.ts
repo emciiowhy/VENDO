@@ -1,5 +1,6 @@
 import { Router, type Request } from "express";
 import { requireAuth } from "../auth/auth.middleware.js";
+import { requireFeature } from "../auth/tier.middleware.js";
 import { getEssProfile } from "./hr.repository.js";
 
 /**
@@ -16,6 +17,9 @@ import { getEssProfile } from "./hr.repository.js";
 export const essRouter = Router();
 
 essRouter.use(requireAuth);
+// ESS surfaces payroll/paystub data, so it lives behind the same ENTERPRISE gate
+// as the HR module — a store below ENTERPRISE has no payroll to self-serve.
+essRouter.use(requireFeature("human_resources_payroll"));
 
 const ISO_MONTH = /^\d{4}-\d{2}$/;
 

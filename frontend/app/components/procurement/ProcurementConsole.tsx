@@ -9,6 +9,7 @@ import {
   deletePurchaseOrder,
   deleteSupplier,
   getProcurementSummary,
+  getReorderSuggestions,
   listPurchaseOrders,
   listSuppliers,
   type ProcurementSummary,
@@ -17,7 +18,7 @@ import {
 } from "@/lib/procurement";
 import { STATUS_STYLE } from "./statusStyle";
 import { SupplierFormModal } from "./SupplierFormModal";
-import { PoFormModal } from "./PoFormModal";
+import { PoFormModal, type PoFormSeed } from "./PoFormModal";
 import { PoDetailDrawer } from "./PoDetailDrawer";
 import { ReorderModal } from "./ReorderModal";
 
@@ -39,8 +40,18 @@ export function ProcurementConsole() {
   const [tab, setTab] = useState<Tab>("orders");
 
   const [poForm, setPoForm] = useState(false);
+  const [draftSeed, setDraftSeed] = useState<PoFormSeed | null>(null);
   const [reorderOpen, setReorderOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  const openBlankPo = () => {
+    setDraftSeed(null);
+    setPoForm(true);
+  };
+  const closePo = () => {
+    setPoForm(false);
+    setDraftSeed(null);
+  };
   const [supplierForm, setSupplierForm] = useState<{ supplier: Supplier | null } | null>(null);
   const [confirmPo, setConfirmPo] = useState<PurchaseOrderSummary | null>(null);
   const [confirmSupplier, setConfirmSupplier] = useState<Supplier | null>(null);
@@ -69,6 +80,43 @@ export function ProcurementConsole() {
           status: "error",
           message: (!s.ok && s.error) || (!o.ok && o.error) || (!sup.ok && sup.error) || "Could not load procurement.",
         });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // One-click "Quick Draft PO": the dashboard low-stock cards deep-link here with
+  // ?reorder=<productId>. Resolve that product's reorder suggestion (qty, last
+  // cost, last supplier) and open the PO form pre-populated, then strip the param
+  // so a refresh doesn't reopen it. Read straight off the URL (no useSearchParams)
+  // to stay clear of the App Router's Suspense requirement on a client page.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const productId = new URLSearchParams(window.location.search).get("reorder");
+    if (!productId) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    let alive = true;
+    void (async () => {
+      const res = await getReorderSuggestions();
+      if (!alive) return;
+      const hit = res.ok ? res.suggestions.find((s) => s.productId === productId) : undefined;
+      if (hit) {
+        setDraftSeed({
+          supplierId: hit.lastSupplierId ?? undefined,
+          status: "draft",
+          line: {
+            productId: hit.productId,
+            name: hit.name,
+            qty: hit.suggestedQty,
+            unitCost: hit.lastUnitCostCents > 0 ? String(hit.lastUnitCostCents / 100) : "",
+          },
+        });
+      } else {
+        // Product is no longer low (or vanished) — open a blank PO instead.
+        setDraftSeed(null);
+      }
+      setPoForm(true);
     })();
     return () => {
       alive = false;
@@ -127,7 +175,7 @@ export function ProcurementConsole() {
           </button>
           <button
             type="button"
-            onClick={() => setPoForm(true)}
+            onClick={openBlankPo}
             className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn tracking-tight transition duration-150"
           >
             <Icon name="plus" className="w-[18px] h-[18px]" strokeWidth={2} />
@@ -164,7 +212,7 @@ export function ProcurementConsole() {
               orders={state.orders}
               onOpen={setDetailId}
               onAskDelete={setConfirmPo}
-              onNew={() => setPoForm(true)}
+              onNew={openBlankPo}
             />
           ) : (
             <SuppliersTable
@@ -181,9 +229,11 @@ export function ProcurementConsole() {
       {poForm && state.status === "ready" && (
         <PoFormModal
           suppliers={state.suppliers}
-          onClose={() => setPoForm(false)}
+          initial={draftSeed ?? undefined}
+          onClose={closePo}
           onSaved={() => {
-            setPoForm(false);
+            closePo();
+            setTab("orders");
             void load();
           }}
         />

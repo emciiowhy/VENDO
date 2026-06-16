@@ -3,6 +3,8 @@ import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { orderSchema, shiftCloseSchema, shiftOpenSchema } from "./pos.schema.js";
 import { returnSchema, voidSchema } from "./refunds.schema.js";
+import { auditEventSchema, summarizeAudit } from "./audit.js";
+import { listAuditLogs, recordAuditLog } from "./audit.repository.js";
 import { createOrder, getCatalog, listCashiers } from "./pos.repository.js";
 import {
   getSaleDetail,
@@ -66,6 +68,55 @@ posRouter.get("/cashiers", async (req, res) => {
   } catch (err) {
     console.error("[pos] cashiers failed:", err);
     res.status(500).json({ ok: false, error: "Could not load cashiers." });
+  }
+});
+
+/**
+ * POST /api/v1/pos/audit — record a sensitive terminal action (void a cart line,
+ * cancel a transaction mid-ring, pop the drawer with no sale). Open to anyone
+ * working the till; the cashier identity is taken from the verified session so a
+ * cashier can't log under someone else's name. Best-effort for the caller —
+ * never blocks the register — but the write itself is durable.
+ */
+posRouter.post("/audit", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = auditEventSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  }
+  try {
+    const log = await recordAuditLog(
+      tenantId,
+      req.user?.userId ?? null,
+      req.user?.name ?? "Cashier",
+      parsed.data,
+    );
+    return res.status(201).json({ ok: true, log });
+  } catch (err) {
+    console.error("[pos] audit log failed:", err);
+    return res.status(500).json({ ok: false, error: "Could not record the audit event." });
+  }
+});
+
+/**
+ * GET /api/v1/pos/audit — the owner/manager audit trail of terminal actions,
+ * with a rollup. Fenced tighter than the rest of the POS router: a cashier may
+ * WRITE their own events but can't READ the store's audit history.
+ */
+posRouter.get("/audit", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (req.user?.role !== "MERCHANT_OWNER" && req.user?.role !== "MANAGER") {
+    return res.status(403).json({ ok: false, error: "Only the store owner or a manager can review the audit log." });
+  }
+  try {
+    const limit = Number(req.query.limit) || 100;
+    const logs = await listAuditLogs(tenantId, limit);
+    return res.json({ ok: true, logs, summary: summarizeAudit(logs) });
+  } catch (err) {
+    console.error("[pos] audit list failed:", err);
+    return res.status(500).json({ ok: false, error: "Could not load the audit log." });
   }
 });
 

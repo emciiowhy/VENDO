@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
+import { requireFeature } from "../auth/tier.middleware.js";
 import {
   attendanceUpsertSchema,
   employeeCreateSchema,
@@ -32,6 +33,8 @@ import {
 export const hrRouter = Router();
 
 hrRouter.use(requireRole("MERCHANT_OWNER", "MANAGER"));
+// HR / payroll is an ENTERPRISE-tier module — a STARTER or BUSINESS store is 403'd.
+hrRouter.use(requireFeature("human_resources_payroll"));
 
 function fieldErrors(error: ZodError): Record<string, string> {
   const out: Record<string, string> = {};

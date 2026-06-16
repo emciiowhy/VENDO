@@ -38,6 +38,8 @@ export interface StoreBrand {
   address: string | null;
   phone: string | null;
   tin: string | null;
+  /** BIR "Business Style" — the store's trade name / line of business. */
+  businessStyle: string | null;
   vatLabel: string | null;
   receiptHeader: string | null;
   receiptFooter: string | null;
@@ -69,6 +71,10 @@ export interface Sale {
   paymentRef: string | null;
   tenderedCents: number | null;
   changeCents: number | null;
+  /** Loyalty points credited to the attached customer for this sale. */
+  pointsEarned: number;
+  /** Loyalty points the customer spent on this sale (1 pt = ₱1 discount). */
+  pointsRedeemed: number;
   createdAt: string;
 }
 
@@ -158,6 +164,8 @@ export async function submitOrder(payload: {
   referenceCode?: string;
   discount?: Discount;
   customerId?: string;
+  /** Loyalty points the attached customer redeems (1 pt = ₱1 off). */
+  redeemPoints?: number;
 }): Promise<Result<{ sale: Sale }>> {
   try {
     const res = await fetch(`${BASE}/orders`, {
@@ -324,6 +332,65 @@ export async function returnSaleLines(
       body: JSON.stringify({ lines, reason }),
     });
     return await readJson(res);
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+// ── Terminal audit trail (cashier accountability) ───────────────────────────
+
+/** The sensitive live-terminal actions the register reports for auditing. */
+export type AuditAction = "void_item" | "cancel_transaction" | "open_drawer";
+
+export interface AuditLog {
+  id: string;
+  cashierUserId: string | null;
+  cashierName: string;
+  action: AuditAction;
+  itemName: string | null;
+  itemQty: number | null;
+  valueCents: number;
+  detail: string | null;
+  createdAt: string;
+}
+
+export interface AuditSummary {
+  total: number;
+  byAction: Record<AuditAction, number>;
+  flaggedValueCents: number;
+}
+
+/**
+ * Report a sensitive terminal action (void a cart line, cancel a transaction,
+ * pop the drawer). Best-effort and fire-and-forget from the caller's view — it
+ * never blocks the register — but the server write itself is durable.
+ */
+export async function recordAudit(event: {
+  action: AuditAction;
+  itemName?: string;
+  itemQty?: number;
+  valueCents?: number;
+  detail?: string;
+}): Promise<Result<{ log: AuditLog }>> {
+  try {
+    const res = await fetch(`${BASE}/audit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(event),
+    });
+    return await readJson(res);
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** The owner/manager audit trail of terminal actions, with a rollup. */
+export async function listAuditLogs(
+  limit = 100,
+): Promise<Result<{ logs: AuditLog[]; summary: AuditSummary }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/audit?limit=${limit}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }

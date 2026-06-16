@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
+import { requireFeature } from "../auth/tier.middleware.js";
 import { customerCreateSchema, customerUpdateSchema } from "./crm.schema.js";
 import {
   createCustomer,
@@ -23,6 +24,9 @@ import {
 export const crmRouter = Router();
 
 crmRouter.use(requireRole("MERCHANT_OWNER", "MANAGER", "CASHIER"));
+// CRM (customers + loyalty) is a BUSINESS-tier module — a STARTER store is 403'd
+// off the entire surface (dashboard book AND the POS quick-add) per the matrix.
+crmRouter.use(requireFeature("customer_relationship_crm"));
 
 function fieldErrors(error: ZodError): Record<string, string> {
   const out: Record<string, string> = {};

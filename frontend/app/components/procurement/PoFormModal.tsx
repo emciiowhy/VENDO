@@ -30,23 +30,44 @@ function blankLine(): LineDraft {
   return { key: lineKey++, productId: "", name: "", qty: "1", unitCost: "" };
 }
 
+/** Optional seed for a one-click "Quick Draft PO" (supplier + a single line). */
+export interface PoFormSeed {
+  supplierId?: string;
+  status?: "draft" | "ordered";
+  line?: { productId: string; name: string; qty: number; unitCost: string };
+}
+
 export function PoFormModal({
   suppliers,
+  initial,
   onClose,
   onSaved,
 }: {
   suppliers: Supplier[];
+  initial?: PoFormSeed;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { push } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
-  const [supplierId, setSupplierId] = useState("");
-  const [status, setStatus] = useState<"draft" | "ordered">("ordered");
+  const [supplierId, setSupplierId] = useState(initial?.supplierId ?? "");
+  const [status, setStatus] = useState<"draft" | "ordered">(initial?.status ?? "ordered");
   const [orderDate, setOrderDate] = useState(today());
   const [expectedDate, setExpectedDate] = useState("");
   const [note, setNote] = useState("");
-  const [lines, setLines] = useState<LineDraft[]>(() => [blankLine()]);
+  const [lines, setLines] = useState<LineDraft[]>(() =>
+    initial?.line
+      ? [
+          {
+            key: lineKey++,
+            productId: initial.line.productId,
+            name: initial.line.name,
+            qty: String(initial.line.qty),
+            unitCost: initial.line.unitCost,
+          },
+        ]
+      : [blankLine()],
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

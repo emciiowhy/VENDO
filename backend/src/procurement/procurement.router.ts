@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
+import { requireFeature } from "../auth/tier.middleware.js";
 import {
   poCreateSchema,
   poStatusSchema,
@@ -33,6 +34,8 @@ import {
 export const procurementRouter = Router();
 
 procurementRouter.use(requireRole("MERCHANT_OWNER", "MANAGER"));
+// Procurement (suppliers + POs) is a BUSINESS-tier module — STARTER is 403'd.
+procurementRouter.use(requireFeature("procurement_supply_chain"));
 
 function fieldErrors(error: ZodError): Record<string, string> {
   const out: Record<string, string> = {};

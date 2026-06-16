@@ -1,5 +1,5 @@
 import { env } from "../env.js";
-import { sendEmail } from "./email.js";
+import { sendEmail, type EmailResult } from "./email.js";
 
 /**
  * The welcome / "here's how to get started" email the Super Admin sends a Lead
@@ -142,12 +142,14 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * Best-effort: email the new owner their onboarding steps. Fire-and-forget from
- * the provisioning transaction (after COMMIT), exactly like notifyNewTenant — a
- * mail failure must never undo a store that was already created. Resolves to a
- * console warning rather than rejecting if the transport can't deliver.
+ * Best-effort: email the new owner their onboarding steps. Fired from the
+ * provisioning transaction after COMMIT — a mail failure must never undo a store
+ * that was already created, so this NEVER throws: a render or transport error is
+ * logged and folded into a non-delivered result. Returns the {@link EmailResult}
+ * so the caller can surface the delivery outcome (e.g. to the admin UI) instead
+ * of it being buried in the server console.
  */
-export async function sendOwnerOnboardingEmail(d: OnboardingDetails): Promise<void> {
+export async function sendOwnerOnboardingEmail(d: OnboardingDetails): Promise<EmailResult> {
   try {
     const { subject, text, html } = renderOnboardingEmail(d);
     const result = await sendEmail({ to: d.ownerEmail, subject, text, html });
@@ -156,7 +158,9 @@ export async function sendOwnerOnboardingEmail(d: OnboardingDetails): Promise<vo
         `[onboarding] onboarding email for ${d.ownerEmail} not delivered (transport: ${result.transport}).`,
       );
     }
+    return result;
   } catch (err) {
     console.error("[onboarding] failed to send onboarding email:", err);
+    return { delivered: false, transport: "log" };
   }
 }

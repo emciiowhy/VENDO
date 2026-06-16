@@ -68,6 +68,9 @@ export interface ReorderSuggestion {
   threshold: number;
   suggestedQty: number;
   lastUnitCostCents: number;
+  /** Supplier on the product's most recent PO, if any — pre-selected on a quick draft. */
+  lastSupplierId: string | null;
+  lastSupplierName: string | null;
 }
 
 /** Fields the supplier form collects. */

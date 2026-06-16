@@ -14,6 +14,13 @@ import { FAQ } from "./components/FAQ";
 import { DemoForm } from "./components/DemoForm";
 import { Footer } from "./components/Footer";
 
+/**
+ * First-time-buyer promo toggle. Flip to false to retire the campaign — the
+ * pricing cards drop the "20% OFF your first 3 months" badge with no other
+ * change. (A future iteration can source this from a real campaign/config seam.)
+ */
+const FIRST_PURCHASE_PROMO = true;
+
 export default function Home() {
   return (
     <>
@@ -29,7 +36,7 @@ export default function Home() {
         <WhyPH />
         <Testimonials />
         <HowItWorks />
-        <Pricing />
+        <Pricing isFirstPurchase={FIRST_PURCHASE_PROMO} />
         <FAQ />
         <DemoForm />
       </main>

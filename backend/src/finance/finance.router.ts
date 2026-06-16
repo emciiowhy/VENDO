@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
+import { requireFeature } from "../auth/tier.middleware.js";
 import { expenseCreateSchema, expenseUpdateSchema } from "./finance.schema.js";
 import {
   createExpense,
@@ -22,6 +23,8 @@ import {
 export const financeRouter = Router();
 
 financeRouter.use(requireRole("MERCHANT_OWNER", "MANAGER"));
+// Finance / accounting is a BUSINESS-tier module — STARTER is 403'd.
+financeRouter.use(requireFeature("finance_accounting"));
 
 function fieldErrors(error: ZodError): Record<string, string> {
   const out: Record<string, string> = {};

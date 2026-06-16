@@ -2,6 +2,7 @@
 
 import { DashShell } from "../../components/dash/DashShell";
 import { MERCHANT_NAV } from "../../components/dash/merchantNav";
+import { FeatureGate } from "../../components/FeatureGate";
 import { ProcurementConsole } from "../../components/procurement/ProcurementConsole";
 
 /**
@@ -17,7 +18,9 @@ export default function ProcurementPage() {
       nav={MERCHANT_NAV}
       allow={["MERCHANT_OWNER", "MANAGER"]}
     >
-      <ProcurementConsole />
+      <FeatureGate feature="procurement_supply_chain">
+        <ProcurementConsole />
+      </FeatureGate>
     </DashShell>
   );
 }

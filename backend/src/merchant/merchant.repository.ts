@@ -1,4 +1,11 @@
 import { query } from "../db.js";
+import {
+  DEFAULT_FORECAST_OPTIONS,
+  buildForecast,
+  type ForecastOptions,
+  type ProductSalesRow,
+  type ReorderForecast,
+} from "./forecast.js";
 
 /**
  * Merchant-side business intelligence + BIR compliance, all strictly fenced to
@@ -213,6 +220,53 @@ export async function getStockAlerts(tenantId: string): Promise<StockAlert[]> {
   }));
 }
 
+// ── Owner at-a-glance summary (mobile) ──────────────────────────────────────
+
+export interface OwnerSummary {
+  /** Local calendar day these figures cover (YYYY-MM-DD, Manila). */
+  day: string;
+  /** Today's gross takings (net of any voids/returns), centavos. */
+  grossCents: number;
+  /** Registers currently open (cashier shifts in the `open` state). */
+  activeRegisters: number;
+  /** Products currently at/below their low-stock floor. */
+  lowStockCount: number;
+}
+
+/**
+ * The three vital signs an owner glances at from their phone while away from the
+ * shop: today's takings, how many tills are open right now, and how many items
+ * need restocking. One cheap round of aggregates, strictly tenant-fenced and
+ * evaluated in Manila time so "today" lines up with the local retail day.
+ */
+export async function getOwnerSummary(tenantId: string): Promise<OwnerSummary> {
+  const res = await query<{
+    day: string;
+    gross: string;
+    active_registers: number;
+    low_stock: number;
+  }>(
+    `SELECT
+        to_char((now() AT TIME ZONE $2)::date, 'YYYY-MM-DD') AS day,
+        (SELECT coalesce(sum(total_cents), 0)::bigint FROM sales
+           WHERE tenant_id = $1
+             AND (created_at AT TIME ZONE $2)::date = (now() AT TIME ZONE $2)::date) AS gross,
+        (SELECT count(*)::int FROM cashier_shifts
+           WHERE tenant_id = $1 AND status = 'open') AS active_registers,
+        (SELECT count(*)::int FROM products
+           WHERE tenant_id = $1 AND is_active = TRUE
+             AND low_stock_threshold > 0 AND stock <= low_stock_threshold) AS low_stock`,
+    [tenantId, MNL],
+  );
+  const r = res.rows[0];
+  return {
+    day: r.day,
+    grossCents: Number(r.gross),
+    activeRegisters: r.active_registers,
+    lowStockCount: r.low_stock,
+  };
+}
+
 /**
  * Low-stock products whose row changed since `since` (exclusive) — the live
  * feed behind the real-time alert pipeline. A checkout decrements stock and
@@ -252,6 +306,56 @@ export async function getLowStockCrossingsSince(
       depleted: r.stock === 0,
     },
   }));
+}
+
+// ── Predictive inventory forecast (ENTERPRISE) ──────────────────────────────
+
+/**
+ * Per active product: current on-hand + its low-stock floor, plus the units it
+ * actually sold in the trailing window (real sales only — `kind = 'sale'`, so
+ * voids/returns don't inflate the pace). This is the live input the pure
+ * forecast engine projects from; strictly fenced to one Tenant on both sides of
+ * the join. The pure maths + filtering live in forecast.ts so they're testable
+ * without a database.
+ */
+export async function getReorderForecast(
+  tenantId: string,
+  opts: ForecastOptions = DEFAULT_FORECAST_OPTIONS,
+): Promise<ReorderForecast> {
+  const { rows } = await query<{
+    id: string;
+    name: string;
+    sku: string | null;
+    stock: number;
+    low_stock_threshold: number;
+    units_sold: string;
+  }>(
+    `SELECT p.id, p.name, p.sku, p.stock, p.low_stock_threshold,
+            coalesce(v.units_sold, 0)::bigint AS units_sold
+       FROM products p
+       LEFT JOIN (
+         SELECT si.product_id, sum(si.qty) AS units_sold
+           FROM sale_items si
+           JOIN sales s ON s.id = si.sale_id
+          WHERE s.tenant_id = $1
+            AND s.kind = 'sale'
+            AND s.created_at >= now() - make_interval(days => $2::int)
+          GROUP BY si.product_id
+       ) v ON v.product_id = p.id
+      WHERE p.tenant_id = $1 AND p.is_active = TRUE`,
+    [tenantId, opts.windowDays],
+  );
+
+  const sales: ProductSalesRow[] = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    sku: r.sku,
+    stock: r.stock,
+    lowStockThreshold: r.low_stock_threshold,
+    unitsSold: Number(r.units_sold),
+  }));
+
+  return buildForecast(sales, opts);
 }
 
 // ── BIR compliance export ───────────────────────────────────────────────────

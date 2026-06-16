@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Icon, type IconName } from "../Icon";
 import { useDashUser } from "../dash/DashShell";
+import { FeatureGate } from "../FeatureGate";
 import { SecurityCard } from "../dash/SecurityCard";
 import { StoreProfileCard } from "./StoreProfileCard";
 import { AppearanceCard } from "./AppearanceCard";
@@ -63,7 +64,14 @@ export function AccountConsole() {
       {/* Sections */}
       {tab === "profile" && <ProfileCard />}
       {tab === "store" && <StoreProfileCard />}
-      {tab === "appearance" && <AppearanceCard />}
+      {/* Custom branding is a BUSINESS-tier feature: a Starter store sees the
+          upgrade callout in place of the live Appearance editor (and the API
+          rejects a theme save anyway). */}
+      {tab === "appearance" && (
+        <FeatureGate feature="custom_branding">
+          <AppearanceCard />
+        </FeatureGate>
+      )}
       {tab === "receipt" && <ReceiptSettingsCard />}
       {tab === "security" && (
         <div className="space-y-5">

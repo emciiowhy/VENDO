@@ -15,6 +15,10 @@ export interface ReorderSuggestion {
   suggestedQty: number;
   /** The product's most recent known purchase cost (centavos), 0 if never bought. */
   lastUnitCostCents: number;
+  /** Supplier on the product's most recent purchase order, if any — used to
+   *  pre-select the vendor when drafting a one-click reorder PO. */
+  lastSupplierId: string | null;
+  lastSupplierName: string | null;
 }
 
 /**

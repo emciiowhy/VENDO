@@ -17,6 +17,11 @@ describe("Merchant analytics & compliance require store-management auth", () => 
     expect(res.status).toBe(401);
   });
 
+  it("blocks the predictive inventory forecast for the unauthenticated with 401", async () => {
+    const res = await request(app).get("/api/v1/merchant/analytics/forecast");
+    expect(res.status).toBe(401);
+  });
+
   it("blocks the inventory alerts engine for the unauthenticated with 401", async () => {
     const res = await request(app).get("/api/v1/inventory/alerts");
     expect(res.status).toBe(401);

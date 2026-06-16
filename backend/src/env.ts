@@ -72,6 +72,13 @@ export const env = {
   email: {
     resendApiKey: optional("RESEND_API_KEY"),
     from: optional("EMAIL_FROM", "VendoPOS <onboarding@vendopos.app>"),
+    /**
+     * Where internal/operations alerts are sent (e.g. an Enterprise concierge
+     * inquiry). Optional: when unset we fall back to the `from` mailbox, and with
+     * no RESEND_API_KEY the message is logged either way — so the alert seam works
+     * end-to-end with zero setup, like the rest of the email layer.
+     */
+    adminAlertTo: optional("ADMIN_ALERT_EMAIL"),
   },
 
   /** Application JWT signed after Google identifies the user. */

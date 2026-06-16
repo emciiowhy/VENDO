@@ -19,9 +19,12 @@ import {
   setPasswordHash,
   startSession,
   tenantBrandById,
+  tenantTierById,
   userAvatarById,
   type LoginMethod,
 } from "./auth.repository.js";
+import type { Tier } from "../lib/tiers.js";
+import { evaluateTenantStatus, type TenantLifecycle } from "../billing/trial.js";
 import { createPinRequest, listActiveCashiers } from "../staff/staff.repository.js";
 import { signUpMerchant, type SignupPlan } from "./signup.repository.js";
 import {
@@ -148,10 +151,21 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   let tenantLogoUrl: string | null = null;
   let themeColor: string | null = null;
   let avatarUrl: string | null = null;
+  // The store's feature-gating tier, read live so an upgrade/downgrade reflects
+  // in the workspace on the next /auth/me without a re-login. Null for the
+  // Super Admin (no tenant); the frontend treats absent tier as STARTER.
+  let tier: Tier | null = null;
+  // The store's trial lifecycle, also read live: evaluating it here applies the
+  // lazy lapse, so the workspace's /auth/me heartbeat is what trips a trial to
+  // `trial_expired` and swaps the UI to the recovery view (no re-login needed).
+  let status: TenantLifecycle | null = null;
+  let trialEndsAt: string | null = null;
   try {
-    const [brand, avatar] = await Promise.all([
+    const [brand, avatar, tenantTier, lifecycle] = await Promise.all([
       user.tenantId ? tenantBrandById(user.tenantId) : Promise.resolve(null),
       userAvatarById(user.userId),
+      user.tenantId ? tenantTierById(user.tenantId) : Promise.resolve(null),
+      user.tenantId ? evaluateTenantStatus(user.tenantId) : Promise.resolve(null),
     ]);
     if (brand) {
       tenantName = brand.name;
@@ -159,10 +173,18 @@ authRouter.get("/me", requireAuth, async (req, res) => {
       themeColor = brand.themeColor;
     }
     avatarUrl = avatar;
+    tier = tenantTier;
+    if (lifecycle) {
+      status = lifecycle.status;
+      trialEndsAt = lifecycle.trialEndsAt;
+    }
   } catch (err) {
     console.error("[auth] session enrichment failed:", err);
   }
-  res.json({ ok: true, user: { ...user, tenantName, tenantLogoUrl, themeColor, avatarUrl } });
+  res.json({
+    ok: true,
+    user: { ...user, tenantName, tenantLogoUrl, themeColor, avatarUrl, tier, status, trialEndsAt },
+  });
 });
 
 /** POST /auth/logout — revoke this device's session row and drop the cookie. */

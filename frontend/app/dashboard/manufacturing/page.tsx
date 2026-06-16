@@ -2,6 +2,7 @@
 
 import { DashShell } from "../../components/dash/DashShell";
 import { MERCHANT_NAV } from "../../components/dash/merchantNav";
+import { FeatureGate } from "../../components/FeatureGate";
 import { ManufacturingConsole } from "../../components/manufacturing/ManufacturingConsole";
 
 /**
@@ -18,7 +19,9 @@ export default function ManufacturingPage() {
       nav={MERCHANT_NAV}
       allow={["MERCHANT_OWNER", "MANAGER"]}
     >
-      <ManufacturingConsole />
+      <FeatureGate feature="manufacturing_bom">
+        <ManufacturingConsole />
+      </FeatureGate>
     </DashShell>
   );
 }

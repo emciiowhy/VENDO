@@ -2,6 +2,7 @@ import { pool, query } from "../db.js";
 import { hashPassword } from "../auth/auth.crypto.js";
 import { notifyNewTenant } from "../notifications/notifications.repository.js";
 import { sendOwnerOnboardingEmail } from "../notifications/onboardingEmail.js";
+import { tierFromPlan } from "../lib/tiers.js";
 import type { AdminLead, LeadStatus, ProvisionInput } from "./adminLeads.schema.js";
 
 /**
@@ -57,7 +58,18 @@ export type ProvisionError =
   | { code: "EMAIL_TAKEN" };
 
 export type ProvisionResult =
-  | { ok: true; tenant: { id: string; name: string; slug: string; plan: string }; lead: AdminLead }
+  | {
+      ok: true;
+      tenant: { id: string; name: string; slug: string; plan: string };
+      lead: AdminLead;
+      /**
+       * Whether the onboarding email actually reached the transport. False on a
+       * Resend rejection (e.g. unverified sender domain) or a key-less log
+       * transport — the store is still fully provisioned either way; this just
+       * lets the admin UI flag that the welcome mail didn't go out.
+       */
+      mailDelivered: boolean;
+    }
   | { ok: false; error: ProvisionError };
 
 /**
@@ -109,12 +121,13 @@ export async function provisionLead(
       return { ok: false, error: { code: "EMAIL_TAKEN" } };
     }
 
-    // 2. Insert the new store.
+    // 2. Insert the new store. `tier` is set from the chosen plan in the same
+    //    insert so the feature-gating level matches what the operator provisioned.
     const tenantRes = await client.query<{ id: string; name: string; slug: string; plan: string }>(
-      `INSERT INTO tenants (name, slug, plan, status)
-       VALUES ($1, $2, $3, 'active')
+      `INSERT INTO tenants (name, slug, plan, tier, status)
+       VALUES ($1, $2, $3, $4, 'active')
        RETURNING id, name, slug, plan`,
-      [input.storeName, input.slug, input.plan],
+      [input.storeName, input.slug, input.plan, tierFromPlan(input.plan)],
     );
     const tenant = tenantRes.rows[0];
 
@@ -139,11 +152,13 @@ export async function provisionLead(
     await client.query("COMMIT");
     // Announce the new store to platform operators (best-effort, in-app bell).
     void notifyNewTenant({ id: tenant.id, name: tenant.name });
-    // Email the new owner their onboarding steps + sign-in details. Fire-and-
-    // forget like the notification above: the store is already committed, so a
-    // mail hiccup must never roll it back. `hasPassword` decides whether the mail
-    // tells them to sign in with a password or with Google.
-    void sendOwnerOnboardingEmail({
+    // Email the new owner their onboarding steps + sign-in details. `hasPassword`
+    // decides whether the mail tells them to sign in with a password or Google.
+    // Unlike the in-app notification above we AWAIT this — purely so the delivery
+    // outcome can ride back in the response and surface in the admin UI. It's
+    // safe: the store is already committed and `sendOwnerOnboardingEmail` never
+    // throws, so a mail failure can't roll the store back, it just reports false.
+    const mail = await sendOwnerOnboardingEmail({
       ownerName: input.ownerName,
       ownerEmail: input.ownerEmail,
       storeName: tenant.name,
@@ -155,6 +170,7 @@ export async function provisionLead(
       ok: true,
       tenant,
       lead: toAdminLead({ ...leadRow, status: "APPROVED" }),
+      mailDelivered: mail.delivered,
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

@@ -48,6 +48,10 @@ export const orderSchema = z.object({
     .uuid()
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  // Optional loyalty redemption: whole points the attached customer spends at
+  // checkout (1 pt = ₱1 off). The server clamps this to the live balance and to
+  // the remaining payable before applying it as a discount, then deducts it.
+  redeemPoints: z.number().int().nonnegative().max(10_000_000).optional(),
 });
 
 export type OrderInput = z.infer<typeof orderSchema>;
@@ -82,6 +86,8 @@ export interface StoreBrand {
   address: string | null;
   phone: string | null;
   tin: string | null;
+  /** BIR "Business Style" — the store's trade name / line of business. */
+  businessStyle: string | null;
   vatLabel: string | null;
   receiptHeader: string | null;
   receiptFooter: string | null;
@@ -116,6 +122,10 @@ export interface Sale {
   paymentRef: string | null;
   tenderedCents: number | null;
   changeCents: number | null;
+  /** Loyalty points credited to the attached customer for this sale. */
+  pointsEarned: number;
+  /** Loyalty points the customer spent on this sale (1 pt = ₱1 discount). */
+  pointsRedeemed: number;
   createdAt: string;
 }
 

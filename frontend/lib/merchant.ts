@@ -43,6 +43,15 @@ export interface DashboardPulse {
   lowStockCount: number;
 }
 
+// ── Owner at-a-glance summary (mobile) ──────────────────────────────────────
+
+export interface OwnerSummary {
+  day: string;
+  grossCents: number;
+  activeRegisters: number;
+  lowStockCount: number;
+}
+
 // ── Low-stock alerts ────────────────────────────────────────────────────────
 
 export interface StockAlert {
@@ -52,6 +61,37 @@ export interface StockAlert {
   stock: number;
   lowStockThreshold: number;
   depleted: boolean;
+}
+
+// ── Predictive inventory forecast (ENTERPRISE) ──────────────────────────────
+
+/** How soon a flagged item needs attention (mirrors backend forecast.ts). */
+export type ForecastUrgency = "out" | "critical" | "soon" | "low";
+
+export interface ForecastItem {
+  productId: string;
+  name: string;
+  sku: string | null;
+  stock: number;
+  lowStockThreshold: number;
+  unitsSoldInWindow: number;
+  dailyVelocity: number;
+  daysToStockout: number | null;
+  suggestedOrderQty: number;
+  urgency: ForecastUrgency;
+}
+
+export interface ReorderForecast {
+  generatedAt: string;
+  windowDays: number;
+  coverDays: number;
+  horizonDays: number;
+  items: ForecastItem[];
+  summary: {
+    atRisk: number;
+    outOfStock: number;
+    suggestedUnitsTotal: number;
+  };
 }
 
 // ── BIR compliance ledger ───────────────────────────────────────────────────
@@ -105,6 +145,31 @@ export async function getDashboardPulse(): Promise<Result<{ pulse: DashboardPuls
 export async function getStockAlerts(): Promise<Result<{ alerts: StockAlert[] }>> {
   try {
     return await readJson(await fetch(`${V1}/inventory/alerts`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** The owner's mobile at-a-glance vitals (gross today, open registers, low stock). */
+export async function getOwnerSummary(): Promise<Result<{ summary: OwnerSummary }>> {
+  try {
+    return await readJson(await fetch(`${V1}/merchant/analytics/summary`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/**
+ * The ENTERPRISE predictive reorder forecast. The endpoint is tier-gated, so a
+ * below-tier session gets a 403 — `readJson` surfaces that as a graceful
+ * `{ ok: false }` rather than throwing (the panel is hidden behind the same gate
+ * anyway, this just makes a tier mismatch fail soft).
+ */
+export async function getReorderForecast(): Promise<Result<{ forecast: ReorderForecast }>> {
+  try {
+    return await readJson(
+      await fetch(`${V1}/merchant/analytics/forecast`, { credentials: "include" }),
+    );
   } catch {
     return NETWORK_ERR;
   }

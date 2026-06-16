@@ -79,7 +79,19 @@ export async function listLeads(): Promise<Result<{ leads: Lead[] }>> {
 export async function approveLead(
   id: string,
   payload: ProvisionPayload,
-): Promise<Result<{ tenant: ProvisionedTenant; lead: Lead; onboardingEmailTo?: string }>> {
+): Promise<
+  Result<{
+    tenant: ProvisionedTenant;
+    lead: Lead;
+    onboardingEmailTo?: string;
+    /**
+     * Whether the onboarding email actually reached the transport. `false` means
+     * the store was provisioned but the welcome mail was dropped (e.g. a Resend
+     * rejection) — the UI shows a warning toast rather than promising delivery.
+     */
+    mailDelivered?: boolean;
+  }>
+> {
   try {
     const res = await fetch(`${BASE}/${id}/approve`, {
       method: "POST",

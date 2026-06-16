@@ -1,6 +1,7 @@
 import { pool } from "../db.js";
 import { hashPassword } from "./auth.crypto.js";
 import { seedDemoWorkspace } from "./demoSeed.js";
+import { tierFromPlan } from "../lib/tiers.js";
 import type { Session } from "./auth.types.js";
 
 /**
@@ -85,7 +86,12 @@ export async function signUpMerchant(input: SignupInput): Promise<SignupResult> 
       slug = `${base}-${randomSuffix()}`;
     }
 
-    // A fresh, isolated tenant on the chosen plan with an active 14-day trial.
+    // A fresh, isolated tenant on the chosen plan, opened on a 14-day trial:
+    // status 'trial' with the window stamped from now. `tier` is the plan's
+    // feature-gating projection, set in the same insert so the two are consistent
+    // from the very first row (Starter signups land on STARTER, Business on
+    // BUSINESS). The trial lapses to 'trial_expired' lazily once trial_ends_at
+    // passes (see billing/trial.ts) — never here, where it's brand new.
     const tenantRes = await client.query<{
       id: string;
       name: string;
@@ -93,10 +99,10 @@ export async function signUpMerchant(input: SignupInput): Promise<SignupResult> 
       plan: string;
       trial_ends_at: Date;
     }>(
-      `INSERT INTO tenants (name, slug, plan, status, trial_ends_at)
-       VALUES ($1, $2, $3, 'active', now() + interval '14 days')
+      `INSERT INTO tenants (name, slug, plan, tier, status, trial_starts_at, trial_ends_at)
+       VALUES ($1, $2, $3, $4, 'trial', now(), now() + interval '14 days')
        RETURNING id, name, slug, plan, trial_ends_at`,
-      [input.businessName, slug, input.plan],
+      [input.businessName, slug, input.plan, tierFromPlan(input.plan)],
     );
     const tenant = tenantRes.rows[0];
 

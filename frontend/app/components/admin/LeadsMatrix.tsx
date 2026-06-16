@@ -33,11 +33,14 @@ export function LeadsMatrix() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | LeadStatus>("all");
   const [active, setActive] = useState<Lead | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  // `success` is the normal green confirmation; `warning` (amber) flags a store
+  // that provisioned fine but whose onboarding email didn't go out.
+  const [toast, setToast] = useState<{ msg: string; tone: "success" | "warning" } | null>(null);
 
-  const flash = useCallback((msg: string) => {
-    setToast(msg);
-    window.setTimeout(() => setToast(null), 3200);
+  const flash = useCallback((msg: string, tone: "success" | "warning" = "success") => {
+    setToast({ msg, tone });
+    // Give the operator longer to read a warning than a routine confirmation.
+    window.setTimeout(() => setToast(null), tone === "warning" ? 6000 : 3200);
   }, []);
 
   const reload = useCallback(async () => {
@@ -224,10 +227,18 @@ export function LeadsMatrix() {
         <ProvisionDrawer
           lead={active}
           onClose={() => setActive(null)}
-          onApproved={(slug, ownerEmail) => {
+          onApproved={(slug, ownerEmail, mailDelivered) => {
             patchLead(active.id, "APPROVED");
+            const name = active.businessName;
             setActive(null);
-            flash(`Provisioned “${active.businessName}” at /${slug} — onboarding email sent to ${ownerEmail}.`);
+            if (mailDelivered) {
+              flash(`Provisioned “${name}” at /${slug} — onboarding email sent to ${ownerEmail}.`);
+            } else {
+              flash(
+                `Provisioned “${name}” at /${slug}, but onboarding email delivery failed. Verify your Resend domain configuration or check server logs.`,
+                "warning",
+              );
+            }
             void reload();
           }}
           onRejected={() => {
@@ -239,11 +250,23 @@ export function LeadsMatrix() {
       )}
 
       {toast && (
-        <div className="fixed bottom-6 right-6 z-[130] flex items-center gap-2.5 rounded-[12px] bg-ink dark:bg-[#0b1220] text-white px-4 py-3 shadow-soft text-[13.5px] font-semibold max-w-[360px]">
-          <span className="grid place-items-center w-6 h-6 rounded-full bg-accent-500 shrink-0">
-            <Icon name="check" className="w-4 h-4 text-white" strokeWidth={2.4} />
+        <div
+          role={toast.tone === "warning" ? "alert" : "status"}
+          className="fixed bottom-6 right-6 z-[130] flex items-center gap-2.5 rounded-[12px] bg-ink dark:bg-[#0b1220] text-white px-4 py-3 shadow-soft text-[13.5px] font-semibold max-w-[360px]"
+        >
+          <span
+            className={
+              "grid place-items-center w-6 h-6 rounded-full shrink-0 " +
+              (toast.tone === "warning" ? "bg-amber-500" : "bg-accent-500")
+            }
+          >
+            <Icon
+              name={toast.tone === "warning" ? "ban" : "check"}
+              className="w-4 h-4 text-white"
+              strokeWidth={2.4}
+            />
           </span>
-          {toast}
+          {toast.msg}
         </div>
       )}
     </section>
@@ -376,7 +399,7 @@ function ProvisionDrawer({
 }: {
   lead: Lead;
   onClose: () => void;
-  onApproved: (slug: string, ownerEmail: string) => void;
+  onApproved: (slug: string, ownerEmail: string, mailDelivered: boolean) => void;
   onRejected: () => void;
 }) {
   const [storeName, setStoreName] = useState(lead.businessName);
@@ -418,7 +441,9 @@ function ProvisionDrawer({
       ownerPassword: ownerPassword.trim() || undefined,
     });
     if (res.ok) {
-      onApproved(res.tenant.slug, res.onboardingEmailTo ?? ownerEmail);
+      // Default to delivered when the field is absent (older API) so a successful
+      // provision never shows a spurious mail-failure warning.
+      onApproved(res.tenant.slug, res.onboardingEmailTo ?? ownerEmail, res.mailDelivered ?? true);
       return;
     }
     setBusy(false);

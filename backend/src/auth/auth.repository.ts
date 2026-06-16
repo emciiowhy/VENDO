@@ -1,5 +1,6 @@
 import { query } from "../db.js";
 import { verifyPin } from "./auth.crypto.js";
+import { asTier, type Tier } from "../lib/tiers.js";
 import type { Role, Session } from "./auth.types.js";
 
 /**
@@ -21,8 +22,13 @@ interface AccountRow {
 
 /**
  * Look up an authenticatable account by email. Returns null when the email is
- * unknown or the account/Tenant is not active — the caller turns that into a
- * clean "not provisioned" rejection rather than minting a session.
+ * unknown or the account/Tenant is barred — the caller turns that into a clean
+ * "not provisioned" rejection rather than minting a session.
+ *
+ * A store on a trial (`trial`) or a lapsed trial (`trial_expired`) can still sign
+ * in: the owner has to reach the workspace to see the recovery view and upgrade.
+ * Only a `suspended` Tenant is turned away here; the trial checkpoint
+ * (billing/trial.ts) is what fences a lapsed store out of the module routes.
  */
 export async function findAccountByEmail(email: string): Promise<Session | null> {
   const { rows } = await query<AccountRow>(
@@ -31,7 +37,7 @@ export async function findAccountByEmail(email: string): Promise<Session | null>
        LEFT JOIN tenants t ON t.id = u.tenant_id
       WHERE u.email = $1
         AND u.status = 'active'
-        AND (u.tenant_id IS NULL OR t.status = 'active')
+        AND (u.tenant_id IS NULL OR t.status <> 'suspended')
       LIMIT 1`,
     [email.toLowerCase()],
   );
@@ -62,7 +68,7 @@ export async function findTenantOwnerSession(tenantId: string): Promise<Session 
       WHERE u.tenant_id = $1
         AND u.role = 'MERCHANT_OWNER'
         AND u.status = 'active'
-        AND t.status = 'active'
+        AND t.status <> 'suspended'
       ORDER BY u.created_at ASC
       LIMIT 1`,
     [tenantId],
@@ -97,7 +103,7 @@ export async function findManagerForPasswordLogin(
         AND lower(u.email) = lower($2)
         AND u.role IN ('MERCHANT_OWNER', 'MANAGER')
         AND u.status = 'active'
-        AND t.status = 'active'
+        AND t.status <> 'suspended'
       LIMIT 1`,
     [tenantId, email],
   );
@@ -140,7 +146,9 @@ interface TenantRow {
  * shared-terminal cashier PIN flow on a cold login screen: the cashier types
  * the Store ID, we confirm an active store exists, then check the PIN strictly
  * within it. The slug is not a secret (it shows up in branding/URLs) — the PIN
- * remains the only credential. Returns null for unknown or suspended stores.
+ * remains the only credential. Returns null for unknown or suspended stores (a
+ * store on a trial — even a lapsed one — still resolves; the trial checkpoint
+ * gates what a lapsed store can actually do once inside).
  */
 export async function findTenantBySlug(
   slug: string,
@@ -149,7 +157,7 @@ export async function findTenantBySlug(
     `SELECT id, name, slug
        FROM tenants
       WHERE lower(slug) = lower($1)
-        AND status = 'active'
+        AND status <> 'suspended'
       LIMIT 1`,
     [slug],
   );
@@ -175,6 +183,20 @@ export async function tenantBrandById(
     logoUrl: rows[0]?.logo_url ?? null,
     themeColor: rows[0]?.theme_color ?? null,
   };
+}
+
+/**
+ * The store's subscription TIER (the feature-gating level), resolved live from
+ * the row rather than the JWT — a tier change (upgrade/downgrade) must bite on
+ * the very next request without waiting for the cookie to be re-minted. Returns
+ * null when the tenant id is unknown. Used by the tier guard middleware and the
+ * /auth/me enrichment.
+ */
+export async function tenantTierById(tenantId: string): Promise<Tier | null> {
+  const { rows } = await query<{ tier: string }>(`SELECT tier FROM tenants WHERE id = $1`, [
+    tenantId,
+  ]);
+  return rows[0] ? asTier(rows[0].tier) : null;
 }
 
 /** The signed-in user's uploaded avatar URL (null when none) for the dashboard chrome. */
