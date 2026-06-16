@@ -262,19 +262,19 @@ export function PosTerminal() {
       payment:
         status === "payment" && checkoutMethod
           ? {
-              method: checkoutMethod as EwalletMethod,
-              netCents,
-              // Show the owner's uploaded QR for this rail (null → placeholder).
-              qrUrl: paymentQrs[checkoutMethod as EwalletQrMethod] ?? null,
-            }
+            method: checkoutMethod as EwalletMethod,
+            netCents,
+            // Show the owner's uploaded QR for this rail (null → placeholder).
+            qrUrl: paymentQrs[checkoutMethod as EwalletQrMethod] ?? null,
+          }
           : null,
       paid: receipt
         ? {
-            totalCents: receipt.sale.totalCents,
-            method: receipt.sale.paymentMethod,
-            reference: receipt.sale.paymentRef,
-            changeCents: receipt.sale.changeCents,
-          }
+          totalCents: receipt.sale.totalCents,
+          method: receipt.sale.paymentMethod,
+          reference: receipt.sale.paymentRef,
+          changeCents: receipt.sale.changeCents,
+        }
         : null,
     };
     // discountText is a module-level pure helper.
@@ -725,7 +725,7 @@ export function PosTerminal() {
 
       {cartOpenMobile && (
         <div className="lg:hidden fixed inset-0 z-[100] flex flex-col justify-end">
-          <button aria-label="Close" onClick={() => setCartOpenMobile(false)} className="absolute inset-0 bg-black/50 overlay-backdrop" />
+          <button aria-label="Close" onClick={() => setCartOpenMobile(false)} className="absolute inset-0 bg-black/50" />
           <div className="relative max-h-[88vh]">
             <CartPanel className="flex rounded-t-xl2" onClose={() => setCartOpenMobile(false)} {...cartProps} />
           </div>
