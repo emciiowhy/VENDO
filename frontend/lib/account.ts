@@ -6,6 +6,7 @@
  * `credentials: "include"`. Mutations are JSON; image uploads are multipart.
  */
 import { API_BASE_URL } from "./api";
+import type { MerchantThemeConfig } from "./themeConfig";
 
 const BASE = `${API_BASE_URL}/api/v1/account`;
 
@@ -20,7 +21,11 @@ async function getJson<T>(path: string): Promise<Ok<T>> {
   }
 }
 
-async function send<T>(path: string, method: "PATCH" | "POST" | "DELETE", body?: unknown): Promise<Ok<T>> {
+async function send<T>(
+  path: string,
+  method: "PATCH" | "PUT" | "POST" | "DELETE",
+  body?: unknown,
+): Promise<Ok<T>> {
   try {
     const res = await fetch(`${BASE}${path}`, {
       method,
@@ -85,6 +90,20 @@ export const removeLogo = () => send<Record<string, never>>("/store/logo", "DELE
 /** Set the store's brand accent (`#rrggbb`), or pass null to reset to default. */
 export const saveTheme = (accent: string | null) =>
   send<{ accent: string | null }>("/theme", "PATCH", { accent });
+
+// ── Theme Studio (full storefront config) ─────────────────────────────────────
+
+/** Load the store's storefront theme config (`config: null` when never set). */
+export const getThemeConfig = () =>
+  getJson<{ config: MerchantThemeConfig | null }>("/theme-config");
+
+/**
+ * Replace the store's storefront theme. The server re-validates every field, so
+ * the response carries the normalised config that was actually stored — callers
+ * should reconcile their form state to it.
+ */
+export const saveThemeConfig = (config: MerchantThemeConfig) =>
+  send<{ config: MerchantThemeConfig }>("/theme-config", "PUT", config);
 
 // ── Receipt customization ─────────────────────────────────────────────────────
 

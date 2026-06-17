@@ -1,4 +1,9 @@
 import { query } from "../db.js";
+import {
+  normalizeThemeConfig,
+  resolveThemeConfig,
+  type MerchantThemeConfig,
+} from "../merchant/theme.config.js";
 
 /**
  * Data access for the owner Account hub — store profile, receipt customization,
@@ -66,6 +71,43 @@ export async function getStoreProfile(tenantId: string): Promise<StoreProfile | 
 /** Set (or clear, with null) the store's brand accent colour. */
 export async function setThemeColor(tenantId: string, hex: string | null): Promise<void> {
   await query(`UPDATE tenants SET theme_color = $2 WHERE id = $1`, [tenantId, hex]);
+}
+
+// ── Merchant Theme Configuration (storefront skin) ──────────────────────────
+
+/**
+ * The store's full storefront theme config, or null if it has never set one.
+ * The stored JSONB is re-validated through `resolveThemeConfig` on read, so a
+ * blob written by an older shape (or hand-edited) still resolves to a complete,
+ * renderable config.
+ */
+export async function getThemeConfig(tenantId: string): Promise<MerchantThemeConfig | null> {
+  const { rows } = await query<{ theme_config: unknown }>(
+    `SELECT theme_config FROM tenants WHERE id = $1`,
+    [tenantId],
+  );
+  if (rows.length === 0) return null;
+  return resolveThemeConfig(rows[0].theme_config);
+}
+
+/**
+ * Persist the store's theme config. The config is the single source of truth;
+ * we also mirror its `primaryColor` into the legacy `theme_color` column in the
+ * same statement so the existing accent pipeline (POS terminal + customer
+ * display, which read `theme_color`) stays in lockstep without a second write.
+ * Returns the normalised config that was actually stored.
+ */
+export async function setThemeConfig(
+  tenantId: string,
+  input: unknown,
+): Promise<MerchantThemeConfig> {
+  const config = normalizeThemeConfig(input);
+  await query(`UPDATE tenants SET theme_config = $2, theme_color = $3 WHERE id = $1`, [
+    tenantId,
+    JSON.stringify(config),
+    config.primaryColor,
+  ]);
+  return config;
 }
 
 export interface StoreProfilePatch {

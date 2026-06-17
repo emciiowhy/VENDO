@@ -1,6 +1,7 @@
 import { query } from "../db.js";
 import { verifyPin } from "./auth.crypto.js";
 import { asTier, type Tier } from "../lib/tiers.js";
+import { resolveThemeConfig, type MerchantThemeConfig } from "../merchant/theme.config.js";
 import type { Role, Session } from "./auth.types.js";
 
 /**
@@ -170,18 +171,29 @@ export async function tenantNameById(tenantId: string): Promise<string | null> {
   return rows[0]?.name ?? null;
 }
 
-/** The store's brand (name + logo + accent colour) for the dashboard chrome. */
-export async function tenantBrandById(
-  tenantId: string,
-): Promise<{ name: string | null; logoUrl: string | null; themeColor: string | null }> {
-  const { rows } = await query<{ name: string; logo_url: string | null; theme_color: string | null }>(
-    `SELECT name, logo_url, theme_color FROM tenants WHERE id = $1`,
-    [tenantId],
-  );
+/**
+ * The store's brand for the dashboard chrome: name + logo + accent colour, plus
+ * the full storefront theme config (or null when unset). All three themed
+ * surfaces (back office, POS, customer display) read the config off `/auth/me`,
+ * so it rides along here with the rest of the brand.
+ */
+export async function tenantBrandById(tenantId: string): Promise<{
+  name: string | null;
+  logoUrl: string | null;
+  themeColor: string | null;
+  themeConfig: MerchantThemeConfig | null;
+}> {
+  const { rows } = await query<{
+    name: string;
+    logo_url: string | null;
+    theme_color: string | null;
+    theme_config: unknown;
+  }>(`SELECT name, logo_url, theme_color, theme_config FROM tenants WHERE id = $1`, [tenantId]);
   return {
     name: rows[0]?.name ?? null,
     logoUrl: rows[0]?.logo_url ?? null,
     themeColor: rows[0]?.theme_color ?? null,
+    themeConfig: resolveThemeConfig(rows[0]?.theme_config ?? null),
   };
 }
 

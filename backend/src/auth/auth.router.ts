@@ -24,6 +24,7 @@ import {
   type LoginMethod,
 } from "./auth.repository.js";
 import type { Tier } from "../lib/tiers.js";
+import type { MerchantThemeConfig } from "../merchant/theme.config.js";
 import { evaluateTenantStatus, type TenantLifecycle } from "../billing/trial.js";
 import { createPinRequest, listActiveCashiers } from "../staff/staff.repository.js";
 import { signUpMerchant, type SignupPlan } from "./signup.repository.js";
@@ -150,6 +151,7 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   let tenantName: string | null = null;
   let tenantLogoUrl: string | null = null;
   let themeColor: string | null = null;
+  let themeConfig: MerchantThemeConfig | null = null;
   let avatarUrl: string | null = null;
   // The store's feature-gating tier, read live so an upgrade/downgrade reflects
   // in the workspace on the next /auth/me without a re-login. Null for the
@@ -171,6 +173,7 @@ authRouter.get("/me", requireAuth, async (req, res) => {
       tenantName = brand.name;
       tenantLogoUrl = brand.logoUrl;
       themeColor = brand.themeColor;
+      themeConfig = brand.themeConfig;
     }
     avatarUrl = avatar;
     tier = tenantTier;
@@ -192,6 +195,7 @@ authRouter.get("/me", requireAuth, async (req, res) => {
       tenantName,
       tenantLogoUrl,
       themeColor,
+      themeConfig,
       avatarUrl,
       tier,
       status,

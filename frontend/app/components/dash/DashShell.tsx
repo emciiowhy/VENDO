@@ -8,6 +8,12 @@ import { useSession } from "../auth/useSession";
 import { useTheme } from "../theme/ThemeProvider";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { AccentProvider, TenantTheme, useAccent } from "../theme/TenantTheme";
+import {
+  AnnouncementBar,
+  ConfigStyle,
+  ThemeConfigProvider,
+  useThemeConfig,
+} from "../theme/TenantThemeConfig";
 import { ToastProvider } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { NotificationBell } from "./NotificationBell";
@@ -101,6 +107,7 @@ export function DashShell({
   return (
     <UserContext.Provider value={user}>
       <AccentProvider initial={user.themeColor}>
+      <ThemeConfigProvider initial={user.themeConfig}>
       <ToastProvider>
       <IconSprite />
       <div
@@ -111,6 +118,7 @@ export function DashShell({
         }
       >
         <ShellAccentStyle />
+        <ShellConfigStyle />
         {/* Sidebar */}
         <aside
           className={
@@ -214,6 +222,7 @@ export function DashShell({
 
         {/* Main column */}
         <div className="flex min-h-screen flex-col">
+          <ShellAnnouncementBar />
           {/* Impersonation escape hatch — only ever present on a SUPER_ADMIN's
               impersonated tenant view (never a real merchant login). */}
           {user.isImpersonating && (
@@ -283,6 +292,7 @@ export function DashShell({
         />
       )}
       </ToastProvider>
+      </ThemeConfigProvider>
       </AccentProvider>
     </UserContext.Provider>
   );
@@ -292,6 +302,22 @@ export function DashShell({
 function ShellAccentStyle() {
   const { accent } = useAccent();
   return <TenantTheme accent={accent} />;
+}
+
+/**
+ * Injects the live storefront theme config (from the Theme Studio / session)
+ * onto the shell. Rendered after ShellAccentStyle so a saved config — which also
+ * derives the brand ramp — wins over the legacy accent style at equal scope.
+ */
+function ShellConfigStyle() {
+  const { config } = useThemeConfig();
+  return <ConfigStyle config={config} />;
+}
+
+/** The live announcement strip at the top of the workspace. */
+function ShellAnnouncementBar() {
+  const { config } = useThemeConfig();
+  return <AnnouncementBar config={config} />;
 }
 
 /**

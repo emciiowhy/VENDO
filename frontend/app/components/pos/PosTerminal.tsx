@@ -9,6 +9,7 @@ import { useSession } from "../auth/useSession";
 import { useTheme } from "../theme/ThemeProvider";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { TenantTheme } from "../theme/TenantTheme";
+import { AnnouncementBar, ConfigStyle } from "../theme/TenantThemeConfig";
 import { logout } from "@/lib/auth";
 import { formatPesoExact } from "@/lib/format";
 import { resolveAssetUrl } from "@/lib/images";
@@ -52,6 +53,12 @@ import {
  * VAT is shown 12% inclusive, per PH retail. Money is centavos end-to-end.
  */
 const UNCATEGORISED = "Uncategorised";
+
+// How long the scan-batcher waits for the next identical-burst scan before it
+// commits. A hardware scanner fires each item as a sub-100ms keystroke burst, so
+// 400ms comfortably groups a rapid "scan the same SKU ×5" sequence into one
+// atomic cart mutation while staying imperceptible for a single scan.
+const SCAN_BATCH_WINDOW_MS = 400;
 
 const PAY_METHODS: { key: PaymentMethod; icon: IconName }[] = [
   { key: "Cash", icon: "peso" },
@@ -134,6 +141,15 @@ export function PosTerminal() {
   // next keystroke. Scanner success just drops the item in the cart silently.
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, Line>>({});
+  // ── Scan-batching engine ────────────────────────────────────────────────────
+  // A hardware scanner can fire the same barcode many times in a sub-second
+  // burst. Rather than spawn N heavy cart mutations (and N re-renders), we buffer
+  // identical SKUs in a ref, aggregate their quantities, and commit a single
+  // debounced +N cart update. `scanBatch` mirrors the buffer for the live
+  // accumulation indicator; the ref is the source of truth the timer flushes.
+  const scanBufferRef = useRef<Map<string, { product: CatalogProduct; count: number }>>(new Map());
+  const scanFlushTimer = useRef<number | null>(null);
+  const [scanBatch, setScanBatch] = useState<Record<string, number>>({});
   const [discount, setDiscount] = useState<Discount | null>(null);
   const [cartOpenMobile, setCartOpenMobile] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -393,9 +409,33 @@ export function PosTerminal() {
     setQuery("");
     setScanMsg(null);
   }
+  // Commit every buffered scan in ONE atomic cart mutation: each SKU's pending
+  // count is merged onto its current line, capped at the stock on hand. Clearing
+  // the buffer + indicator together keeps them from ever drifting.
+  const flushScanBatch = useCallback(() => {
+    scanFlushTimer.current = null;
+    const buffer = scanBufferRef.current;
+    if (buffer.size === 0) return;
+    const pending = [...buffer.values()];
+    buffer.clear();
+    setScanBatch({});
+    setCart((c) => {
+      const next = { ...c };
+      for (const { product, count } of pending) {
+        const cur = next[product.id]?.qty ?? 0;
+        const capped = Math.min(cur + count, product.stock);
+        if (capped <= 0) continue;
+        next[product.id] = { product, qty: capped };
+      }
+      return next;
+    });
+  }, []);
+
   // Hardware-scanner path (global wedge capture). No query context exists, so it
   // resolves an exact SKU only — a miss surfaces the same transient message so
-  // the cashier knows to key the item manually.
+  // the cashier knows to key the item manually. Hits don't touch the cart
+  // directly: they feed the batcher, which coalesces a rapid burst into a single
+  // quantity bump (see flushScanBatch) so the UI never thrashes mid-scan.
   function addByScan(code: string) {
     const c = code.trim();
     if (!c) return;
@@ -408,9 +448,22 @@ export function PosTerminal() {
       setScanMsg(`${hit.name} is out of stock.`);
       return;
     }
-    add(hit);
     setScanMsg(null);
+    const buffer = scanBufferRef.current;
+    const entry = buffer.get(hit.id);
+    buffer.set(hit.id, { product: hit, count: (entry?.count ?? 0) + 1 });
+    // Mirror the buffer into state for the live accumulation indicator.
+    setScanBatch(Object.fromEntries([...buffer].map(([id, e]) => [id, e.count])));
+    if (scanFlushTimer.current !== null) window.clearTimeout(scanFlushTimer.current);
+    scanFlushTimer.current = window.setTimeout(flushScanBatch, SCAN_BATCH_WINDOW_MS);
   }
+
+  // Never leak the pending-flush timer if the terminal unmounts mid-burst.
+  useEffect(() => {
+    return () => {
+      if (scanFlushTimer.current !== null) window.clearTimeout(scanFlushTimer.current);
+    };
+  }, []);
   function setQty(id: string, qty: number) {
     const line = cart[id];
     if (!line) return;
@@ -528,6 +581,17 @@ export function PosTerminal() {
     }
   };
 
+  // Pending scan accumulation (name + count) for the live ticker / row badges.
+  const scanBatchList = useMemo(
+    () =>
+      Object.entries(scanBatch).map(([id, qty]) => ({
+        id,
+        name: products.find((p) => p.id === id)?.name ?? id,
+        count: qty,
+      })),
+    [scanBatch, products],
+  );
+
   const cartProps = {
     lines,
     grossCents,
@@ -536,6 +600,7 @@ export function PosTerminal() {
     netCents,
     vatCents,
     count,
+    scanBatch: scanBatchList,
     setQty,
     onDiscount: () => setDiscountOpen(true),
     onVoid: () => setVoidOpen(true),
@@ -565,7 +630,9 @@ export function PosTerminal() {
       }
     >
       <TenantTheme accent={user.themeColor} />
+      <ConfigStyle config={user.themeConfig ?? null} />
       <IconSprite />
+      <AnnouncementBar config={user.themeConfig ?? null} />
 
       {/* Lock bar — relative + raised z-index so it owns its own stacking layer,
           fully separated from the catalog/search column below it. */}
@@ -971,7 +1038,10 @@ function ProductTile({
           : "hover:border-brand-200 hover:shadow-soft active:scale-[0.98]")
       }
     >
-      <div className="relative aspect-square rounded-lg bg-paper hairline overflow-hidden grid place-items-center mb-2.5">
+      <div
+        style={{ aspectRatio: "var(--vp-product-aspect, 1 / 1)" }}
+        className="relative rounded-lg bg-paper hairline overflow-hidden grid place-items-center mb-2.5"
+      >
         {imgSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -1025,6 +1095,8 @@ interface CartProps {
   netCents: number;
   vatCents: number;
   count: number;
+  /** SKUs mid-accumulation in the scan batcher (live, pre-commit indicator). */
+  scanBatch: { id: string; name: string; count: number }[];
   setQty: (id: string, qty: number) => void;
   onDiscount: () => void;
   onVoid: () => void;
@@ -1041,12 +1113,14 @@ function CartPanel({
   netCents,
   vatCents,
   count,
+  scanBatch,
   setQty,
   onDiscount,
   onVoid,
   onCheckout,
 }: CartProps) {
   const empty = lines.length === 0;
+  const scanBatchById = new Map(scanBatch.map((s) => [s.id, s.count]));
   return (
     <aside className={"flex-col bg-surface min-h-0 lg:border-l lg:border-[rgba(11,18,32,0.07)] " + className}>
       <div className="shrink-0 flex items-center justify-between px-5 py-4 hairline-b">
@@ -1082,6 +1156,20 @@ function CartPanel({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+        {scanBatch.length > 0 && (
+          <div className="mb-3 space-y-1.5" aria-live="polite">
+            {scanBatch.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center gap-2 rounded-[10px] bg-brand-50 text-brand-700 px-3 py-2 text-[12.5px] font-semibold step-in"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse shrink-0" />
+                <span className="truncate flex-1">Scanning {s.name}…</span>
+                <span className="tabular-nums font-extrabold">+{s.count}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {lines.length === 0 ? (
           <div className="h-full grid place-items-center text-center text-ink-faint py-16">
             <div>
@@ -1098,6 +1186,11 @@ function CartPanel({
                   <div className="text-[13.5px] font-bold tracking-tight truncate">{l.product.name}</div>
                   <div className="text-[12px] text-ink-faint">{peso(l.product.priceCents)} ea</div>
                 </div>
+                {scanBatchById.has(l.product.id) && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 text-brand-700 px-2 py-0.5 text-[11px] font-extrabold tabular-nums animate-pulse">
+                    +{scanBatchById.get(l.product.id)}
+                  </span>
+                )}
                 <div className="flex items-center gap-1.5">
                   <QtyBtn onClick={() => setQty(l.product.id, l.qty - 1)} label="decrease" symbol="−" />
                   <span className="w-6 text-center text-[14px] font-bold tabular-nums">{l.qty}</span>

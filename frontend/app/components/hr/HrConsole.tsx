@@ -26,13 +26,15 @@ import {
 import { EmployeeFormModal } from "./EmployeeFormModal";
 import { PayrollRunModal } from "./PayrollRunModal";
 import { PayrollDetailDrawer } from "./PayrollDetailDrawer";
+import { PayrollExportCard } from "./PayrollExportCard";
+import { ShiftDiscrepancyMatrix } from "./ShiftDiscrepancyMatrix";
 
 /**
  * Merchant HR console — employees, attendance and payroll over one tenant-scoped
  * dataset. Attendance is marked per day; payroll derives gross pay from rates +
  * that attendance. Builds on the same staff the cashier/shift ledger uses.
  */
-type Tab = "overview" | "employees" | "attendance" | "payroll" | "performance" | "labor";
+type Tab = "overview" | "employees" | "attendance" | "payroll" | "performance" | "labor" | "reconciliation";
 
 const PAY_TAG: Record<string, string> = {
   Monthly: "bg-brand-50 text-brand-600",
@@ -132,6 +134,7 @@ export function HrConsole() {
             <TabButton active={tab === "payroll"} onClick={() => setTab("payroll")} label={`Payroll (${state.runs.length})`} />
             <TabButton active={tab === "performance"} onClick={() => setTab("performance")} label="Performance" />
             <TabButton active={tab === "labor"} onClick={() => setTab("labor")} label="Labor analytics" />
+            <TabButton active={tab === "reconciliation"} onClick={() => setTab("reconciliation")} label="Drawer audit" />
           </div>
 
           {tab === "overview" && <HrOverview />}
@@ -145,10 +148,14 @@ export function HrConsole() {
           )}
           {tab === "attendance" && <AttendanceTab hasEmployees={state.employees.some((e) => e.isActive)} />}
           {tab === "payroll" && (
-            <PayrollTable runs={state.runs} onOpen={setDetailId} onRun={() => setPayrollModal(true)} />
+            <div className="space-y-6">
+              <PayrollExportCard employees={state.employees} />
+              <PayrollTable runs={state.runs} onOpen={setDetailId} onRun={() => setPayrollModal(true)} />
+            </div>
           )}
           {tab === "performance" && <PerformanceMatrix />}
           {tab === "labor" && <LaborAnalytics />}
+          {tab === "reconciliation" && <ShiftDiscrepancyMatrix />}
         </>
       )}
 

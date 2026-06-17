@@ -41,6 +41,12 @@ export async function updateTenant(
   if (patch.plan) {
     vals.push(patch.plan);
     sets.push(`plan = $${vals.length}`);
+    // Keep the feature-gating TIER in lockstep with the plan — tier is the
+    // plan's uppercase projection (see migrate.ts). Without this, an admin
+    // moving a store to Enterprise would change `plan` but leave `tier` stale,
+    // so the owner's /auth/me (which reads tier) keeps gating them as Starter.
+    vals.push(patch.plan.toUpperCase());
+    sets.push(`tier = $${vals.length}`);
   }
   if (patch.status) {
     vals.push(patch.status);

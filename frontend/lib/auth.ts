@@ -7,6 +7,7 @@
  */
 import { API_BASE_URL } from "./api";
 import type { Tier } from "./tiers";
+import type { MerchantThemeConfig } from "./themeConfig";
 
 /** The href the "Sign in with Google" button points at. */
 export const GOOGLE_SIGN_IN_URL = `${API_BASE_URL}/auth/google`;
@@ -34,6 +35,12 @@ export interface SessionUser {
   avatarUrl?: string | null;
   /** The store's brand accent (#rrggbb) from /auth/me; null/undefined → default blue. */
   themeColor?: string | null;
+  /**
+   * The store's full storefront theme config from /auth/me (preset vibe + design
+   * tokens), or null when it has never configured one — null keeps the stock
+   * VendoPOS look. Applied across the back office, POS, and customer display.
+   */
+  themeConfig?: MerchantThemeConfig | null;
   /**
    * The store's subscription TIER from /auth/me — the feature-gating level the
    * UI reads to hide premium controls. Null for the Super Admin (no store);

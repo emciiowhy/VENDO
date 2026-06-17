@@ -6,7 +6,7 @@ import { useDashUser } from "../dash/DashShell";
 import { FeatureGate } from "../FeatureGate";
 import { SecurityCard } from "../dash/SecurityCard";
 import { StoreProfileCard } from "./StoreProfileCard";
-import { AppearanceCard } from "./AppearanceCard";
+import { ThemeStudioCard } from "./ThemeStudioCard";
 import { ReceiptSettingsCard } from "./ReceiptSettingsCard";
 import { ProfileCard } from "./ProfileCard";
 import { PreferencesCard } from "./PreferencesCard";
@@ -26,7 +26,7 @@ type TabKey = "profile" | "store" | "appearance" | "receipt" | "security" | "pre
 const TABS: { key: TabKey; label: string; icon: IconName }[] = [
   { key: "profile", label: "Profile", icon: "users" },
   { key: "store", label: "Store", icon: "store" },
-  { key: "appearance", label: "Appearance", icon: "layers" },
+  { key: "appearance", label: "Theme Studio", icon: "layers" },
   { key: "receipt", label: "Receipt", icon: "receipt" },
   { key: "security", label: "Security", icon: "lock" },
   { key: "preferences", label: "Preferences", icon: "gear" },
@@ -69,7 +69,7 @@ export function AccountConsole() {
           rejects a theme save anyway). */}
       {tab === "appearance" && (
         <FeatureGate feature="custom_branding">
-          <AppearanceCard />
+          <ThemeStudioCard />
         </FeatureGate>
       )}
       {tab === "receipt" && <ReceiptSettingsCard />}

@@ -24,6 +24,9 @@ import {
   upsertAttendance,
 } from "./hr.repository.js";
 import { DEFAULT_HOURLY_RATE_CENTS, getLaborAnalytics } from "./timecard.repository.js";
+import { buildPayrollExport } from "./payroll.export.repository.js";
+import { toPayrollCsv } from "./payroll.processor.js";
+import { listShiftReconciliations } from "../pos/shifts.repository.js";
 
 /**
  * Merchant HR — employees, attendance, payroll.
@@ -67,6 +70,23 @@ function monthParam(req: Request): string {
 function dateParam(req: Request, key: string): string | null {
   const v = req.query[key];
   return typeof v === "string" && ISO_DATE.test(v) ? v : null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Resolve [from, to] from the query, defaulting to the trailing 30 days. */
+function windowParams(req: Request): { from: string; to: string } {
+  const today = new Date().toISOString().slice(0, 10);
+  const monthAgo = new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10);
+  return { from: dateParam(req, "from") ?? monthAgo, to: dateParam(req, "to") ?? today };
+}
+
+/** Truthy `?nightDiff=` query flag (1/true/yes/on). Defaults ON when absent. */
+function nightDiffParam(req: Request): boolean {
+  const v = req.query.nightDiff;
+  if (v === undefined) return true;
+  const s = String(v).toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "on";
 }
 
 // ── Summary ──────────────────────────────────────────────────────────────────
@@ -137,6 +157,27 @@ hrRouter.get("/labor-analytics", async (req, res) => {
   } catch (err) {
     console.error("[hr] labor analytics failed:", err);
     res.status(500).json({ ok: false, error: "Could not load labor analytics." });
+  }
+});
+
+// ── Shift discrepancy matrix (drawer reconciliation audit) ─────────────────────
+
+/**
+ * GET /api/v1/hr/shift-reconciliations?from&to — every closed cashier shift in
+ * the window with its drawer variance + short/over status, for the manager audit
+ * matrix. Reuses the cashier_shifts ledger the POS close paths already write;
+ * read-only and tenant-fenced (OWNER/MANAGER via the router-level guards).
+ */
+hrRouter.get("/shift-reconciliations", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const { from, to } = windowParams(req);
+  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
+  try {
+    res.json({ ok: true, report: await listShiftReconciliations(tenantId, from, to) });
+  } catch (err) {
+    console.error("[hr] shift reconciliations failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load shift reconciliations." });
   }
 });
 
@@ -247,6 +288,55 @@ hrRouter.get("/payroll", async (req, res) => {
   } catch (err) {
     console.error("[hr] list payroll failed:", err);
     res.status(500).json({ ok: false, error: "Could not load payroll runs." });
+  }
+});
+
+/**
+ * GET /api/v1/hr/payroll/export/preview?from&to&nightDiff&employeeId — the live
+ * payroll table the export studio renders before download. Same maths as the CSV
+ * route; returns JSON. Registered before `/payroll/:id` so "export" isn't read as
+ * a run id.
+ */
+hrRouter.get("/payroll/export/preview", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const { from, to } = windowParams(req);
+  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
+  const employeeId = typeof req.query.employeeId === "string" && UUID_RE.test(req.query.employeeId)
+    ? req.query.employeeId
+    : undefined;
+  try {
+    const report = await buildPayrollExport(tenantId, from, to, nightDiffParam(req), employeeId);
+    res.json({ ok: true, report });
+  } catch (err) {
+    console.error("[hr] payroll export preview failed:", err);
+    res.status(500).json({ ok: false, error: "Could not build the payroll preview." });
+  }
+});
+
+/**
+ * GET /api/v1/hr/payroll/export?from&to&nightDiff&employeeId — the accounting-
+ * ready payroll snapshot as a downloadable CSV stream. Strictly tenant-fenced;
+ * a manager can never pull another store's labour. Registered before
+ * `/payroll/:id` for the same routing reason as the preview above.
+ */
+hrRouter.get("/payroll/export", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const { from, to } = windowParams(req);
+  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
+  const employeeId = typeof req.query.employeeId === "string" && UUID_RE.test(req.query.employeeId)
+    ? req.query.employeeId
+    : undefined;
+  try {
+    const report = await buildPayrollExport(tenantId, from, to, nightDiffParam(req), employeeId);
+    const csv = toPayrollCsv(report);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="payroll-${from}_to_${to}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    console.error("[hr] payroll export failed:", err);
+    res.status(500).json({ ok: false, error: "Could not export payroll." });
   }
 });
 

@@ -200,6 +200,76 @@ export interface LaborAnalytics {
   cashiers: CashierEfficiencyRow[];
 }
 
+// ── Payroll export (timecard-based, with OT + night differential) ───────────
+
+export interface PayrollExportLine {
+  employeeId: string;
+  name: string;
+  position: string | null;
+  payType: string;
+  hourlyRateCents: number;
+  daysWorked: number;
+  regularHours: number;
+  overtimeHours: number;
+  nightDiffHours: number;
+  totalHours: number;
+  regularPayCents: number;
+  overtimePayCents: number;
+  nightDiffPayCents: number;
+  grossCents: number;
+}
+
+export interface PayrollExportReport {
+  from: string;
+  to: string;
+  includeNightDifferential: boolean;
+  lines: PayrollExportLine[];
+  totals: {
+    headcount: number;
+    regularHours: number;
+    overtimeHours: number;
+    nightDiffHours: number;
+    grossCents: number;
+  };
+}
+
+// ── Shift discrepancy matrix (drawer reconciliation audit) ──────────────────
+
+export type ShiftStatus = "balanced" | "short" | "over";
+
+export interface ShiftReconciliation {
+  id: string;
+  cashierUserId: string | null;
+  cashierName: string;
+  openedAt: string;
+  closedAt: string;
+  openingCents: number;
+  cashSalesCents: number;
+  ewalletSalesCents: number;
+  cardSalesCents: number;
+  totalSalesCents: number;
+  txnCount: number;
+  expectedCashCents: number;
+  countedCashCents: number;
+  varianceCents: number;
+  status: ShiftStatus;
+  note: string | null;
+}
+
+export interface ShiftReconciliationReport {
+  from: string;
+  to: string;
+  rows: ShiftReconciliation[];
+  totals: {
+    shifts: number;
+    netVarianceCents: number;
+    absVarianceCents: number;
+    shortCount: number;
+    overCount: number;
+    balancedCount: number;
+  };
+}
+
 export interface EmployeeFields {
   name: string;
   position: string;
@@ -302,6 +372,64 @@ export async function listEmployees(): Promise<Result<{ employees: Employee[] }>
 export async function getAttendance(date: string): Promise<Result<{ date: string; attendance: AttendanceRow[] }>> {
   try {
     return await readJson(await fetch(`${BASE}/attendance?date=${date}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Build the export query string shared by the preview fetch and the CSV link. */
+function payrollExportQuery(opts: {
+  from: string;
+  to: string;
+  nightDiff: boolean;
+  employeeId?: string;
+}): string {
+  const qs = new URLSearchParams({ from: opts.from, to: opts.to, nightDiff: opts.nightDiff ? "1" : "0" });
+  if (opts.employeeId) qs.set("employeeId", opts.employeeId);
+  return qs.toString();
+}
+
+/** The live payroll preview the export studio renders before download. */
+export async function getPayrollExportPreview(opts: {
+  from: string;
+  to: string;
+  nightDiff: boolean;
+  employeeId?: string;
+}): Promise<Result<{ report: PayrollExportReport }>> {
+  try {
+    return await readJson(
+      await fetch(`${BASE}/payroll/export/preview?${payrollExportQuery(opts)}`, { credentials: "include" }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/**
+ * The tenant-scoped CSV download URL. Used as a plain <a href download> so the
+ * session cookie rides the top-level navigation and the server streams an
+ * attachment (mirrors the account data-export links).
+ */
+export function payrollExportUrl(opts: {
+  from: string;
+  to: string;
+  nightDiff: boolean;
+  employeeId?: string;
+}): string {
+  return `${BASE}/payroll/export?${payrollExportQuery(opts)}`;
+}
+
+/** The manager shift-discrepancy matrix — closed shifts with drawer variance. */
+export async function getShiftReconciliations(
+  from?: string,
+  to?: string,
+): Promise<Result<{ report: ShiftReconciliationReport }>> {
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", from);
+  if (to) qs.set("to", to);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  try {
+    return await readJson(await fetch(`${BASE}/shift-reconciliations${suffix}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }

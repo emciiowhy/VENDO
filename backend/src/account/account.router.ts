@@ -12,6 +12,7 @@ import {
   getPreferences,
   getReceiptSettings,
   getStoreProfile,
+  getThemeConfig,
   isExportDataset,
   listLoginEvents,
   listSessions,
@@ -20,6 +21,7 @@ import {
   setAvatarUrl,
   setLogoUrl,
   setThemeColor,
+  setThemeConfig,
   slugTakenByOther,
   updateOwnerProfile,
   updatePreferences,
@@ -171,6 +173,44 @@ accountRouter.patch("/theme", requireFeature("custom_branding"), async (req, res
     res.json({ ok: true, accent });
   } catch (err) {
     console.error("[account] theme update failed:", err);
+    res.status(500).json({ ok: false, error: "Could not save your theme." });
+  }
+});
+
+/**
+ * GET /account/theme-config — the store's full storefront theme config (preset
+ * vibe + design tokens), or `config: null` when it has never set one (the stock
+ * VendoPOS look). Behind the same BUSINESS-tier `custom_branding` gate as the
+ * write, so the Theme Studio is only reachable by stores that can use it.
+ */
+accountRouter.get("/theme-config", requireFeature("custom_branding"), async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const config = await getThemeConfig(tenantId);
+    res.json({ ok: true, config });
+  } catch (err) {
+    console.error("[account] theme-config load failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load your theme." });
+  }
+});
+
+/**
+ * PUT /account/theme-config — replace the store's storefront theme. The body is
+ * an untrusted `MerchantThemeConfig`; the repository runs it through
+ * `normalizeThemeConfig`, so every field is validated/clamped (bad colours →
+ * preset fallback, unsafe hero URLs → null, capped announcement) before it
+ * lands. Returns the normalised config so the client can reconcile to exactly
+ * what was stored. Tier-gated identically to the accent write above.
+ */
+accountRouter.put("/theme-config", requireFeature("custom_branding"), async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const config = await setThemeConfig(tenantId, req.body);
+    res.json({ ok: true, config });
+  } catch (err) {
+    console.error("[account] theme-config update failed:", err);
     res.status(500).json({ ok: false, error: "Could not save your theme." });
   }
 });

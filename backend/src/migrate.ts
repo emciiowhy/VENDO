@@ -83,6 +83,15 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'STARTER
   CHECK (tier IN ('STARTER', 'BUSINESS', 'ENTERPRISE'));
 UPDATE tenants SET tier = upper(plan) WHERE tier <> upper(plan);
 
+-- Merchant Theme Configuration — the storefront skin (preset vibe + design
+-- tokens: colours, font register, product framing, announcement bar). Stored as
+-- one JSONB blob so the schema can evolve without a migration per token; NULL
+-- means the store has never configured a theme and gets the stock VendoPOS look.
+-- The legacy theme_color column is kept in lockstep with the config's primary
+-- colour so the existing accent pipeline (POS/customer-display) keeps working
+-- unchanged. See backend/src/merchant/theme.config.ts.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS theme_config JSONB;
+
 CREATE TABLE IF NOT EXISTS users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id     UUID REFERENCES tenants (id) ON DELETE CASCADE,

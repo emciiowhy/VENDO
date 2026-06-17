@@ -45,7 +45,12 @@ export function createApp() {
       // cross-origin XHR (frontend :3000 → API :4000). The OAuth redirects are
       // top-level navigations and aren't subject to CORS.
       credentials: true,
-      methods: ["GET", "POST", "PATCH", "DELETE"],
+      // Must list every verb the API uses: a cross-origin credentialed JSON
+      // request (e.g. the Theme Studio's PUT /account/theme-config, or PUT
+      // /hr/attendance) triggers a CORS preflight, and the browser blocks the
+      // real call unless the method is echoed back here. Omitting PUT surfaced
+      // on the client as a misleading "Could not reach the server" fetch reject.
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }),
   );
   app.use(express.json({ limit: "100kb" }));

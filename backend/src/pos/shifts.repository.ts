@@ -148,6 +148,126 @@ export async function openShift(
   }
 }
 
+// ── Manager reconciliation matrix (read-only audit) ─────────────────────────
+
+/** One closed shift's drawer reconciliation, for the manager audit matrix. */
+export interface ShiftReconciliation {
+  id: string;
+  cashierUserId: string | null;
+  cashierName: string;
+  openedAt: string;
+  closedAt: string;
+  openingCents: number;
+  cashSalesCents: number;
+  ewalletSalesCents: number;
+  cardSalesCents: number;
+  totalSalesCents: number;
+  txnCount: number;
+  expectedCashCents: number;
+  countedCashCents: number;
+  varianceCents: number;
+  /** Derived from the centavo variance — the loss-prevention signal. */
+  status: "balanced" | "short" | "over";
+  note: string | null;
+}
+
+export interface ShiftReconciliationReport {
+  from: string;
+  to: string;
+  rows: ShiftReconciliation[];
+  totals: {
+    shifts: number;
+    /** Net variance across the window (overages net shortages). */
+    netVarianceCents: number;
+    /** Absolute shrink — the sum of every shortage/overage magnitude. */
+    absVarianceCents: number;
+    shortCount: number;
+    overCount: number;
+    balancedCount: number;
+  };
+}
+
+const MNL = "Asia/Manila";
+
+/** Classify a centavo variance into the drawer-status the matrix badges read. */
+function varianceStatus(varianceCents: number): "balanced" | "short" | "over" {
+  if (varianceCents === 0) return "balanced";
+  return varianceCents < 0 ? "short" : "over";
+}
+
+/**
+ * List every CLOSED shift reconciled in [from, to] (inclusive Manila dates) for
+ * the manager discrepancy matrix. Strictly tenant-fenced (the tenant id comes
+ * from the verified session, never the request), newest first. Read-only — the
+ * close paths above are the only writers of these rows.
+ */
+export async function listShiftReconciliations(
+  tenantId: string,
+  from: string,
+  to: string,
+): Promise<ShiftReconciliationReport> {
+  const { rows } = await query<{
+    id: string;
+    cashier_user_id: string | null;
+    cashier_name: string;
+    opened_at: Date;
+    closed_at: Date;
+    opening_cents: number;
+    cash_sales_cents: number;
+    ewallet_sales_cents: number;
+    card_sales_cents: number;
+    total_sales_cents: number;
+    txn_count: number;
+    expected_cash_cents: number;
+    counted_cash_cents: number;
+    cash_variance_cents: number;
+    note: string | null;
+  }>(
+    `SELECT id, cashier_user_id, cashier_name, opened_at, closed_at, opening_cents,
+            cash_sales_cents, ewallet_sales_cents, card_sales_cents, total_sales_cents,
+            txn_count, expected_cash_cents, counted_cash_cents, cash_variance_cents, note
+       FROM cashier_shifts
+      WHERE tenant_id = $1 AND status = 'closed' AND closed_at IS NOT NULL
+        AND (closed_at AT TIME ZONE $4)::date BETWEEN $2 AND $3
+      ORDER BY closed_at DESC`,
+    [tenantId, from, to, MNL],
+  );
+
+  const reconciliations: ShiftReconciliation[] = rows.map((r) => ({
+    id: r.id,
+    cashierUserId: r.cashier_user_id,
+    cashierName: r.cashier_name,
+    openedAt: r.opened_at.toISOString(),
+    closedAt: r.closed_at.toISOString(),
+    openingCents: r.opening_cents,
+    cashSalesCents: r.cash_sales_cents,
+    ewalletSalesCents: r.ewallet_sales_cents,
+    cardSalesCents: r.card_sales_cents,
+    totalSalesCents: r.total_sales_cents,
+    txnCount: r.txn_count,
+    expectedCashCents: r.expected_cash_cents,
+    countedCashCents: r.counted_cash_cents,
+    varianceCents: r.cash_variance_cents,
+    status: varianceStatus(r.cash_variance_cents),
+    note: r.note,
+  }));
+
+  const totals = reconciliations.reduce(
+    (acc, r) => {
+      acc.shifts += 1;
+      acc.netVarianceCents += r.varianceCents;
+      acc.absVarianceCents += Math.abs(r.varianceCents);
+      if (r.status === "short") acc.shortCount += 1;
+      else if (r.status === "over") acc.overCount += 1;
+      else acc.balancedCount += 1;
+      return acc;
+    },
+    { shifts: 0, netVarianceCents: 0, absVarianceCents: 0, shortCount: 0, overCount: 0, balancedCount: 0 },
+  );
+
+  return { from, to, rows: reconciliations, totals };
+}
+
 export type CloseShiftResult =
   | { ok: true; zread: ShiftZRead }
   | { ok: false; error: "NO_OPEN_SHIFT" };
