@@ -28,8 +28,8 @@ export function DangerZoneCard() {
           </h2>
           <p className="mt-0.5 text-[13.5px] text-ink-soft leading-relaxed max-w-[60ch]">
             Suspends your store and signs out every device. Your data is kept — a
-            VendoPOS administrator can reactivate it. Cashiers won't be able to sign
-            in while it's deactivated.
+            VendoPOS administrator can reactivate it. Cashiers won&apos;t be able to sign
+            in while it&apos;s deactivated.
           </p>
         </div>
       </div>

@@ -54,7 +54,7 @@ export function WhyPH() {
 
         <div className="mt-14 grid md:grid-cols-2 gap-4 reveal">
           {advantages.map((a) => (
-            <div key={a.title} className="rounded-xl2 bg-white hairline p-8 flex gap-6 items-start">
+            <div key={a.title} className="lift rounded-xl2 bg-white hairline p-8 flex gap-6 items-start">
               <div className="w-12 h-12 shrink-0 rounded-[13px] bg-accent-50 grid place-items-center">
                 {a.icon ? (
                   <Icon name={a.icon} className="w-6 h-6 text-accent-600" />

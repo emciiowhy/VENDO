@@ -66,8 +66,14 @@ function clockText(d: Date): string {
  */
 function DisplayLogo({ logoUrl, className }: { logoUrl: string | null; className: string }) {
   const [broken, setBroken] = useState(false);
-  // Reset the error flag if the mirrored logo URL changes (e.g. a new session).
-  useEffect(() => setBroken(false), [logoUrl]);
+  // Reset the error flag when the mirrored logo URL changes (e.g. a new session).
+  // Done during render (React's "adjust state on prop change" pattern) rather
+  // than in an effect, so it lands before paint without a cascading render.
+  const [seenLogoUrl, setSeenLogoUrl] = useState(logoUrl);
+  if (logoUrl !== seenLogoUrl) {
+    setSeenLogoUrl(logoUrl);
+    setBroken(false);
+  }
   return (
     <div
       className={
@@ -78,6 +84,7 @@ function DisplayLogo({ logoUrl, className }: { logoUrl: string | null; className
       {!logoUrl || broken ? (
         <BrandMark className="w-3/5 h-3/5" />
       ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- cross-origin tenant upload URL; next/image remote config isn't wired for the customer display
         <img
           src={logoUrl}
           alt=""

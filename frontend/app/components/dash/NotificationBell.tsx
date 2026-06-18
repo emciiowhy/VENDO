@@ -51,7 +51,10 @@ export function NotificationBell() {
     setLoading(false);
   }, []);
 
-  // Poll the cheap unread count; the full list loads on open.
+  // Poll the cheap unread count; the full list loads on open. This effect
+  // subscribes to an external system (the server, on an interval) and updates
+  // state from the async result — the setState lands after the await, not
+  // synchronously — so this is a legitimate effect use.
   useEffect(() => {
     void refreshCount();
     const timer = setInterval(() => void refreshCount(), POLL_MS);
@@ -136,7 +139,7 @@ export function NotificationBell() {
                 <span className="grid place-items-center w-11 h-11 mx-auto rounded-full bg-paper hairline text-ink-faint">
                   <Icon name="bell" className="w-5 h-5" />
                 </span>
-                <p className="mt-3 text-[13px] font-semibold text-ink-soft">You're all caught up</p>
+                <p className="mt-3 text-[13px] font-semibold text-ink-soft">You&apos;re all caught up</p>
                 <p className="text-[12px] text-ink-faint">New alerts will appear here.</p>
               </div>
             ) : (

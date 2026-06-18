@@ -120,7 +120,7 @@ export function OwnerPasswordSignIn() {
       <button
         type="submit"
         disabled={busy}
-        className="inline-flex items-center justify-center gap-2 w-full bg-ink dark:bg-[#0b1220] hover:opacity-90 text-white font-semibold text-[14.5px] py-3 rounded-[10px] shadow-btn transition duration-150 disabled:opacity-60"
+        className="press inline-flex items-center justify-center gap-2 w-full bg-ink text-paper hover:opacity-90 font-semibold text-[14.5px] py-3 rounded-[10px] shadow-btn disabled:opacity-60"
       >
         {busy ? "Signing in…" : "Sign in"}
         {!busy && <Icon name="arrow" className="w-4 h-4 -mr-1" strokeWidth={2} />}

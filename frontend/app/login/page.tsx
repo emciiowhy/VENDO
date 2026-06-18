@@ -72,7 +72,7 @@ export default function LoginPage() {
               The multi-tenant POS &amp; ERP built for Philippine retail. Sign in to your store
               dashboard, or open a shared register on the floor.
             </p>
-            <ul className="mt-8 space-y-3.5">
+            <ul className="mt-8 space-y-4">
               {HIGHLIGHTS.map((h) => (
                 <li key={h.icon} className="flex items-start gap-3">
                   <span className="mt-0.5 grid place-items-center w-7 h-7 rounded-[9px] bg-white/12 shrink-0">
@@ -125,7 +125,7 @@ export default function LoginPage() {
                 {/* Primary action — direct top-level navigation to the backend. */}
                 <a
                   href={GOOGLE_SIGN_IN_URL}
-                  className="inline-flex items-center justify-center gap-3 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[15px] tracking-tight py-3.5 rounded-[10px] shadow-btn transition duration-150"
+                  className="press inline-flex items-center justify-center gap-3 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[15px] tracking-tight py-3.5 rounded-[10px] shadow-btn"
                 >
                   <span className="grid place-items-center w-[22px] h-[22px] rounded-full bg-white">
                     <GoogleGlyph />

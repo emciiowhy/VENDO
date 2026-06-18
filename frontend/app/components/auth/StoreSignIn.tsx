@@ -255,7 +255,7 @@ export function StoreSignIn() {
         <button
           type="submit"
           disabled={busy}
-          className="mt-3 inline-flex items-center justify-center gap-2 w-full bg-surface hairline text-ink font-semibold text-[14.5px] py-3 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition duration-150 disabled:opacity-60"
+          className="press mt-3 inline-flex items-center justify-center gap-2 w-full bg-surface hairline text-ink font-semibold text-[14.5px] py-3 rounded-[10px] hover:border-brand-200 hover:text-brand-600 disabled:opacity-60"
         >
           {busy && phase === "store" ? "Checking…" : "Continue"}
           {!busy && <Icon name="chevron" className="w-4 h-4 -mr-1" strokeWidth={2} />}
@@ -274,9 +274,9 @@ export function StoreSignIn() {
             type="button"
             aria-label="Close"
             onClick={backToStore}
-            className="absolute inset-0 glass backdrop-blur-sm"
+            className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
-          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7">
+          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-brand-600">
@@ -299,12 +299,12 @@ export function StoreSignIn() {
               </button>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 space-y-3.5">
               {/* Cashier → pick who's on duty, then a 4-digit PIN within this store. */}
               <button
                 type="button"
                 onClick={openDuty}
-                className="group w-full flex items-center gap-3.5 rounded-[12px] bg-brand-500 hover:bg-brand-600 text-white p-4 shadow-btn transition duration-150 text-left"
+                className="press group w-full flex items-center gap-3.5 rounded-[12px] bg-brand-500 hover:bg-brand-600 text-white p-4 shadow-btn text-left"
               >
                 <span className="grid place-items-center w-10 h-10 rounded-[11px] bg-white/15 shrink-0">
                   <Icon name="lock" className="w-5 h-5" strokeWidth={1.8} />
@@ -323,7 +323,7 @@ export function StoreSignIn() {
                   setError(null);
                   setPhase("owner");
                 }}
-                className="group w-full flex items-center gap-3.5 rounded-[12px] bg-surface hairline p-4 hover:border-brand-200 transition duration-150 text-left"
+                className="press group w-full flex items-center gap-3.5 rounded-[12px] bg-surface hairline p-4 hover:border-brand-200 text-left"
               >
                 <span className="grid place-items-center w-10 h-10 rounded-[11px] bg-paper hairline shrink-0 text-ink-soft">
                   <Icon name="lock" className="w-5 h-5" strokeWidth={1.8} />
@@ -362,9 +362,9 @@ export function StoreSignIn() {
             type="button"
             aria-label="Close"
             onClick={backToStore}
-            className="absolute inset-0 glass backdrop-blur-sm"
+            className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
-          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7">
+          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-brand-600">
@@ -400,7 +400,7 @@ export function StoreSignIn() {
                   <button
                     type="button"
                     onClick={() => pickCashier(null)}
-                    className="mt-3 inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] py-2.5 rounded-[10px] shadow-btn transition duration-150"
+                    className="press mt-3 inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] py-2.5 rounded-[10px] shadow-btn"
                   >
                     Continue to PIN
                     <Icon name="chevron" className="w-4 h-4 -mr-1" strokeWidth={2} />
@@ -412,7 +412,7 @@ export function StoreSignIn() {
                     key={c.id}
                     type="button"
                     onClick={() => pickCashier(c)}
-                    className="flex w-full items-center gap-3 rounded-[12px] bg-paper hairline px-4 py-3 text-left hover:border-brand-200 hover:bg-brand-50 active:scale-[0.99] transition duration-150"
+                    className="press flex w-full items-center gap-3 rounded-[12px] bg-paper hairline px-4 py-3 text-left hover:border-brand-200 hover:bg-brand-50"
                   >
                     <span className="grid place-items-center w-9 h-9 rounded-full bg-brand-500 text-white font-bold text-[13px] tracking-tight shrink-0">
                       {initials(c.name)}
@@ -448,7 +448,7 @@ export function StoreSignIn() {
             type="button"
             aria-label="Close"
             onClick={backToStore}
-            className="absolute inset-0 glass backdrop-blur-sm"
+            className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
           <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 text-center step-in">
             <div className="mx-auto w-14 h-14 rounded-full bg-amber-50 grid place-items-center text-amber-600">
@@ -462,7 +462,7 @@ export function StoreSignIn() {
             <button
               type="button"
               onClick={() => setPhase("pin")}
-              className="mt-6 inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14.5px] py-3 rounded-[10px] shadow-btn transition duration-150"
+              className="press mt-6 inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14.5px] py-3 rounded-[10px] shadow-btn"
             >
               Enter PIN to start my shift
               <Icon name="arrow" className="w-4 h-4 -mr-1" strokeWidth={2} />
@@ -490,9 +490,9 @@ export function StoreSignIn() {
             type="button"
             aria-label="Close"
             onClick={backToStore}
-            className="absolute inset-0 glass backdrop-blur-sm"
+            className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
-          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7">
+          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-brand-600">
@@ -559,7 +559,7 @@ export function StoreSignIn() {
               <button
                 type="submit"
                 disabled={busy}
-                className="inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14.5px] py-3 rounded-[10px] shadow-btn transition duration-150 disabled:opacity-60"
+                className="press inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14.5px] py-3 rounded-[10px] shadow-btn disabled:opacity-60"
               >
                 {busy ? "Signing in…" : "Sign in"}
                 {!busy && <Icon name="arrow" className="w-4 h-4 -mr-1" strokeWidth={2} />}
@@ -570,7 +570,7 @@ export function StoreSignIn() {
             <button
               type="button"
               onClick={() => window.location.assign(GOOGLE_SIGN_IN_URL)}
-              className="mt-3 inline-flex items-center justify-center gap-2.5 w-full bg-surface hairline text-ink font-semibold text-[14px] py-2.5 rounded-[10px] hover:border-brand-200 transition duration-150"
+              className="press mt-3 inline-flex items-center justify-center gap-2.5 w-full bg-surface hairline text-ink font-semibold text-[14px] py-2.5 rounded-[10px] hover:border-brand-200"
             >
               <GoogleGlyph />
               Continue with Google instead
@@ -603,9 +603,9 @@ export function StoreSignIn() {
             type="button"
             aria-label="Close"
             onClick={backToStore}
-            className="absolute inset-0 glass backdrop-blur-sm"
+            className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
-          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7">
+          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-brand-600">

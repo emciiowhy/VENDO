@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../Icon";
 import { useToast } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -24,15 +24,15 @@ export function SessionsCard() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
 
-  useEffect(() => {
-    void load();
-  }, []);
-
-  async function load() {
+  const load = useCallback(async () => {
     const res = await getSessions();
     if (res.ok) setSessions(res.sessions);
     else setLoadError(res.error ?? "Could not load your active sessions.");
-  }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function onRevoke(s: DeviceSession) {
     const res = await revokeSession(s.id);

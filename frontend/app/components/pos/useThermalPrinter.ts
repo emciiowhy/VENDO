@@ -48,6 +48,9 @@ export function useThermalPrinter(): UseThermalPrinter {
   useEffect(() => {
     const usb = isWebUsbSupported();
     const bluetooth = isWebBluetoothSupported();
+    // Capability is client-only (navigator) and must start false on the server +
+    // first client render to hydrate identically, then reconcile here after mount
+    // (see header) — a legitimate post-mount effect, not a derived-state smell.
     setSupport({ usb, bluetooth, any: usb || bluetooth });
     // Drop the link if the terminal unmounts.
     return () => {

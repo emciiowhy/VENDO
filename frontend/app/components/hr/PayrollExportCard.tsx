@@ -47,10 +47,7 @@ export function PayrollExportCard({ employees }: { employees: Employee[] }) {
   const activeEmployees = employees.filter((e) => e.isActive);
 
   useEffect(() => {
-    if (!rangeValid) {
-      setPreview({ status: "error", message: "The start date must be on or before the end date." });
-      return;
-    }
+    if (!rangeValid) return; // an out-of-order range is derived for display below — no fetch
     let alive = true;
     setPreview({ status: "loading" });
     void (async () => {
@@ -64,8 +61,14 @@ export function PayrollExportCard({ employees }: { employees: Employee[] }) {
     };
   }, [from, to, nightDiff, employeeId, rangeValid]);
 
+  // The out-of-order-range error is a pure function of the inputs, so derive it
+  // for display instead of writing it into state from the effect.
+  const shownPreview: Preview = rangeValid
+    ? preview
+    : { status: "error", message: "The start date must be on or before the end date." };
+
   const downloadUrl = payrollExportUrl({ from, to, nightDiff, employeeId: employeeId || undefined });
-  const canDownload = rangeValid && preview.status === "ready" && preview.report.lines.length > 0;
+  const canDownload = shownPreview.status === "ready" && shownPreview.report.lines.length > 0;
 
   return (
     <div className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden">
@@ -162,14 +165,14 @@ export function PayrollExportCard({ employees }: { employees: Employee[] }) {
       </div>
 
       {/* Live preview */}
-      {preview.status === "loading" && (
+      {shownPreview.status === "loading" && (
         <div className="px-5 sm:px-6 py-10 text-center text-[13px] text-ink-soft">Building preview…</div>
       )}
-      {preview.status === "error" && (
-        <div className="px-5 sm:px-6 py-8 text-center text-[13px] font-semibold text-rose-600">{preview.message}</div>
+      {shownPreview.status === "error" && (
+        <div className="px-5 sm:px-6 py-8 text-center text-[13px] font-semibold text-rose-600">{shownPreview.message}</div>
       )}
-      {preview.status === "ready" && (
-        <PreviewTable report={preview.report} />
+      {shownPreview.status === "ready" && (
+        <PreviewTable report={shownPreview.report} />
       )}
     </div>
   );

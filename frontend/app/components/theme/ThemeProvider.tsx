@@ -62,6 +62,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const resolved = initialTheme();
+    // Deliberate post-mount reconciliation: server + first client render are
+    // always "light" to avoid a hydration mismatch, then the stored/system
+    // preference is applied here (see file header).
     setThemeState((prev) => (prev === resolved ? prev : resolved));
   }, []);
 

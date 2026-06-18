@@ -53,7 +53,7 @@ export function CoreTools() {
           {tools.map((t) => (
             <article
               key={t.title}
-              className="rounded-xl2 bg-white hairline p-6 hover:-translate-y-0.5 transition"
+              className="lift rounded-xl2 bg-white hairline p-6"
             >
               <div className="w-11 h-11 rounded-[12px] bg-brand-50 hairline grid place-items-center mb-5">
                 <Icon name={t.icon} className="w-[22px] h-[22px] text-brand-600" />

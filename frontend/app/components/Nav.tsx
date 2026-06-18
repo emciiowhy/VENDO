@@ -394,7 +394,7 @@ export function Nav() {
           </Link>
           <Link
             href="/#demo"
-            className="hidden sm:inline-flex items-center gap-2 bg-ink text-white font-semibold text-[14.5px] px-5 py-2.5 rounded-[10px] hover:bg-black transition"
+            className="press hidden sm:inline-flex items-center gap-2 bg-ink text-white font-semibold text-[14.5px] px-5 py-2.5 rounded-[10px] hover:opacity-90"
           >
             Request a Demo
           </Link>
@@ -404,7 +404,7 @@ export function Nav() {
             aria-label="Toggle menu"
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((v) => !v)}
-            className="md:hidden grid place-items-center w-10 h-10 rounded-[10px] hairline text-ink"
+            className="press md:hidden grid place-items-center w-10 h-10 rounded-[10px] hairline text-ink"
           >
             <Icon name={mobileOpen ? "x" : "menu"} className="w-5 h-5" />
           </button>
@@ -458,14 +458,14 @@ export function Nav() {
               <Link
                 href="/login"
                 onClick={() => setMobileOpen(false)}
-                className="flex-1 text-center font-semibold text-[14.5px] py-2.5 rounded-[10px] hairline text-ink"
+                className="press flex-1 text-center font-semibold text-[14.5px] py-2.5 rounded-[10px] hairline text-ink"
               >
                 Sign in
               </Link>
               <Link
                 href="/#demo"
                 onClick={() => setMobileOpen(false)}
-                className="flex-1 text-center bg-ink text-white font-semibold text-[14.5px] py-2.5 rounded-[10px]"
+                className="press flex-1 text-center bg-ink text-white font-semibold text-[14.5px] py-2.5 rounded-[10px]"
               >
                 Request a Demo
               </Link>

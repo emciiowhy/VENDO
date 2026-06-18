@@ -36,14 +36,14 @@ export function Hero() {
             <div className="mt-8 flex flex-wrap gap-3">
               <a
                 href="#demo"
-                className="inline-flex items-center gap-2 bg-brand-600 text-white font-semibold px-6 py-3.5 rounded-[11px] shadow-btn hover:bg-brand-700 transition"
+                className="press inline-flex items-center gap-2 bg-brand-600 text-white font-semibold px-6 py-3.5 rounded-[11px] shadow-btn hover:bg-brand-700"
               >
                 Request a Demo
                 <Icon name="arrow" className="w-[18px] h-[18px]" strokeWidth={1.8} />
               </a>
               <a
                 href="#tools"
-                className="inline-flex items-center gap-2 bg-white hairline text-ink font-semibold px-6 py-3.5 rounded-[11px] hover:border-brand-200 hover:text-brand-600 transition"
+                className="press inline-flex items-center gap-2 bg-white hairline text-ink font-semibold px-6 py-3.5 rounded-[11px] hover:border-brand-200 hover:text-brand-600"
               >
                 Explore the 7 Core Tools
               </a>
@@ -60,7 +60,7 @@ export function Hero() {
 
           {/* Right: minimal mini-dashboard */}
           <div className="reveal">
-            <div className="rounded-xl2 bg-white hairline shadow-soft overflow-hidden">
+            <div className="lift rounded-xl2 bg-white hairline shadow-soft overflow-hidden">
               <div className="flex items-center gap-2 px-5 h-11 hairline-b bg-paper">
                 <span className="w-2.5 h-2.5 rounded-full bg-ink/15" />
                 <span className="w-2.5 h-2.5 rounded-full bg-ink/15" />

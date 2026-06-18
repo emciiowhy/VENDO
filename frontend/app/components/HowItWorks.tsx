@@ -35,7 +35,7 @@ export function HowItWorks() {
 
         <div className="mt-14 grid md:grid-cols-3 gap-4 reveal">
           {steps.map((s) => (
-            <div key={s.label} className="rounded-xl2 border border-white/10 bg-white/[0.03] p-8">
+            <div key={s.label} className="lift rounded-xl2 border border-white/10 bg-white/[0.03] p-8">
               <span className="text-[13px] font-bold text-brand-200 tracking-widest">{s.label}</span>
               <h3 className="mt-4 text-[1.2rem] font-bold tracking-tight">{s.title}</h3>
               <p className="mt-2.5 text-white/65 text-[0.96rem] leading-relaxed">{s.body}</p>

@@ -464,6 +464,20 @@ export function PosTerminal() {
       if (scanFlushTimer.current !== null) window.clearTimeout(scanFlushTimer.current);
     };
   }, []);
+
+  // Pending scan accumulation (name + count) for the live ticker / row badges.
+  // Declared here with the other hooks — above every early return — so the hook
+  // order stays stable across the session-loading → authed transition.
+  const scanBatchList = useMemo(
+    () =>
+      Object.entries(scanBatch).map(([id, qty]) => ({
+        id,
+        name: products.find((p) => p.id === id)?.name ?? id,
+        count: qty,
+      })),
+    [scanBatch, products],
+  );
+
   function setQty(id: string, qty: number) {
     const line = cart[id];
     if (!line) return;
@@ -581,17 +595,6 @@ export function PosTerminal() {
     }
   };
 
-  // Pending scan accumulation (name + count) for the live ticker / row badges.
-  const scanBatchList = useMemo(
-    () =>
-      Object.entries(scanBatch).map(([id, qty]) => ({
-        id,
-        name: products.find((p) => p.id === id)?.name ?? id,
-        count: qty,
-      })),
-    [scanBatch, products],
-  );
-
   const cartProps = {
     lines,
     grossCents,
@@ -644,7 +647,7 @@ export function PosTerminal() {
             onClick={exitTerminal}
             title={exitLabel}
             aria-label={exitLabel}
-            className="inline-flex items-center gap-2 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150 ease-in-out"
+            className="tap press inline-flex items-center gap-2 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
           >
             <Icon name="arrow" className="w-[18px] h-[18px] rotate-180" strokeWidth={1.8} />
             <span className="hidden sm:inline">{exitLabel}</span>
@@ -690,7 +693,7 @@ export function PosTerminal() {
               }
               title="Open cash drawer (No Sale)"
               aria-label="Open cash drawer"
-              className="inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+              className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
             >
               <Icon name="wallet" className="w-[18px] h-[18px]" strokeWidth={1.7} />
               <span className="hidden lg:inline">Open drawer</span>
@@ -700,7 +703,7 @@ export function PosTerminal() {
               onClick={() => setSalesOpen(true)}
               title="Sales & returns"
               aria-label="Sales and returns"
-              className="inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+              className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
             >
               <Icon name="refresh" className="w-[18px] h-[18px]" strokeWidth={1.7} />
               <span className="hidden lg:inline">Returns</span>
@@ -710,7 +713,7 @@ export function PosTerminal() {
               onClick={() => window.open("/pos/customer-display", "vendopos-customer-display", "noopener")}
               title="Open customer display"
               aria-label="Open customer display"
-              className="inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+              className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
             >
               <Icon name="monitor" className="w-[18px] h-[18px]" strokeWidth={1.7} />
               <span className="hidden lg:inline">Customer display</span>
@@ -720,7 +723,7 @@ export function PosTerminal() {
               href="/me"
               title="My record — hours, PTO & paystubs"
               aria-label="My record"
-              className="inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+              className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
             >
               <Icon name="clock" className="w-[18px] h-[18px]" strokeWidth={1.7} />
               <span className="hidden lg:inline">My record</span>
@@ -749,7 +752,7 @@ export function PosTerminal() {
                 onClick={() => void refreshShift().then(() => setCloseShiftOpen(true))}
                 title="End shift (Z-Read)"
                 aria-label="End shift"
-                className="inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-rose-600 hover:border-rose-200 transition duration-150"
+                className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-rose-600 hover:border-rose-200"
               >
                 <Icon name="receipt" className="w-[18px] h-[18px]" strokeWidth={1.8} />
                 <span className="hidden sm:inline">End shift</span>
@@ -757,7 +760,7 @@ export function PosTerminal() {
             )}
             <PinSwitcher
               triggerLabel="Switch"
-              triggerClassName="inline-flex items-center gap-1.5 bg-surface hairline rounded-[10px] px-3 py-2 text-[13px] font-semibold hover:border-brand-200 hover:text-brand-600 transition duration-150"
+              triggerClassName="tap press inline-flex items-center gap-1.5 bg-surface hairline rounded-[10px] px-3 text-[13px] font-semibold hover:border-brand-200 hover:text-brand-600"
               openShift={shift ? { expectedCashCents: shift.expectedCashCents } : null}
               onCloseShift={() => void refreshShift().then(() => setCloseShiftOpen(true))}
             />
@@ -765,7 +768,7 @@ export function PosTerminal() {
               type="button"
               onClick={requestSignOut}
               aria-label="Sign out"
-              className="grid place-items-center w-9 h-9 rounded-[10px] bg-surface hairline text-ink-soft hover:text-rose-600 hover:border-rose-200 transition duration-150"
+              className="tap press grid place-items-center rounded-[10px] bg-surface hairline text-ink-soft hover:text-rose-600 hover:border-rose-200"
             >
               <Icon name="logout" className="w-[18px] h-[18px]" />
             </button>
@@ -799,7 +802,7 @@ export function PosTerminal() {
                   }
                 }}
                 placeholder="Search or scan barcode…"
-                className="field-input rounded-[10px] pl-9 pr-3 py-2.5 text-[14px] w-full"
+                className="field-input tap rounded-[10px] pl-9 pr-3 py-2.5 text-[14px] w-full"
               />
             </label>
           </div>
@@ -819,9 +822,9 @@ export function PosTerminal() {
                   type="button"
                   onClick={() => setCat(c)}
                   className={
-                    "shrink-0 px-4 py-2 rounded-[10px] text-[13.5px] font-semibold transition duration-150 " +
+                    "tap press shrink-0 px-4 rounded-[10px] text-[13.5px] font-semibold " +
                     (cat === c
-                      ? "bg-ink dark:bg-[#0b1220] text-white"
+                      ? "bg-brand-600 text-white shadow-btn"
                       : "bg-surface hairline text-ink-soft hover:text-ink")
                   }
                 >
@@ -838,8 +841,8 @@ export function PosTerminal() {
               <div className="py-20 text-center text-rose-600 text-[14px] font-semibold">{loadError}</div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 pb-4">
-                {visible.map((p) => (
-                  <ProductTile key={p.id} product={p} inCart={cart[p.id]?.qty ?? 0} onAdd={() => add(p)} />
+                {visible.map((p, i) => (
+                  <ProductTile key={p.id} product={p} index={i} inCart={cart[p.id]?.qty ?? 0} onAdd={() => add(p)} />
                 ))}
                 {visible.length === 0 && (
                   <div className="col-span-full py-16 text-center text-ink-soft text-[14px]">
@@ -1012,10 +1015,12 @@ export function PosTerminal() {
 
 function ProductTile({
   product,
+  index,
   inCart,
   onAdd,
 }: {
   product: CatalogProduct;
+  index: number;
   inCart: number;
   onAdd: () => void;
 }) {
@@ -1031,11 +1036,12 @@ function ProductTile({
       onClick={onAdd}
       disabled={soldOut}
       aria-disabled={soldOut}
+      style={{ animationDelay: `${Math.min(index, 11) * 25}ms` }}
       className={
-        "relative group text-left rounded-xl2 bg-surface hairline shadow-card p-3 transition duration-150 " +
+        "rise relative group text-left rounded-xl2 bg-surface hairline shadow-card p-3 press " +
         (soldOut
           ? "opacity-60 cursor-not-allowed"
-          : "hover:border-brand-200 hover:shadow-soft active:scale-[0.98]")
+          : "hover:border-brand-200 hover:shadow-soft")
       }
     >
       <div
@@ -1062,18 +1068,24 @@ function ProductTile({
 
         {soldOut && (
           <span className="absolute inset-0 grid place-items-center bg-surface/55">
-            <span className="rounded-full bg-ink dark:bg-[#0b1220] text-white px-3 py-1 text-[11px] font-bold tracking-tight">
+            <span className="rounded-full bg-ink text-paper px-3 py-1 text-[11px] font-bold tracking-tight">
               Sold out
             </span>
+          </span>
+        )}
+
+        {!soldOut && !maxed && (
+          <span className="absolute bottom-1.5 right-1.5 w-8 h-8 rounded-full bg-brand-600 text-white grid place-items-center shadow-btn">
+            <Icon name="plus" className="w-[18px] h-[18px]" strokeWidth={2} />
           </span>
         )}
       </div>
 
       <div className="font-bold tracking-tight leading-tight line-clamp-2">{product.name}</div>
-      <div className="mt-0.5 flex items-center justify-between">
-        <span className="text-[13.5px] font-semibold text-ink-soft">{peso(product.priceCents)}</span>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span className="text-[15px] font-extrabold tracking-tight tabular-nums">{peso(product.priceCents)}</span>
         {!soldOut && inCart > 0 && (
-          <span className="text-[11px] font-bold text-brand-600">
+          <span className="shrink-0 inline-flex items-center rounded-full bg-brand-50 text-brand-700 px-2 py-0.5 text-[11px] font-extrabold tabular-nums">
             {inCart}
             {maxed ? " · max" : ""}
           </span>
@@ -1127,13 +1139,18 @@ function CartPanel({
         <h2 className="font-extrabold tracking-tight flex items-center gap-2">
           <Icon name="cart" className="w-[18px] h-[18px] text-brand-600" strokeWidth={1.7} />
           Current order
+          {count > 0 && (
+            <span className="ml-1 rounded-full bg-brand-50 text-brand-700 px-2 py-0.5 text-[11px] font-extrabold tabular-nums">
+              {count}
+            </span>
+          )}
         </h2>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={onDiscount}
             disabled={empty}
-            className="inline-flex items-center gap-1.5 rounded-[9px] bg-paper hairline px-2.5 py-1.5 text-[12px] font-bold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
+            className="tap press inline-flex items-center gap-1.5 rounded-[9px] bg-paper hairline px-2.5 text-[12px] font-bold text-ink-soft hover:text-brand-600 hover:border-brand-200 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Icon name="tag" className="w-[15px] h-[15px]" strokeWidth={1.7} />
             Discount
@@ -1142,7 +1159,7 @@ function CartPanel({
             type="button"
             onClick={onVoid}
             disabled={empty}
-            className="inline-flex items-center gap-1.5 rounded-[9px] bg-paper hairline px-2.5 py-1.5 text-[12px] font-bold text-ink-soft hover:text-rose-600 hover:border-rose-200 transition duration-150 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed"
+            className="tap press inline-flex items-center gap-1.5 rounded-[9px] bg-paper hairline px-2.5 text-[12px] font-bold text-ink-soft hover:text-rose-600 hover:border-rose-200 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Icon name="ban" className="w-[15px] h-[15px]" strokeWidth={1.7} />
             Void
@@ -1223,9 +1240,9 @@ function CartPanel({
             </div>
           )}
           <Row label="VAT (12% incl.)" value={peso(vatCents)} muted />
-          <div className="flex items-center justify-between pt-1.5 mt-1 hairline-t">
+          <div className="flex items-end justify-between pt-2 mt-1 hairline-t">
             <span className="text-[14px] font-bold">Total</span>
-            <span className="text-[1.4rem] font-extrabold tracking-tightest">{peso(netCents)}</span>
+            <span className="text-stat font-extrabold tracking-tightest tabular-nums">{peso(netCents)}</span>
           </div>
         </div>
 
@@ -1233,7 +1250,7 @@ function CartPanel({
           type="button"
           onClick={onCheckout}
           disabled={empty}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3.5 font-semibold text-white shadow-btn tracking-tight transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
+          className="tap press w-full inline-flex items-center justify-center gap-2 rounded-[12px] bg-brand-500 hover:bg-brand-600 min-h-[56px] font-semibold text-white shadow-btn tracking-tight disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Icon name="bolt" className="w-[18px] h-[18px]" strokeWidth={1.8} />
           {empty ? "Add items to charge" : `Checkout · ${peso(netCents)}`}
@@ -1342,7 +1359,7 @@ function CheckoutOverlay({
       <div className={"relative flex flex-col w-full max-w-[420px] max-h-[88vh] overflow-hidden rounded-xl2 bg-surface hairline shadow-soft overlay-card " + (closing ? "closing" : "")}>
         <div className="shrink-0 flex items-center justify-between px-6 py-4 hairline-b">
           <h3 className="text-[1.15rem] font-extrabold tracking-tightest">Checkout</h3>
-          <button type="button" onClick={dismiss} aria-label="Close" className="text-ink-faint hover:text-ink transition p-1">
+          <button type="button" onClick={dismiss} aria-label="Close" className="tap press grid place-items-center text-ink-faint hover:text-ink">
             <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
           </button>
         </div>
@@ -1406,7 +1423,7 @@ function CheckoutOverlay({
                     onMethodChange?.(m.key); // mirror the staged rail to the customer screen
                   }}
                   className={
-                    "flex flex-col items-center gap-1 py-2.5 rounded-[10px] text-[11.5px] font-bold tracking-tight transition duration-150 ease-in-out " +
+                    "tap press flex flex-col items-center gap-1 py-2.5 rounded-[10px] text-[11.5px] font-bold tracking-tight " +
                     (method === m.key
                       ? "bg-brand-50 text-brand-700 ring-2 ring-brand-200"
                       : "bg-paper hairline text-ink-soft hover:text-ink")
@@ -1428,7 +1445,7 @@ function CheckoutOverlay({
                     key={b}
                     type="button"
                     onClick={() => addBill(b)}
-                    className="flex-1 rounded-[10px] bg-paper hairline py-2 text-[12.5px] font-bold tracking-tight text-ink hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200 active:scale-[0.97] transition duration-150 ease-in-out tabular-nums"
+                    className="tap press flex-1 rounded-[10px] bg-paper hairline text-[12.5px] font-bold tracking-tight text-ink hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200 tabular-nums"
                   >
                     ₱{b.toLocaleString("en-PH")}
                   </button>
@@ -1458,7 +1475,7 @@ function CheckoutOverlay({
                 <button
                   type="button"
                   onClick={setExact}
-                  className="rounded-[10px] bg-paper hairline px-3 py-2.5 text-[12.5px] font-bold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150 ease-in-out"
+                  className="tap press rounded-[10px] bg-paper hairline px-3 text-[12.5px] font-bold text-ink-soft hover:text-brand-600 hover:border-brand-200"
                 >
                   Exact
                 </button>
@@ -1543,7 +1560,7 @@ function CheckoutOverlay({
             type="button"
             onClick={() => void charge()}
             disabled={busy || cashShort || netCents <= 0}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3.5 font-semibold text-white shadow-btn tracking-tight transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
+            className="tap press w-full inline-flex items-center justify-center gap-2 rounded-[12px] bg-brand-500 hover:bg-brand-600 min-h-[56px] font-semibold text-white shadow-btn tracking-tight disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Icon name="check" className="w-[18px] h-[18px]" strokeWidth={2} />
             {busy ? "Processing…" : cashShort ? "Insufficient cash" : `Charge ${peso(dueCents)}`}
@@ -1661,7 +1678,7 @@ function ReceiptOverlay({
             onClick={() => printSaleReceipt({ store, sale, items, cashierName })}
             title="Print receipt"
             aria-label="Print receipt"
-            className="inline-flex items-center justify-center gap-2 rounded-[10px] bg-surface hairline px-4 py-3.5 font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+            className="tap press inline-flex items-center justify-center gap-2 rounded-[10px] bg-surface hairline px-4 py-3.5 font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
           >
             <Icon name="receipt" className="w-[18px] h-[18px]" strokeWidth={1.8} />
             Print
@@ -1669,7 +1686,7 @@ function ReceiptOverlay({
           <button
             type="button"
             onClick={dismiss}
-            className="w-full rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3.5 font-semibold text-white shadow-btn tracking-tight transition duration-150 ease-in-out"
+            className="tap press w-full rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3.5 font-semibold text-white shadow-btn tracking-tight"
           >
             New sale
           </button>
@@ -1731,7 +1748,7 @@ function DiscountModal({
       <div className={"relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft overlay-card " + (closing ? "closing" : "")}>
         <div className="flex items-center justify-between px-6 py-4 hairline-b">
           <h3 className="text-[1.1rem] font-extrabold tracking-tight">Apply discount</h3>
-          <button type="button" onClick={dismiss} aria-label="Close" className="text-ink-faint hover:text-ink transition p-1">
+          <button type="button" onClick={dismiss} aria-label="Close" className="tap press grid place-items-center text-ink-faint hover:text-ink">
             <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
           </button>
         </div>
@@ -1742,7 +1759,7 @@ function DiscountModal({
             <button
               type="button"
               onClick={() => onApply({ type: "percent", value: 10, label: "10% off" })}
-              className="rounded-[12px] bg-paper hairline px-3 py-3 text-left hover:border-brand-200 hover:bg-brand-50 active:scale-[0.98] transition duration-150 ease-in-out"
+              className="press rounded-[12px] bg-paper hairline px-3 py-3 text-left hover:border-brand-200 hover:bg-brand-50"
             >
               <div className="text-[15px] font-extrabold tracking-tight">10%</div>
               <div className="text-[12px] text-ink-soft">Promo</div>
@@ -1750,7 +1767,7 @@ function DiscountModal({
             <button
               type="button"
               onClick={() => onApply({ type: "percent", value: 20, label: "Senior/PWD 20%" })}
-              className="rounded-[12px] bg-paper hairline px-3 py-3 text-left hover:border-brand-200 hover:bg-brand-50 active:scale-[0.98] transition duration-150 ease-in-out"
+              className="press rounded-[12px] bg-paper hairline px-3 py-3 text-left hover:border-brand-200 hover:bg-brand-50"
             >
               <div className="text-[15px] font-extrabold tracking-tight">20%</div>
               <div className="text-[12px] text-ink-soft">Senior / PWD</div>
@@ -1771,7 +1788,7 @@ function DiscountModal({
                   type="button"
                   onClick={() => setMode(m)}
                   className={
-                    "px-3 py-2 rounded-[8px] text-[13px] font-bold transition duration-150 ease-in-out " +
+                    "press px-3 py-2 rounded-[8px] text-[13px] font-bold " +
                     (mode === m ? "bg-surface shadow-card text-ink" : "text-ink-soft")
                   }
                 >
@@ -1801,7 +1818,7 @@ function DiscountModal({
             <button
               type="button"
               onClick={() => onApply(null)}
-              className="px-4 py-2.5 rounded-[10px] text-[14px] font-semibold text-ink-soft hover:text-rose-600 hover:bg-rose-50 transition duration-150"
+              className="press px-4 py-2.5 rounded-[10px] text-[14px] font-semibold text-ink-soft hover:text-rose-600 hover:bg-rose-50"
             >
               Remove
             </button>
@@ -1810,7 +1827,7 @@ function DiscountModal({
             type="button"
             onClick={applyCustom}
             disabled={num <= 0}
-            className="flex-1 rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3 font-semibold text-[14px] text-white shadow-btn tracking-tight transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
+            className="tap press flex-1 rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3 font-semibold text-[14px] text-white shadow-btn tracking-tight disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Apply discount
           </button>
@@ -1955,7 +1972,7 @@ function RedeemPoints({
         onClick={onToggle}
         disabled={!redeeming && maxRedeemable <= 0}
         className={
-          "shrink-0 rounded-[9px] px-3 py-2 text-[12.5px] font-bold tracking-tight transition duration-150 ease-in-out disabled:opacity-40 disabled:cursor-not-allowed " +
+          "press shrink-0 rounded-[9px] px-3 py-2 text-[12.5px] font-bold tracking-tight disabled:opacity-40 disabled:cursor-not-allowed " +
           (redeeming
             ? "bg-surface hairline text-ink-soft hover:text-rose-600 hover:border-rose-200"
             : "bg-accent-500 text-white hover:bg-accent-600 shadow-btn")
@@ -1987,14 +2004,14 @@ function VoidModal({ count, onClose, onConfirm }: { count: number; onClose: () =
           <button
             type="button"
             onClick={dismiss}
-            className="px-4 py-2.5 rounded-[10px] text-[14px] font-semibold text-ink-soft hover:bg-paper transition duration-150"
+            className="press px-4 py-2.5 rounded-[10px] text-[14px] font-semibold text-ink-soft hover:bg-paper"
           >
             Keep order
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] transition duration-150"
+            className="tap press bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px]"
           >
             Void order
           </button>
@@ -2032,7 +2049,7 @@ function QtyBtn({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="grid place-items-center w-7 h-7 rounded-[8px] bg-paper hairline text-ink-soft hover:text-ink hover:border-brand-200 transition duration-150 ease-in-out text-[16px] font-bold leading-none disabled:opacity-40 disabled:cursor-not-allowed"
+      className="tap press grid place-items-center rounded-[9px] bg-paper hairline text-ink-soft hover:text-brand-600 hover:border-brand-200 text-[18px] font-bold leading-none disabled:opacity-40 disabled:cursor-not-allowed"
     >
       {symbol ?? <Icon name="plus" className="w-4 h-4" strokeWidth={2} />}
     </button>

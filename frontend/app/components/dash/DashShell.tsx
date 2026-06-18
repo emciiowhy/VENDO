@@ -166,7 +166,7 @@ export function DashShell({
                           href={item.href}
                           onClick={() => setMobileOpen(false)}
                           title="Upgrade to unlock"
-                          className={base + " text-ink-faint hover:text-ink hover:bg-paper"}
+                          className={base + " press text-ink-faint hover:text-ink hover:bg-paper"}
                         >
                           <Icon name={item.icon} className="w-[18px] h-[18px]" strokeWidth={1.6} />
                           {item.label}
@@ -180,12 +180,15 @@ export function DashShell({
                         href={item.href}
                         onClick={() => setMobileOpen(false)}
                         className={
-                          base +
+                          base + " press relative" +
                           (active
                             ? " bg-brand-50 text-brand-700"
                             : " text-ink-soft hover:text-ink hover:bg-paper")
                         }
                       >
+                        {active && (
+                          <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand-500" />
+                        )}
                         <Icon
                           name={item.icon}
                           className="w-[18px] h-[18px]"
@@ -204,7 +207,7 @@ export function DashShell({
             <button
               type="button"
               onClick={() => setSignOutOpen(true)}
-              className="flex w-full items-center gap-3 px-3 py-2.5 rounded-[10px] text-[14px] font-semibold text-ink-soft hover:text-rose-600 hover:bg-rose-50 transition duration-150"
+              className="press flex w-full items-center gap-3 px-3 py-2.5 rounded-[10px] text-[14px] font-semibold text-ink-soft hover:text-rose-600 hover:bg-rose-50"
             >
               <Icon name="logout" className="w-[18px] h-[18px]" />
               Sign out
@@ -234,7 +237,7 @@ export function DashShell({
                 type="button"
                 aria-label="Open menu"
                 onClick={() => setMobileOpen(true)}
-                className="lg:hidden text-ink-soft hover:text-ink transition"
+                className="press lg:hidden text-ink-soft hover:text-ink"
               >
                 <Icon name="menu" className="w-6 h-6" />
               </button>
@@ -267,7 +270,7 @@ export function DashShell({
                       className="w-9 h-9 rounded-full object-cover hairline"
                     />
                   ) : (
-                    <span className="w-9 h-9 rounded-full bg-ink dark:bg-[#0b1220] text-white grid place-items-center font-bold text-[13px] tracking-tight">
+                    <span className="w-9 h-9 rounded-full bg-ink text-paper grid place-items-center font-bold text-[13px] tracking-tight">
                       {initials || "U"}
                     </span>
                   )}

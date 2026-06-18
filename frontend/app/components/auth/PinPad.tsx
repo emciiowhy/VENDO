@@ -49,7 +49,7 @@ export function PinPad({
             type="button"
             onClick={() => onPush(k)}
             disabled={submitting}
-            className="h-14 rounded-[12px] bg-paper hairline text-[1.25rem] font-bold tracking-tight text-ink hover:bg-brand-50 hover:border-brand-200 active:scale-[0.97] transition duration-150 disabled:opacity-50"
+            className="press h-14 rounded-[12px] bg-paper hairline text-[1.25rem] font-bold tracking-tight text-ink hover:bg-brand-50 hover:border-brand-200 disabled:opacity-50"
           >
             {k}
           </button>
@@ -59,7 +59,7 @@ export function PinPad({
           type="button"
           onClick={() => onPush("0")}
           disabled={submitting}
-          className="h-14 rounded-[12px] bg-paper hairline text-[1.25rem] font-bold tracking-tight text-ink hover:bg-brand-50 hover:border-brand-200 active:scale-[0.97] transition duration-150 disabled:opacity-50"
+          className="press h-14 rounded-[12px] bg-paper hairline text-[1.25rem] font-bold tracking-tight text-ink hover:bg-brand-50 hover:border-brand-200 disabled:opacity-50"
         >
           0
         </button>
@@ -68,7 +68,7 @@ export function PinPad({
           onClick={onBackspace}
           disabled={submitting || pin.length === 0}
           aria-label="Delete"
-          className="h-14 rounded-[12px] grid place-items-center text-ink-soft hover:text-ink hover:bg-paper transition duration-150 disabled:opacity-30"
+          className="press h-14 rounded-[12px] grid place-items-center text-ink-soft hover:text-ink hover:bg-paper disabled:opacity-30"
         >
           <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 5H8.5L3 12l5.5 7H21a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z" />

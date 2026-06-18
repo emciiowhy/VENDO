@@ -143,7 +143,7 @@ export function MerchantHome() {
       <div>
         <h3 className="font-extrabold tracking-tight mb-3">Your tools</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {MODULES.map((mod) => {
+          {MODULES.map((mod, i) => {
             const inner = (
               <>
                 <span className="grid place-items-center w-10 h-10 rounded-[12px] bg-brand-50 text-brand-600 transition duration-150 group-hover:bg-brand-500 group-hover:text-white">
@@ -164,14 +164,16 @@ export function MerchantHome() {
               <Link
                 key={mod.label}
                 href={mod.href}
-                className="group rounded-xl2 bg-surface hairline shadow-card p-5 hover:border-brand-200 hover:shadow-soft transition duration-150"
+                style={{ animationDelay: `${i * 50}ms` }}
+                className="rise lift group rounded-xl2 bg-surface hairline shadow-card p-5 hover:border-brand-200 hover:shadow-soft"
               >
                 {inner}
               </Link>
             ) : (
               <div
                 key={mod.label}
-                className="group rounded-xl2 bg-surface hairline shadow-card p-5 opacity-80"
+                style={{ animationDelay: `${i * 50}ms` }}
+                className="rise group rounded-xl2 bg-surface hairline shadow-card p-5 opacity-80"
               >
                 {inner}
               </div>
@@ -194,15 +196,16 @@ function Live({ pulse, alerts }: { pulse: DashboardPulse; alerts: StockAlert[] }
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi icon="peso" label="Sales today" value={formatCentsWhole(pulse.grossCents)} />
-        <Kpi icon="receipt" label="Transactions" value={formatCount(pulse.txns)} />
-        <Kpi icon="cart" label="Avg. order value" value={formatCents(pulse.aovCents)} />
+        <Kpi icon="peso" label="Sales today" value={formatCentsWhole(pulse.grossCents)} index={0} />
+        <Kpi icon="receipt" label="Transactions" value={formatCount(pulse.txns)} index={1} />
+        <Kpi icon="cart" label="Avg. order value" value={formatCents(pulse.aovCents)} index={2} />
         <Kpi
           icon="box"
           label="Items sold"
           value={formatCount(pulse.itemsSold)}
           warn={pulse.lowStockCount > 0}
           note={pulse.lowStockCount > 0 ? `${pulse.lowStockCount} low on stock` : undefined}
+          index={3}
         />
       </div>
 
@@ -235,12 +238,16 @@ function Live({ pulse, alerts }: { pulse: DashboardPulse; alerts: StockAlert[] }
               Everything&apos;s well stocked. 👌
             </p>
           ) : (
-            <div className="mt-4 space-y-3">
-              {alerts.slice(0, 5).map((s) => (
-                <div key={s.id} className="flex items-center gap-2.5">
+            <div className="mt-4">
+              {alerts.slice(0, 5).map((s, i) => (
+                <div
+                  key={s.id}
+                  style={{ animationDelay: `${i * 40}ms` }}
+                  className={"rise flex items-center gap-2.5 py-2.5 " + (i > 0 ? "hairline-t" : "")}
+                >
                   <div className="min-w-0 flex-1">
                     <div className="text-note font-semibold truncate">{s.name}</div>
-                    <div className="text-fine text-ink-faint">reorder at {s.lowStockThreshold}</div>
+                    <div className="text-fine text-ink-faint tabular-nums">reorder at {s.lowStockThreshold}</div>
                   </div>
                   <span
                     className={
@@ -255,7 +262,7 @@ function Live({ pulse, alerts }: { pulse: DashboardPulse; alerts: StockAlert[] }
                       href={`/dashboard/procurement?reorder=${s.id}`}
                       title="Quick draft purchase order"
                       aria-label={`Draft a purchase order for ${s.name}`}
-                      className="shrink-0 inline-flex items-center gap-1 rounded-[8px] bg-paper hairline px-2 py-1 text-cap font-bold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition duration-150"
+                      className="press shrink-0 inline-flex items-center gap-1 rounded-[8px] bg-paper hairline px-2 py-1 text-cap font-bold text-ink-soft hover:text-brand-600 hover:border-brand-200"
                     >
                       <Icon name="truck" className="w-[14px] h-[14px]" strokeWidth={1.7} />
                       Draft PO
@@ -625,8 +632,8 @@ function TopSellers({ items }: { items: DashboardPulse["topItems"] }) {
         <p className="mt-6 mb-4 text-center text-note text-ink-soft">Nothing sold yet today.</p>
       ) : (
         <div className="mt-4 space-y-3">
-          {items.map((it) => (
-            <div key={it.name}>
+          {items.map((it, i) => (
+            <div key={it.name} style={{ animationDelay: `${i * 40}ms` }} className="rise">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-note font-semibold truncate">{it.name}</span>
                 <span className="text-fine font-bold tracking-tight tabular-nums shrink-0">
@@ -695,15 +702,20 @@ function Kpi({
   value,
   warn,
   note,
+  index = 0,
 }: {
   icon: IconName;
   label: string;
   value: string;
   warn?: boolean;
   note?: string;
+  index?: number;
 }) {
   return (
-    <div className="rounded-xl2 bg-surface hairline shadow-card p-5">
+    <div
+      style={{ animationDelay: `${index * 60}ms` }}
+      className="rise lift rounded-xl2 bg-surface hairline shadow-card p-5"
+    >
       <div className="flex items-center justify-between">
         <span
           className={
@@ -713,10 +725,15 @@ function Kpi({
         >
           <Icon name={icon} className="w-[18px] h-[18px]" strokeWidth={1.7} />
         </span>
-        {note && <span className="text-fine font-bold text-amber-600">{note}</span>}
+        {note && (
+          <span className="inline-flex items-center gap-1 text-fine font-bold text-amber-600 tabular-nums">
+            <Icon name="box" className="w-3.5 h-3.5" strokeWidth={2} />
+            {note}
+          </span>
+        )}
       </div>
-      <div className="mt-3 text-stat font-extrabold">{value}</div>
-      <div className="mt-1.5 text-fine text-ink-soft">{label}</div>
+      <div className="mt-3 text-stat font-extrabold tracking-tightest tabular-nums">{value}</div>
+      <div className="mt-1.5 text-cap font-semibold uppercase tracking-wide text-ink-faint">{label}</div>
     </div>
   );
 }

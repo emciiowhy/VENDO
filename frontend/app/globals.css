@@ -337,6 +337,70 @@ details[open] .faq-plus {
   }
 }
 
+/* ---- Redesign primitives (taste-skill, operational surfaces) ---------------
+   Token-driven micro-interactions for the POS/dashboard restyle. Budget: hard
+   cap 200ms, GPU transforms only (translate / scale / opacity) — never layout
+   properties, so the register never thrashes. All disabled under reduced-motion.
+   `--ease-snap` is the shared "settle" curve the overlays already use inline. */
+:root {
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Touch-target floor: any control a cashier taps on a tablet is >=44px. */
+.tap {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Press feedback for tappable tiles and buttons (apply on its own — do not pair
+   with .lift on the same element, their transforms would fight). */
+.press {
+  transition: transform 0.12s var(--ease-snap);
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+/* Hover lift for cards on pointer devices (desktop dashboard). */
+.lift {
+  transition: transform 0.15s var(--ease-snap), box-shadow 0.15s var(--ease-snap);
+}
+.lift:hover {
+  transform: translateY(-2px);
+}
+
+/* Fast list/grid entrance — the dense operational answer to the 0.6s marketing
+   `.reveal`. Stagger with an inline animation-delay per item. */
+@keyframes vp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  /* `backwards` (not `both`): show the `from` state during the stagger delay to
+     avoid a pre-animation flash, but don't retain a forward fill — a filled
+     transform would otherwise override .press/.lift hover/active transforms. */
+  animation: vp-rise 0.18s var(--ease-snap) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press,
+  .lift,
+  .rise {
+    animation: none;
+    transition: none;
+  }
+  .press:active,
+  .lift:hover {
+    transform: none;
+  }
+}
+
 /* ---- Customer-facing display (second screen) motion -----------------------
    Used only by /pos/customer-display. A glanceable screen, so motion is gentle
    and purposeful: rows ease in, the total pops when it changes, the idle brand

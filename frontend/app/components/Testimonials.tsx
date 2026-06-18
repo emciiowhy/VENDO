@@ -60,7 +60,7 @@ export function Testimonials() {
           {REVIEWS.map((r) => (
             <figure
               key={r.store}
-              className="rounded-xl2 bg-surface hairline shadow-card p-7 flex flex-col"
+              className="lift rounded-xl2 bg-surface hairline shadow-card p-7 flex flex-col"
             >
               <div className="flex items-center gap-1 text-brand-500" aria-label="5 out of 5 stars">
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -77,7 +77,7 @@ export function Testimonials() {
                 </span>
               </div>
               <figcaption className="mt-5 pt-5 hairline-t flex items-center gap-3">
-                <span className="grid place-items-center w-11 h-11 rounded-full bg-ink dark:bg-[#0b1220] text-white font-bold text-[14px] tracking-tight">
+                <span className="grid place-items-center w-11 h-11 rounded-full bg-ink text-paper font-bold text-[14px] tracking-tight">
                   {r.initials}
                 </span>
                 <div className="leading-tight">

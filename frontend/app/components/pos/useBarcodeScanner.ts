@@ -39,8 +39,11 @@ export function useBarcodeScanner({
   maxIntervalMs = 50,
 }: BarcodeScannerOptions): void {
   // Hold the latest callback in a ref so changing it doesn't re-bind the listener.
+  // Synced in an effect (not during render) so we never write a ref while rendering.
   const onScanRef = useRef(onScan);
-  onScanRef.current = onScan;
+  useEffect(() => {
+    onScanRef.current = onScan;
+  });
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;

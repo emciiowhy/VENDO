@@ -148,7 +148,7 @@ export function DemoForm() {
                 <button
                   type="button"
                   onClick={reset}
-                  className="inline-flex items-center bg-white hairline text-ink font-semibold px-5 py-2.5 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition"
+                  className="press inline-flex items-center bg-white hairline text-ink font-semibold px-5 py-2.5 rounded-[10px] hover:border-brand-200 hover:text-brand-600"
                 >
                   Submit another request
                 </button>
@@ -277,7 +277,7 @@ export function DemoForm() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="inline-flex justify-center items-center gap-2 bg-brand-600 text-white font-semibold py-3.5 rounded-[11px] shadow-btn hover:bg-brand-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="press inline-flex justify-center items-center gap-2 bg-brand-600 text-white font-semibold py-3.5 rounded-[11px] shadow-btn hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {submitting ? "Sending…" : "Request my demo"}
                   {!submitting && (

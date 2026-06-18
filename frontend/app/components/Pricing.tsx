@@ -91,7 +91,7 @@ export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean
             <div
               key={plan.name}
               className={
-                "rounded-xl2 bg-white p-8 flex flex-col relative " +
+                "lift rounded-xl2 bg-white p-8 flex flex-col relative " +
                 (plan.featured ? "border-2 border-brand-500 shadow-soft" : "hairline")
               }
             >
@@ -144,7 +144,7 @@ export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean
                 <Link
                   href={`/auth/signup?plan=${plan.signupPlan}`}
                   className={
-                    "mt-7 inline-flex justify-center items-center gap-2 font-semibold py-3 rounded-[11px] transition " +
+                    "press mt-7 inline-flex justify-center items-center gap-2 font-semibold py-3 rounded-[11px] " +
                     (plan.featured
                       ? "bg-brand-600 text-white shadow-btn hover:bg-brand-700"
                       : "bg-white hairline text-ink hover:border-brand-200 hover:text-brand-600")
@@ -156,7 +156,7 @@ export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean
               ) : (
                 <Link
                   href="/enterprise"
-                  className="mt-7 inline-flex justify-center items-center gap-2 font-semibold py-3 rounded-[11px] transition bg-white hairline text-ink hover:border-brand-200 hover:text-brand-600"
+                  className="press mt-7 inline-flex justify-center items-center gap-2 font-semibold py-3 rounded-[11px] bg-white hairline text-ink hover:border-brand-200 hover:text-brand-600"
                 >
                   Talk to our team
                   <Icon name="arrow" className="w-[17px] h-[17px]" strokeWidth={2} />
