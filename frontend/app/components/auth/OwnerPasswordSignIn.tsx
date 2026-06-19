@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
 import { passwordLogin } from "@/lib/auth";
 
@@ -12,6 +12,7 @@ import { passwordLogin } from "@/lib/auth";
  * lookup to one tenant before the email + password are checked.
  */
 const SUFFIX = ".vendopos.app";
+const STORE_KEY = "vendopos_last_store";
 
 export function OwnerPasswordSignIn() {
   const [open, setOpen] = useState(false);
@@ -20,6 +21,34 @@ export function OwnerPasswordSignIn() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPw, setShowPw] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
+  const [remembered, setRemembered] = useState(false);
+
+  // Prefill the last store this terminal signed into. Read after mount so the
+  // server + first client render stay deterministic (no hydration mismatch);
+  // presentational only — the auth call is unchanged.
+  useEffect(() => {
+    try {
+      const last = window.localStorage.getItem(STORE_KEY);
+      if (last) {
+        setStoreId(last);
+        setRemembered(true);
+      }
+    } catch {
+      /* private mode / disabled storage */
+    }
+  }, []);
+
+  function clearStore() {
+    setStoreId("");
+    setRemembered(false);
+    try {
+      window.localStorage.removeItem(STORE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function submit() {
     const slug = storeId.trim().toLowerCase();
@@ -31,6 +60,11 @@ export function OwnerPasswordSignIn() {
     setError(null);
     const res = await passwordLogin({ storeId: slug, email: email.trim(), password });
     if (res.ok) {
+      try {
+        window.localStorage.setItem(STORE_KEY, slug);
+      } catch {
+        /* ignore */
+      }
       window.location.assign(res.redirectTo);
       return;
     }
@@ -84,6 +118,16 @@ export function OwnerPasswordSignIn() {
         </div>
       </label>
 
+      {remembered && (
+        <button
+          type="button"
+          onClick={clearStore}
+          className="press -mt-1.5 block text-[12px] font-semibold text-ink-faint hover:text-ink transition duration-150"
+        >
+          Use a different store
+        </button>
+      )}
+
       <label className="block">
         <span className="text-[13px] font-semibold text-ink-soft">Email</span>
         <input
@@ -103,19 +147,47 @@ export function OwnerPasswordSignIn() {
 
       <label className="block">
         <span className="text-[13px] font-semibold text-ink-soft">Password</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => {
-            setPassword(e.target.value);
-            setError(null);
-          }}
-          placeholder="••••••••"
-          className="field-input w-full rounded-[10px] px-3.5 py-3 text-[15px] tracking-tight text-ink mt-1.5"
-        />
+        <div className="relative mt-1.5">
+          <input
+            type={showPw ? "text" : "password"}
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError(null);
+            }}
+            onKeyUp={(e) => setCapsOn(e.getModifierState("CapsLock"))}
+            onKeyDown={(e) => setCapsOn(e.getModifierState("CapsLock"))}
+            autoComplete="current-password"
+            placeholder="••••••••"
+            className="field-input w-full rounded-[10px] pl-3.5 pr-11 py-3 text-[15px] tracking-tight text-ink"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPw((v) => !v)}
+            aria-label={showPw ? "Hide password" : "Show password"}
+            aria-pressed={showPw}
+            className="press absolute right-1 top-1/2 -translate-y-1/2 grid place-items-center w-9 h-9 rounded-[8px] text-ink-faint hover:text-ink transition duration-150"
+          >
+            <Icon name={showPw ? "eye-off" : "eye"} className="w-[18px] h-[18px]" strokeWidth={1.7} />
+          </button>
+        </div>
+        <p aria-live="polite" className="mt-1.5 min-h-[1.05em] text-[12px] font-semibold text-amber-600">
+          {capsOn ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Icon name="lock" className="w-3.5 h-3.5" strokeWidth={2} />
+              Caps Lock is on
+            </span>
+          ) : (
+            ""
+          )}
+        </p>
       </label>
 
-      {error && <p className="text-[12.5px] font-semibold text-rose-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-[12.5px] font-semibold text-rose-600">
+          {error}
+        </p>
+      )}
 
       <button
         type="submit"

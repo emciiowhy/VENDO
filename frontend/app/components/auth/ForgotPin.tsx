@@ -54,7 +54,7 @@ export function ForgotPin({
 
   if (sent) {
     return (
-      <div className="mt-6 text-center step-in">
+      <div role="status" aria-live="polite" className="mt-6 text-center step-in">
         <div className="mx-auto w-14 h-14 rounded-full bg-accent-50 grid place-items-center">
           <Icon name="check" className="w-7 h-7 text-accent-600" strokeWidth={2.2} />
         </div>
@@ -88,11 +88,28 @@ export function ForgotPin({
           : "Pick your profile — your store owner will be notified to set a new PIN."}
       </p>
 
-      {error && <p className="mt-3 text-[12.5px] font-semibold text-rose-600">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-3 text-[12.5px] font-semibold text-rose-600">
+          {error}
+        </p>
+      )}
 
       <div className="mt-4 space-y-2">
         {loading ? (
-          <p className="py-4 text-center text-[13px] text-ink-soft">Loading profiles…</p>
+          <div role="status">
+            <span className="sr-only">Loading profiles…</span>
+            <div aria-hidden="true" className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 rounded-[12px] bg-paper hairline px-4 py-3"
+                >
+                  <span className="skeleton w-9 h-9 rounded-full shrink-0" />
+                  <span className="skeleton h-3.5 w-1/2 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
         ) : !cashiers || cashiers.length === 0 ? (
           <p className="py-4 text-center text-[13px] text-ink-soft">
             No cashier profiles found for this store.

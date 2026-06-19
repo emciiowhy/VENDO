@@ -28,9 +28,26 @@ const faqs = [
   },
 ];
 
+/** schema.org FAQPage markup, sourced from the same `faqs` array shown above —
+ *  single source of truth, no duplicated copy. Lets search engines surface the
+ *  Q&A as rich results. */
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+};
+
 export function FAQ() {
   return (
     <section id="faq" className="py-28 bg-paper hairline-y">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <div className="max-w-[1160px] mx-auto px-6">
         <div className="text-center max-w-[60ch] mx-auto reveal">
           <span className="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">

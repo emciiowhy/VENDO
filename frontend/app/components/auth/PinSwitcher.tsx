@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../Icon";
 import { PinPad } from "./PinPad";
 import { ForgotPin } from "./ForgotPin";
+import { useFocusTrap } from "@/lib/useFocusTrap";
 import { useTheme } from "../theme/ThemeProvider";
 import { switchByPin } from "@/lib/auth";
 import { listCashiers, type CashierProfile } from "@/lib/pos";
@@ -62,6 +63,11 @@ export function PinSwitcher({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [forgot, setForgot] = useState(false);
+
+  // Trap focus inside the modal card while open + inert the app behind it; the
+  // card element is stable across steps, so no re-key is needed.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -210,7 +216,10 @@ export function PinSwitcher({
                 className="absolute inset-0 bg-black/40 backdrop-blur-md overlay-backdrop"
               />
 
-          <div className="relative w-full max-w-[380px] rounded-xl2 bg-surface hairline shadow-soft overlay-card overflow-hidden">
+          <div
+            ref={dialogRef}
+            className="relative w-full max-w-[380px] rounded-xl2 bg-surface hairline shadow-soft overlay-card overflow-hidden"
+          >
             {/* Header */}
             <div className="flex items-start justify-between px-6 pt-6 pb-4">
               <div className="flex items-center gap-2.5">
@@ -219,7 +228,7 @@ export function PinSwitcher({
                     type="button"
                     onClick={backToSelect}
                     aria-label="Back to profiles"
-                    className="grid place-items-center w-8 h-8 -ml-1 rounded-[9px] text-ink-soft hover:text-ink hover:bg-paper transition duration-150"
+                    className="grid place-items-center w-11 h-11 -ml-1.5 rounded-[9px] text-ink-soft hover:text-ink hover:bg-paper transition duration-150"
                   >
                     <Icon name="arrow" className="w-[18px] h-[18px] rotate-180" strokeWidth={1.8} />
                   </button>
@@ -245,7 +254,7 @@ export function PinSwitcher({
                 type="button"
                 onClick={close}
                 aria-label="Close"
-                className="text-ink-faint hover:text-ink transition -mt-1 -mr-1 p-1"
+                className="text-ink-faint hover:text-ink transition -mt-2.5 -mr-2.5 grid place-items-center w-11 h-11 rounded-[8px]"
               >
                 <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
               </button>
@@ -291,7 +300,20 @@ export function PinSwitcher({
               ) : step === "select" ? (
                 <div>
                   {loadingList ? (
-                    <p className="py-8 text-center text-[13.5px] text-ink-soft">Loading profiles…</p>
+                    <div role="status">
+                      <span className="sr-only">Loading profiles…</span>
+                      <div aria-hidden="true" className="grid grid-cols-2 gap-2.5">
+                        {[0, 1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="flex flex-col items-center gap-2 rounded-[12px] bg-paper hairline px-3 py-4"
+                          >
+                            <span className="skeleton w-11 h-11 rounded-full" />
+                            <span className="skeleton h-3 w-3/4 rounded" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   ) : cashiers.length === 0 ? (
                     <p className="py-8 text-center text-[13.5px] text-ink-soft">
                       No cashier profiles set up for this store yet.

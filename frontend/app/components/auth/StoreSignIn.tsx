@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
 import { PinPad } from "./PinPad";
 import { ForgotPin } from "./ForgotPin";
+import { useFocusTrap } from "@/lib/useFocusTrap";
 import {
   GOOGLE_SIGN_IN_URL,
   listStoreCashiers,
@@ -29,6 +30,7 @@ type Cashier = { id: string; name: string };
  *     or Google as a fallback. Their email maps to their tenant either way.
  */
 const SUFFIX = ".vendopos.app";
+const STORE_KEY = "vendopos_last_store";
 
 export function StoreSignIn() {
   const [phase, setPhase] = useState<"store" | "role" | "duty" | "welcome" | "pin" | "owner">(
@@ -50,6 +52,28 @@ export function StoreSignIn() {
   // so a colliding PIN can't sign in the wrong person, and personalises the copy.
   const [onDuty, setOnDuty] = useState<Cashier | null>(null);
   const [welcome, setWelcome] = useState<{ greeting: string; line: string } | null>(null);
+  const [showPw, setShowPw] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
+  const [remembered, setRemembered] = useState(false);
+
+  // The open modal card (one ref across phases; only one is mounted at a time).
+  // Drives the focus trap + background inert; `phase` re-keys it on each step.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, phase !== "store", phase);
+
+  // Prefill the last store this terminal used — read after mount (deterministic
+  // SSR/first render), presentational only.
+  useEffect(() => {
+    try {
+      const last = window.localStorage.getItem(STORE_KEY);
+      if (last) {
+        setStoreId(last);
+        setRemembered(true);
+      }
+    } catch {
+      /* private mode / disabled storage */
+    }
+  }, []);
 
   // ---- Step 1: resolve the Store ID --------------------------------------
   const resolveStore = useCallback(async () => {
@@ -63,6 +87,11 @@ export function StoreSignIn() {
     const res = await lookupStore(slug);
     setBusy(false);
     if (res.ok) {
+      try {
+        window.localStorage.setItem(STORE_KEY, slug);
+      } catch {
+        /* ignore */
+      }
       setStore(res.store);
       setPin("");
       setPhase("role");
@@ -249,7 +278,9 @@ export function StoreSignIn() {
         </div>
 
         {phase === "store" && error && (
-          <p className="mt-2 text-[12.5px] font-semibold text-rose-600">{error}</p>
+          <p role="alert" className="mt-2 text-[12.5px] font-semibold text-rose-600">
+            {error}
+          </p>
         )}
 
         <button
@@ -260,6 +291,24 @@ export function StoreSignIn() {
           {busy && phase === "store" ? "Checking…" : "Continue"}
           {!busy && <Icon name="chevron" className="w-4 h-4 -mr-1" strokeWidth={2} />}
         </button>
+
+        {remembered && phase === "store" && (
+          <button
+            type="button"
+            onClick={() => {
+              setStoreId("");
+              setRemembered(false);
+              try {
+                window.localStorage.removeItem(STORE_KEY);
+              } catch {
+                /* ignore */
+              }
+            }}
+            className="press mt-3 mx-auto block text-[12px] font-semibold text-ink-faint hover:text-ink transition duration-150"
+          >
+            Use a different store
+          </button>
+        )}
       </form>
 
       {/* Step 2: role chooser, scoped to the resolved store. */}
@@ -276,7 +325,10 @@ export function StoreSignIn() {
             onClick={backToStore}
             className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
-          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card">
+          <div
+            ref={dialogRef}
+            className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card"
+          >
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-brand-600">
@@ -291,7 +343,7 @@ export function StoreSignIn() {
                 type="button"
                 onClick={backToStore}
                 aria-label="Close"
-                className="text-ink-faint hover:text-ink transition -mt-1 -mr-1 p-1"
+                className="text-ink-faint hover:text-ink transition -mt-2.5 -mr-2.5 grid place-items-center w-11 h-11 rounded-[8px]"
               >
                 <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
                   <path d="M6 6l12 12M18 6 6 18" />
@@ -364,7 +416,10 @@ export function StoreSignIn() {
             onClick={backToStore}
             className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
-          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card">
+          <div
+            ref={dialogRef}
+            className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card"
+          >
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-brand-600">
@@ -381,7 +436,7 @@ export function StoreSignIn() {
                 type="button"
                 onClick={backToRole}
                 aria-label="Close"
-                className="text-ink-faint hover:text-ink transition -mt-1 -mr-1 p-1"
+                className="text-ink-faint hover:text-ink transition -mt-2.5 -mr-2.5 grid place-items-center w-11 h-11 rounded-[8px]"
               >
                 <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
                   <path d="M6 6l12 12M18 6 6 18" />
@@ -391,7 +446,19 @@ export function StoreSignIn() {
 
             <div className="mt-5 space-y-2 max-h-[46vh] overflow-y-auto pr-0.5">
               {cashiersLoading ? (
-                <p className="py-4 text-center text-[13px] text-ink-soft">Loading the team…</p>
+                <div role="status" className="space-y-2">
+                  <span className="sr-only">Loading the team…</span>
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      aria-hidden="true"
+                      className="flex items-center gap-3 rounded-[12px] bg-paper hairline px-4 py-3"
+                    >
+                      <span className="skeleton w-9 h-9 rounded-full shrink-0" />
+                      <span className="skeleton h-3.5 w-1/2 rounded" />
+                    </div>
+                  ))}
+                </div>
               ) : !cashiers || cashiers.length === 0 ? (
                 <div className="py-2 text-center">
                   <p className="text-[13px] text-ink-soft">
@@ -450,7 +517,10 @@ export function StoreSignIn() {
             onClick={backToStore}
             className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
-          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 text-center step-in">
+          <div
+            ref={dialogRef}
+            className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 text-center step-in"
+          >
             <div className="mx-auto w-14 h-14 rounded-full bg-amber-50 grid place-items-center text-amber-600">
               <Icon name="sun" className="w-7 h-7" strokeWidth={1.9} />
             </div>
@@ -492,7 +562,10 @@ export function StoreSignIn() {
             onClick={backToStore}
             className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
-          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card">
+          <div
+            ref={dialogRef}
+            className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card"
+          >
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-brand-600">
@@ -507,7 +580,7 @@ export function StoreSignIn() {
                 type="button"
                 onClick={backToRole}
                 aria-label="Close"
-                className="text-ink-faint hover:text-ink transition -mt-1 -mr-1 p-1"
+                className="text-ink-faint hover:text-ink transition -mt-2.5 -mr-2.5 grid place-items-center w-11 h-11 rounded-[8px]"
               >
                 <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
                   <path d="M6 6l12 12M18 6 6 18" />
@@ -541,20 +614,47 @@ export function StoreSignIn() {
               </label>
               <label className="block">
                 <span className="text-[12px] font-semibold text-ink-soft">Password</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError(null);
-                  }}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  className="field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14px] text-ink mt-1.5"
-                />
+                <div className="relative mt-1.5">
+                  <input
+                    type={showPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError(null);
+                    }}
+                    onKeyUp={(e) => setCapsOn(e.getModifierState("CapsLock"))}
+                    onKeyDown={(e) => setCapsOn(e.getModifierState("CapsLock"))}
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    className="field-input w-full rounded-[10px] pl-3.5 pr-11 py-2.5 text-[14px] text-ink"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw((v) => !v)}
+                    aria-label={showPw ? "Hide password" : "Show password"}
+                    aria-pressed={showPw}
+                    className="press absolute right-1 top-1/2 -translate-y-1/2 grid place-items-center w-9 h-9 rounded-[8px] text-ink-faint hover:text-ink transition duration-150"
+                  >
+                    <Icon name={showPw ? "eye-off" : "eye"} className="w-[18px] h-[18px]" strokeWidth={1.7} />
+                  </button>
+                </div>
+                <p aria-live="polite" className="mt-1.5 min-h-[1.05em] text-[12px] font-semibold text-amber-600">
+                  {capsOn ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon name="lock" className="w-3.5 h-3.5" strokeWidth={2} />
+                      Caps Lock is on
+                    </span>
+                  ) : (
+                    ""
+                  )}
+                </p>
               </label>
 
-              {error && <p className="text-[12.5px] font-semibold text-rose-600">{error}</p>}
+              {error && (
+                <p role="alert" className="text-[12.5px] font-semibold text-rose-600">
+                  {error}
+                </p>
+              )}
 
               <button
                 type="submit"
@@ -605,7 +705,10 @@ export function StoreSignIn() {
             onClick={backToStore}
             className="absolute inset-0 glass backdrop-blur-sm overlay-backdrop"
           />
-          <div className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card">
+          <div
+            ref={dialogRef}
+            className="relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft p-7 overlay-card"
+          >
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-wide text-brand-600">
@@ -622,7 +725,7 @@ export function StoreSignIn() {
                 type="button"
                 onClick={backToDuty}
                 aria-label="Close"
-                className="text-ink-faint hover:text-ink transition -mt-1 -mr-1 p-1"
+                className="text-ink-faint hover:text-ink transition -mt-2.5 -mr-2.5 grid place-items-center w-11 h-11 rounded-[8px]"
               >
                 <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
                   <path d="M6 6l12 12M18 6 6 18" />

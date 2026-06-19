@@ -37,7 +37,11 @@ export function PinPad({
         ))}
       </div>
 
-      <p className="mt-3 text-center text-[12.5px] font-semibold text-rose-600 min-h-[1.1em]">
+      <p
+        role="alert"
+        aria-live="assertive"
+        className="mt-3 text-center text-[12.5px] font-semibold text-rose-600 min-h-[1.1em]"
+      >
         {error ?? ""}
       </p>
 

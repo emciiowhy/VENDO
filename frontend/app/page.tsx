@@ -1,5 +1,6 @@
 import { IconSprite } from "./components/Icon";
 import { ScrollReveal } from "./components/ScrollReveal";
+import { AnnounceBar } from "./components/AnnounceBar";
 import { Nav } from "./components/Nav";
 import { Hero } from "./components/Hero";
 import { TrustBar } from "./components/TrustBar";
@@ -7,12 +8,14 @@ import { LogoMarquee } from "./components/LogoMarquee";
 import { Problem } from "./components/Problem";
 import { CoreTools } from "./components/CoreTools";
 import { WhyPH } from "./components/WhyPH";
+import { Compare } from "./components/Compare";
 import { Testimonials } from "./components/Testimonials";
 import { HowItWorks } from "./components/HowItWorks";
 import { Pricing } from "./components/Pricing";
 import { FAQ } from "./components/FAQ";
 import { DemoForm } from "./components/DemoForm";
 import { Footer } from "./components/Footer";
+import { StickyCta } from "./components/StickyCta";
 
 /**
  * First-time-buyer promo toggle. Flip to false to retire the campaign — the
@@ -26,6 +29,7 @@ export default function Home() {
     <>
       <IconSprite />
       <ScrollReveal />
+      <AnnounceBar promo={FIRST_PURCHASE_PROMO} />
       <Nav />
       <main>
         <Hero />
@@ -34,6 +38,7 @@ export default function Home() {
         <Problem />
         <CoreTools />
         <WhyPH />
+        <Compare />
         <Testimonials />
         <HowItWorks />
         <Pricing isFirstPurchase={FIRST_PURCHASE_PROMO} />
@@ -41,6 +46,7 @@ export default function Home() {
         <DemoForm />
       </main>
       <Footer />
+      <StickyCta />
     </>
   );
 }
