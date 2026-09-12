@@ -17,7 +17,7 @@ const plans: Plan[] = [
   {
     name: "Starter",
     forWho: "For single-location coffee shops & small retailers.",
-    price: "₱499",
+    price: "₱599",
     per: "/mo",
     indicative: true,
     signupPlan: "starter",
@@ -32,7 +32,7 @@ const plans: Plan[] = [
   {
     name: "Business",
     forWho: "For growing multi-staff retailers & restaurants.",
-    price: "₱1,499",
+    price: "₱1,999",
     per: "/mo",
     indicative: true,
     featured: true,
