@@ -5,7 +5,13 @@ import Link from "next/link";
 import { Icon, type IconName } from "../Icon";
 import { useToast } from "../Toast";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
-import { getEmployeeDetail, type EmployeeDetail } from "@/lib/hr";
+import {
+  getEmployeeDetail,
+  grantTillAccess,
+  listUnlinkedCashiers,
+  type EmployeeDetail,
+  type UnlinkedCashier,
+} from "@/lib/hr";
 import { AttendanceCalendar } from "./AttendanceCalendar";
 import { EmployeeFormModal } from "./EmployeeFormModal";
 import { PayrollDetailDrawer } from "./PayrollDetailDrawer";
@@ -27,6 +33,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
     { status: "loading" } | { status: "error"; message: string } | { status: "ready"; emp: EmployeeDetail }
   >({ status: "loading" });
   const [editing, setEditing] = useState(false);
+  const [granting, setGranting] = useState(false);
   const [payslipRun, setPayslipRun] = useState<string | null>(null);
 
   async function load() {
@@ -96,14 +103,31 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
             {!e.isActive && e.separatedOn && <> · Left {formatDate(e.separatedOn)}</>}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="ml-auto inline-flex items-center gap-2 bg-paper hairline text-ink font-semibold text-[14px] px-4 py-2.5 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition duration-150"
-        >
-          <Icon name="pencil" className="w-[17px] h-[17px]" strokeWidth={1.8} />
-          Edit
-        </button>
+        <div className="ml-auto flex items-center gap-2.5">
+          {e.userId ? (
+            <span className="inline-flex items-center gap-1.5 bg-accent-50 dark:bg-accent-500/10 text-accent-700 dark:text-accent-400 font-semibold text-[12.5px] px-3 py-1.5 rounded-full">
+              <Icon name="check" className="w-4 h-4" strokeWidth={2} />
+              Till access
+            </span>
+          ) : e.isActive ? (
+            <button
+              type="button"
+              onClick={() => setGranting(true)}
+              className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-4 py-2.5 rounded-[10px] shadow-btn transition duration-150"
+            >
+              <Icon name="lock" className="w-[17px] h-[17px]" strokeWidth={1.8} />
+              Grant till access
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-2 bg-paper hairline text-ink font-semibold text-[14px] px-4 py-2.5 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition duration-150"
+          >
+            <Icon name="pencil" className="w-[17px] h-[17px]" strokeWidth={1.8} />
+            Edit
+          </button>
+        </div>
       </div>
 
       {/* Stat strip */}
@@ -241,7 +265,185 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
           }}
         />
       )}
+      {granting && (
+        <GrantTillModal
+          employeeId={employeeId}
+          employeeName={e.name}
+          onClose={() => setGranting(false)}
+          onDone={() => {
+            setGranting(false);
+            push({
+              variant: "success",
+              title: "Till access granted",
+              message: `${e.name} can now sign in at a terminal and will show on the duty roster.`,
+            });
+            void load();
+          }}
+        />
+      )}
       {payslipRun && <PayrollDetailDrawer id={payslipRun} onClose={() => setPayslipRun(null)} />}
+    </div>
+  );
+}
+
+/**
+ * Grant till access (ADR 0002): provision a brand-new cashier login (optional
+ * 4-digit PIN + opening float) for this employee, or link an existing unlinked
+ * cashier. On success the employee gains a `user_id` and appears in the live
+ * duty roster.
+ */
+function GrantTillModal({
+  employeeId,
+  employeeName,
+  onClose,
+  onDone,
+}: {
+  employeeId: string;
+  employeeName: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [mode, setMode] = useState<"create" | "link">("create");
+  const [pin, setPin] = useState("");
+  const [float, setFloat] = useState("");
+  const [cashiers, setCashiers] = useState<UnlinkedCashier[] | null>(null);
+  const [cashierId, setCashierId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const res = await listUnlinkedCashiers();
+      if (!alive) return;
+      setCashiers(res.ok ? res.cashiers : []);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const wantsPin = pin.length > 0;
+
+  async function submit() {
+    setError(null);
+    if (mode === "create") {
+      if (wantsPin && !/^\d{4}$/.test(pin)) return setError("PIN must be exactly 4 digits.");
+      const floatCents = Math.round((Number(float) || 0) * 100);
+      setBusy(true);
+      const res = await grantTillAccess(employeeId, {
+        mode: "create",
+        pin: wantsPin ? pin : undefined,
+        defaultFloatCents: floatCents,
+      });
+      setBusy(false);
+      if (res.ok) return onDone();
+      setError(res.error ?? "Could not grant till access.");
+    } else {
+      if (!cashierId) return setError("Choose a cashier to link.");
+      setBusy(true);
+      const res = await grantTillAccess(employeeId, { mode: "link", cashierUserId: cashierId });
+      setBusy(false);
+      if (res.ok) return onDone();
+      setError(res.error ?? "Could not grant till access.");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120] grid place-items-center px-5" role="dialog" aria-modal="true" aria-label="Grant till access">
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/45 backdrop-blur-sm" />
+      <div className="relative w-full max-w-[400px] rounded-xl2 bg-surface hairline shadow-soft p-6">
+        <button type="button" onClick={onClose} aria-label="Close" className="absolute top-4 right-4 text-ink-faint hover:text-ink p-1">
+          <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
+        </button>
+        <h3 className="text-[1.1rem] font-extrabold tracking-tight">Grant till access</h3>
+        <p className="mt-0.5 text-[13px] text-ink-soft">
+          Give <span className="font-semibold text-ink">{employeeName}</span> a cashier login so they can work the till.
+        </p>
+
+        {/* Mode toggle */}
+        <div className="mt-4 grid grid-cols-2 gap-1.5 p-1 rounded-[11px] bg-paper hairline">
+          {(["create", "link"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setMode(m);
+                setError(null);
+              }}
+              className={
+                "py-2 rounded-[8px] text-[13px] font-semibold transition " +
+                (mode === m ? "bg-surface shadow-card text-ink" : "text-ink-soft hover:text-ink")
+              }
+            >
+              {m === "create" ? "New login" : "Link existing"}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {mode === "create" ? (
+            <>
+              <label className="block">
+                <span className="text-[12px] font-semibold text-ink-soft">PIN (optional — set now or later)</span>
+                <input
+                  value={pin}
+                  onChange={(ev) => setPin(ev.target.value.replace(/\D/g, "").slice(0, 4))}
+                  inputMode="numeric"
+                  placeholder="••••"
+                  className="field-input rounded-[10px] px-3.5 py-2.5 text-[18px] w-full mt-1.5 text-center tracking-[0.5em] tabular-nums"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[12px] font-semibold text-ink-soft">Default opening cash float</span>
+                <span className="relative mt-1.5 block">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint text-[15px]">₱</span>
+                  <input
+                    value={float}
+                    onChange={(ev) => setFloat(ev.target.value.replace(/[^\d.]/g, ""))}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    className="field-input rounded-[10px] pl-7 pr-3 py-2.5 text-[14px] w-full text-right tabular-nums"
+                  />
+                </span>
+              </label>
+            </>
+          ) : cashiers === null ? (
+            <p className="text-[13px] text-ink-soft py-4 text-center">Loading cashiers…</p>
+          ) : cashiers.length === 0 ? (
+            <p className="text-[13px] text-ink-soft py-2">
+              No unlinked cashier logins. Create a new login instead, or add one in the Cashiers console first.
+            </p>
+          ) : (
+            <label className="block">
+              <span className="text-[12px] font-semibold text-ink-soft">Link to an existing cashier</span>
+              <select
+                value={cashierId}
+                onChange={(ev) => setCashierId(ev.target.value)}
+                className="field-input rounded-[10px] px-3.5 py-2.5 text-[14px] w-full mt-1.5"
+              >
+                <option value="">Choose a cashier…</option>
+                {cashiers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.hasPin ? "" : " (no PIN yet)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {error && <p className="text-[12.5px] font-semibold text-rose-600">{error}</p>}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={busy || (mode === "link" && !cashierId)}
+          className="mt-5 w-full rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3 font-semibold text-white shadow-btn tracking-tight transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {busy ? "Granting…" : "Grant till access"}
+        </button>
+      </div>
     </div>
   );
 }

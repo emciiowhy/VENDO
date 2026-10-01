@@ -1,4 +1,5 @@
 import { pool, query } from "../db.js";
+import { hashPin } from "../auth/auth.crypto.js";
 import type {
   AttendanceDay,
   AttendanceRow,
@@ -18,7 +19,24 @@ import type {
   PerformanceReport,
   PerformanceRow,
   RosterEntry,
+  TillAccessInput,
+  TillCashier,
+  UnlinkedCashier,
 } from "./hr.schema.js";
+
+/** Outcome of a till-access grant — a friendly code the router maps to HTTP. */
+export type GrantTillResult =
+  | { ok: true; cashier: TillCashier }
+  | {
+      ok: false;
+      code:
+        | "not_found"
+        | "inactive"
+        | "already_linked"
+        | "cashier_not_found"
+        | "cashier_disabled"
+        | "cashier_taken";
+    };
 
 /**
  * Data access for HR. EVERY query is scoped by `tenantId` (read from the
@@ -194,6 +212,130 @@ export async function updateEmployee(
 export async function deleteEmployee(tenantId: string, id: string): Promise<boolean> {
   const { rowCount } = await query(`DELETE FROM employees WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
   return (rowCount ?? 0) > 0;
+}
+
+// ── Till access (Employee ↔ Cashier bridge) ───────────────────────────────────
+
+/**
+ * Active cashier logins in this tenant with NO linked employee — the candidates
+ * the owner can link an employee to. Mirrors the "orphan till logins" an admin
+ * can also adopt from the HR side.
+ */
+export async function listUnlinkedCashiers(tenantId: string): Promise<UnlinkedCashier[]> {
+  const { rows } = await query<{ id: string; name: string; has_pin: boolean }>(
+    `SELECT u.id, u.name, (u.pin_hash IS NOT NULL) AS has_pin
+       FROM users u
+      WHERE u.tenant_id = $1 AND u.role = 'CASHIER' AND u.status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM employees e WHERE e.tenant_id = $1 AND e.user_id = u.id
+        )
+      ORDER BY lower(u.name) ASC`,
+    [tenantId],
+  );
+  return rows.map((r) => ({ id: r.id, name: r.name, hasPin: r.has_pin }));
+}
+
+/**
+ * Grant an employee till access (ADR 0002). Either provisions a fresh CASHIER
+ * login (optional 4-digit PIN + opening float) or links an existing unlinked
+ * cashier, then points `employees.user_id` at it. Once linked, the cashier shows
+ * in the live duty roster automatically (the roster reads `users`, not here).
+ *
+ * Runs in one transaction with the employee row locked, so two concurrent grants
+ * can't both win. `employees.user_id` is not UNIQUE, so the link path explicitly
+ * rejects a cashier already attached to another employee.
+ */
+export async function grantTillAccess(
+  tenantId: string,
+  employeeId: string,
+  input: TillAccessInput,
+): Promise<GrantTillResult> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const emp = await client.query<{ user_id: string | null; is_active: boolean; name: string }>(
+      `SELECT user_id, is_active, name FROM employees
+        WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+      [employeeId, tenantId],
+    );
+    if (emp.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "not_found" };
+    }
+    const e = emp.rows[0];
+    if (!e.is_active) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "inactive" };
+    }
+    if (e.user_id) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "already_linked" };
+    }
+
+    type CashierRow = {
+      id: string;
+      name: string;
+      status: string;
+      has_pin: boolean;
+      default_float_cents: number;
+    };
+    let row: CashierRow;
+
+    if (input.mode === "create") {
+      const ins = await client.query<CashierRow>(
+        `INSERT INTO users (tenant_id, email, name, role, pin_hash, status, default_float_cents)
+         VALUES ($1, 'cashier.' || gen_random_uuid() || '@cashier.local', $2, 'CASHIER', $3, 'active', $4)
+         RETURNING id, name, status, default_float_cents, (pin_hash IS NOT NULL) AS has_pin`,
+        [tenantId, e.name, input.pin ? hashPin(input.pin) : null, input.defaultFloatCents],
+      );
+      row = ins.rows[0];
+    } else {
+      const found = await client.query<CashierRow>(
+        `SELECT id, name, status, default_float_cents, (pin_hash IS NOT NULL) AS has_pin
+           FROM users WHERE id = $1 AND tenant_id = $2 AND role = 'CASHIER' FOR UPDATE`,
+        [input.cashierUserId, tenantId],
+      );
+      if (found.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "cashier_not_found" };
+      }
+      row = found.rows[0];
+      if (row.status !== "active") {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "cashier_disabled" };
+      }
+      const taken = await client.query(
+        `SELECT 1 FROM employees WHERE tenant_id = $1 AND user_id = $2`,
+        [tenantId, row.id],
+      );
+      if ((taken.rowCount ?? 0) > 0) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "cashier_taken" };
+      }
+    }
+
+    await client.query(
+      `UPDATE employees SET user_id = $3, updated_at = now() WHERE id = $1 AND tenant_id = $2`,
+      [employeeId, tenantId, row.id],
+    );
+    await client.query("COMMIT");
+    return {
+      ok: true,
+      cashier: {
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        hasPin: row.has_pin,
+        defaultFloatCents: row.default_float_cents,
+      },
+    };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ── Attendance ───────────────────────────────────────────────────────────────

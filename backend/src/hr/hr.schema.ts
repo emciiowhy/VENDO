@@ -105,10 +105,40 @@ export const payrollRunSchema = z
     path: ["periodEnd"],
   });
 
+// ── Till access (link an Employee to a Cashier login) ─────────────────────────
+
+/** A 4-digit cashier PIN — the same shape the Cashiers console enforces. */
+const pinField = z.string().trim().regex(/^\d{4}$/, "PIN must be exactly 4 digits.");
+
+/** Opening cash float in integer centavos; the client converts from pesos. */
+const floatCentsField = z.coerce
+  .number()
+  .int("Enter a whole centavo amount.")
+  .min(0, "Float can't be negative.")
+  .max(10_000_000, "That float is too large.")
+  .default(0);
+
+/**
+ * Grant an employee till access: either provision a brand-new cashier login
+ * (optional PIN + opening float) or link an existing unlinked cashier.
+ */
+export const tillAccessSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("create"),
+    pin: pinField.optional(),
+    defaultFloatCents: floatCentsField,
+  }),
+  z.object({
+    mode: z.literal("link"),
+    cashierUserId: z.string().trim().uuid("Choose a valid cashier."),
+  }),
+]);
+
 export type EmployeeCreateInput = z.infer<typeof employeeCreateSchema>;
 export type EmployeeUpdateInput = z.infer<typeof employeeUpdateSchema>;
 export type AttendanceUpsertInput = z.infer<typeof attendanceUpsertSchema>;
 export type PayrollRunInput = z.infer<typeof payrollRunSchema>;
+export type TillAccessInput = z.infer<typeof tillAccessSchema>;
 
 // ── API-facing shapes ─────────────────────────────────────────────────────────
 
@@ -222,6 +252,22 @@ export interface RosterEntry {
   name: string;
   openingCents: number;
   openedAt: string;
+}
+
+/** A cashier login linked to an employee, returned after granting till access. */
+export interface TillCashier {
+  id: string;
+  name: string;
+  status: string;
+  hasPin: boolean;
+  defaultFloatCents: number;
+}
+
+/** An active cashier login with no linked employee — a candidate to link. */
+export interface UnlinkedCashier {
+  id: string;
+  name: string;
+  hasPin: boolean;
 }
 
 /** The HR executive overview hub. */
