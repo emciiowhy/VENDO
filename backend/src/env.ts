@@ -68,10 +68,16 @@ export const env = {
    * logs the rendered message to the server console, so provisioning works with
    * no setup. Set the key (https://resend.com → API Keys) to deliver for real,
    * and EMAIL_FROM to a verified sender on your domain. See notifications/email.ts.
+   *
+   * The default `from` is a cosmetic placeholder for the pre-deploy phase. NOTE:
+   * before real delivery, this MUST change — a gmail.com sender is rejected by
+   * Resend (you can only send from a domain you verify). At deploy, either verify
+   * a real domain in Resend (e.g. noreply@vendopos.app) or swap the transport to
+   * Gmail SMTP/API. See docs/staging-validation.md §7.
    */
   email: {
     resendApiKey: optional("RESEND_API_KEY"),
-    from: optional("EMAIL_FROM", "VendoPOS <onboarding@vendopos.app>"),
+    from: optional("EMAIL_FROM", "VendoPOS <vendopos@gmail.com>"),
     /**
      * Where internal/operations alerts are sent (e.g. an Enterprise concierge
      * inquiry). Optional: when unset we fall back to the `from` mailbox, and with
