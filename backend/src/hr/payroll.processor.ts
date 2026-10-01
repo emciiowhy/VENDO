@@ -17,6 +17,8 @@
  * can't drift a centavo across thousands of punches.
  */
 
+import { computeDeductions } from "./deductions.js"; // pure; keeps this module IO-free
+
 const MNL_OFFSET_MS = 8 * 60 * 60 * 1000; // Asia/Manila = UTC+8, no DST.
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -73,6 +75,13 @@ export interface PayrollLine {
   overtimePayCents: number;
   nightDiffPayCents: number;
   grossCents: number;
+  // Employee-side statutory deductions, derived from gross (see deductions.ts).
+  sssCents: number;
+  philhealthCents: number;
+  pagibigCents: number;
+  withholdingTaxCents: number;
+  totalDeductionsCents: number;
+  netCents: number;
 }
 
 export interface PayrollReport {
@@ -86,6 +95,8 @@ export interface PayrollReport {
     overtimeHours: number;
     nightDiffHours: number;
     grossCents: number;
+    totalDeductionsCents: number;
+    netCents: number;
   };
 }
 
@@ -199,6 +210,7 @@ export function processPayroll(
       ? Math.round(nightDiffHours * hourlyRateCents * NIGHT_DIFF_RATE)
       : 0;
     const grossCents = regularPayCents + overtimePayCents + nightDiffPayCents;
+    const ded = computeDeductions(grossCents);
 
     return {
       employeeId: e.id,
@@ -215,6 +227,12 @@ export function processPayroll(
       overtimePayCents,
       nightDiffPayCents,
       grossCents,
+      sssCents: ded.sssCents,
+      philhealthCents: ded.philhealthCents,
+      pagibigCents: ded.pagibigCents,
+      withholdingTaxCents: ded.withholdingTaxCents,
+      totalDeductionsCents: ded.totalDeductionsCents,
+      netCents: ded.netCents,
     };
   });
 
@@ -224,9 +242,19 @@ export function processPayroll(
       acc.overtimeHours += l.overtimeHours;
       acc.nightDiffHours += l.nightDiffHours;
       acc.grossCents += l.grossCents;
+      acc.totalDeductionsCents += l.totalDeductionsCents;
+      acc.netCents += l.netCents;
       return acc;
     },
-    { headcount: lines.length, regularHours: 0, overtimeHours: 0, nightDiffHours: 0, grossCents: 0 },
+    {
+      headcount: lines.length,
+      regularHours: 0,
+      overtimeHours: 0,
+      nightDiffHours: 0,
+      grossCents: 0,
+      totalDeductionsCents: 0,
+      netCents: 0,
+    },
   );
   totals.regularHours = round2(totals.regularHours);
   totals.overtimeHours = round2(totals.overtimeHours);
@@ -261,6 +289,12 @@ const CSV_HEADER = [
   "Overtime Pay",
   "Night Diff Pay",
   "Gross Earnings",
+  "SSS",
+  "PhilHealth",
+  "Pag-IBIG",
+  "Withholding Tax",
+  "Total Deductions",
+  "Net Pay",
 ];
 
 /**
@@ -287,6 +321,12 @@ export function toPayrollCsv(report: PayrollReport): string {
         pesoDecimal(l.overtimePayCents),
         pesoDecimal(l.nightDiffPayCents),
         pesoDecimal(l.grossCents),
+        pesoDecimal(l.sssCents),
+        pesoDecimal(l.philhealthCents),
+        pesoDecimal(l.pagibigCents),
+        pesoDecimal(l.withholdingTaxCents),
+        pesoDecimal(l.totalDeductionsCents),
+        pesoDecimal(l.netCents),
       ]
         .map(csvField)
         .join(","),
@@ -308,6 +348,12 @@ export function toPayrollCsv(report: PayrollReport): string {
       "",
       "",
       pesoDecimal(t.grossCents),
+      "",
+      "",
+      "",
+      "",
+      pesoDecimal(t.totalDeductionsCents),
+      pesoDecimal(t.netCents),
     ]
       .map(csvField)
       .join(","),

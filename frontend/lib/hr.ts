@@ -140,6 +140,12 @@ export interface PayrollItem {
   payRateCents: number;
   basisQty: number;
   grossCents: number;
+  sssCents: number;
+  philhealthCents: number;
+  pagibigCents: number;
+  withholdingTaxCents: number;
+  totalDeductionsCents: number;
+  netCents: number;
 }
 
 export interface PayrollRunSummary {
@@ -155,6 +161,8 @@ export interface PayrollRunSummary {
 export interface PayrollRunDetail extends PayrollRunSummary {
   note: string | null;
   items: PayrollItem[];
+  totalDeductionsCents: number;
+  totalNetCents: number;
 }
 
 export interface HrSummary {
@@ -217,6 +225,12 @@ export interface PayrollExportLine {
   overtimePayCents: number;
   nightDiffPayCents: number;
   grossCents: number;
+  sssCents: number;
+  philhealthCents: number;
+  pagibigCents: number;
+  withholdingTaxCents: number;
+  totalDeductionsCents: number;
+  netCents: number;
 }
 
 export interface PayrollExportReport {
@@ -230,6 +244,8 @@ export interface PayrollExportReport {
     overtimeHours: number;
     nightDiffHours: number;
     grossCents: number;
+    totalDeductionsCents: number;
+    netCents: number;
   };
 }
 

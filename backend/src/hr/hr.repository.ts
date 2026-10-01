@@ -1,4 +1,5 @@
 import { pool, query } from "../db.js";
+import { computeDeductions } from "./deductions.js";
 import type {
   AttendanceDay,
   AttendanceRow,
@@ -416,16 +417,27 @@ export async function getPayrollRun(tenantId: string, id: string): Promise<Payro
        FROM payroll_items WHERE run_id = $1 ORDER BY lower(name) ASC`,
     [id],
   );
-  const items: PayrollItem[] = itemsRes.rows.map((i) => ({
-    id: i.id,
-    employeeId: i.employee_id,
-    name: i.name,
-    payType: i.pay_type,
-    payRateCents: i.pay_rate_cents,
-    basisQty: Number(i.basis_qty),
-    grossCents: i.gross_cents,
-  }));
-  return { ...toRunSummary(rows[0]), note: rows[0].note, items };
+  const items: PayrollItem[] = itemsRes.rows.map((i) => {
+    const d = computeDeductions(i.gross_cents);
+    return {
+      id: i.id,
+      employeeId: i.employee_id,
+      name: i.name,
+      payType: i.pay_type,
+      payRateCents: i.pay_rate_cents,
+      basisQty: Number(i.basis_qty),
+      grossCents: i.gross_cents,
+      sssCents: d.sssCents,
+      philhealthCents: d.philhealthCents,
+      pagibigCents: d.pagibigCents,
+      withholdingTaxCents: d.withholdingTaxCents,
+      totalDeductionsCents: d.totalDeductionsCents,
+      netCents: d.netCents,
+    };
+  });
+  const totalDeductionsCents = items.reduce((s, i) => s + i.totalDeductionsCents, 0);
+  const totalNetCents = items.reduce((s, i) => s + i.netCents, 0);
+  return { ...toRunSummary(rows[0]), note: rows[0].note, items, totalDeductionsCents, totalNetCents };
 }
 
 // ── Summary KPIs ──────────────────────────────────────────────────────────────
