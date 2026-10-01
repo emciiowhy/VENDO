@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createApp } from "../app.js";
-import { tillAccessSchema } from "./hr.schema.js";
+import { adoptCashierSchema, tillAccessSchema } from "./hr.schema.js";
 
 const app = createApp();
 const UUID = "00000000-0000-0000-0000-000000000000";
@@ -23,6 +23,29 @@ describe("HR till-access routes are fenced to authenticated store staff", () => 
       .post(`/api/v1/hr/employees/${UUID}/till-access`)
       .send({ mode: "create", pin: "1234" });
     expect(res.status).toBe(401);
+  });
+
+  it("blocks adopting a cashier for the unauthenticated with 401", async () => {
+    const res = await request(app).post(`/api/v1/hr/cashiers/${UUID}/adopt`).send({ mode: "create" });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("adoptCashierSchema validates the adopt payload", () => {
+  it("accepts create (employee made from the cashier)", () => {
+    expect(adoptCashierSchema.parse({ mode: "create" })).toEqual({ mode: "create" });
+  });
+  it("accepts link to an existing employee by id", () => {
+    expect(adoptCashierSchema.parse({ mode: "link", employeeId: UUID })).toEqual({
+      mode: "link",
+      employeeId: UUID,
+    });
+  });
+  it("rejects link without a valid employee uuid", () => {
+    expect(adoptCashierSchema.safeParse({ mode: "link", employeeId: "nope" }).success).toBe(false);
+  });
+  it("rejects an unknown mode", () => {
+    expect(adoptCashierSchema.safeParse({ mode: "merge" }).success).toBe(false);
   });
 });
 

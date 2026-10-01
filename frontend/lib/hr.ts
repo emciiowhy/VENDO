@@ -542,6 +542,28 @@ export async function grantTillAccess(
   }
 }
 
+/** Adopt input: create a new employee from the cashier, or link an existing one. */
+export type AdoptCashierInput = { mode: "create" } | { mode: "link"; employeeId: string };
+
+/** Adopt an unlinked cashier into HR (create a new employee, or link an existing one). */
+export async function adoptCashier(
+  cashierUserId: string,
+  input: AdoptCashierInput,
+): Promise<Result<{ employee: Employee }>> {
+  try {
+    return await readJson(
+      await fetch(`${BASE}/cashiers/${cashierUserId}/adopt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(input),
+      }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
 export async function saveAttendance(input: {
   employeeId: string;
   workDate: string;
