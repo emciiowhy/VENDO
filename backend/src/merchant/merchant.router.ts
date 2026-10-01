@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { requireRole } from "../auth/auth.middleware.js";
 import { requireFeature } from "../auth/tier.middleware.js";
+import { tenantTierById } from "../auth/auth.repository.js";
+import { minTierForFeature, tierAtLeast } from "../lib/tiers.js";
 import {
   getComplianceLedger,
   getDashboardPulse,
@@ -59,7 +61,11 @@ merchantRouter.get("/analytics/totals", async (req, res) => {
   const raw = req.query.range;
   const range: SalesRange = SALES_RANGES.includes(raw as SalesRange) ? (raw as SalesRange) : "today";
   try {
-    res.json({ ok: true, totals: await getSalesTotals(tenantId, range) });
+    // Expenses + net are a Finance (Business+) feature — include them only when
+    // the tenant is entitled, so Starter sees Sales alone (no 403, just omitted).
+    const tier = await tenantTierById(tenantId);
+    const financeEntitled = tier ? tierAtLeast(tier, minTierForFeature("finance_accounting")) : false;
+    res.json({ ok: true, totals: await getSalesTotals(tenantId, range, financeEntitled) });
   } catch (err) {
     console.error("[merchant] sales totals failed:", err);
     res.status(500).json({ ok: false, error: "Could not load sales totals." });

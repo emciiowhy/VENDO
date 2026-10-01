@@ -163,6 +163,10 @@ export interface SalesTotals {
   grossCents: number;
   txns: number;
   aovCents: number;
+  /** Store expenses over the window; null when not entitled to Finance. */
+  expensesCents: number | null;
+  /** Sales − expenses; null when expenses aren't available. */
+  netCents: number | null;
 }
 
 /** Total sales / transactions / AOV over the given window. */

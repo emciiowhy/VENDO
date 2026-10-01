@@ -246,14 +246,60 @@ function TotalsStrip() {
 
       <div className="mt-5 grid gap-4 sm:grid-cols-3">
         <TotalTile label="Sales" value={loading || !totals ? "—" : formatCentsWhole(totals.grossCents)} loading={loading} wide />
-        <TotalTile label="Transactions" value={loading || !totals ? "—" : formatCount(totals.txns)} loading={loading} />
-        <TotalTile label="Avg. order value" value={loading || !totals ? "—" : formatCents(totals.aovCents)} loading={loading} />
+        {totals && totals.netCents !== null ? (
+          <>
+            <TotalTile
+              label="Expenses"
+              value={loading ? "—" : `−${formatCentsWhole(totals.expensesCents ?? 0)}`}
+              loading={loading}
+              tone="expense"
+            />
+            <TotalTile
+              label="Net profit"
+              value={loading ? "—" : formatCentsWhole(totals.netCents)}
+              loading={loading}
+              wide
+              tone="net"
+            />
+          </>
+        ) : (
+          <>
+            <TotalTile label="Transactions" value={loading || !totals ? "—" : formatCount(totals.txns)} loading={loading} />
+            <TotalTile label="Avg. order value" value={loading || !totals ? "—" : formatCents(totals.aovCents)} loading={loading} />
+          </>
+        )}
       </div>
+
+      {/* When the money story (expenses/net) takes the tiles, keep txns + AOV visible. */}
+      {!loading && totals && totals.netCents !== null && (
+        <p className="mt-3 text-[12px] text-ink-soft tabular-nums">
+          {formatCount(totals.txns)} transactions · {formatCents(totals.aovCents)} avg. order value
+        </p>
+      )}
     </div>
   );
 }
 
-function TotalTile({ label, value, loading, wide }: { label: string; value: string; loading: boolean; wide?: boolean }) {
+function TotalTile({
+  label,
+  value,
+  loading,
+  wide,
+  tone,
+}: {
+  label: string;
+  value: string;
+  loading: boolean;
+  wide?: boolean;
+  tone?: "expense" | "net";
+}) {
+  const valueTone = loading
+    ? " animate-pulse text-ink-faint"
+    : tone === "expense"
+      ? " text-rose-600"
+      : tone === "net"
+        ? " text-accent-700 dark:text-accent-400"
+        : "";
   return (
     <div className="rounded-[12px] bg-paper hairline px-4 py-3.5">
       <div className="text-[12px] font-semibold text-ink-soft">{label}</div>
@@ -261,7 +307,7 @@ function TotalTile({ label, value, loading, wide }: { label: string; value: stri
         className={
           "mt-1 font-extrabold tracking-tightest tabular-nums " +
           (wide ? "text-[1.7rem] leading-none" : "text-[1.4rem] leading-none") +
-          (loading ? " animate-pulse text-ink-faint" : "")
+          valueTone
         }
       >
         {value}
