@@ -19,23 +19,33 @@ interface Review {
 const REVIEWS: Review[] = [
   {
     quote:
-      "Espresso rush doesn't wait. VendoPOS keeps up shot-for-shot, and Senior/PWD discounts on food orders land in one tap — no mental math at the bar. Best of all, when baristas swap the drawer mid-shift it reconciles to the centavo, so handovers stop being an argument.",
+      "Espresso rush doesn't wait, and VendoPOS keeps up shot-for-shot. Senior and PWD discounts land in one tap — no more mental math at the bar — and when my baristas swap the drawer mid-shift it reconciles to the last centavo. Handovers that used to start arguments now take seconds.",
     name: "Justine Mirafuentes",
     role: "Owner",
     store: "Local Coffee Co.",
     region: "Quezon City",
     initials: "JM",
-    highlight: "Senior/PWD discounts in one tap",
+    highlight: "Drawer reconciles to the centavo",
   },
   {
     quote:
-      "Morning rush is chaos — one barista's steaming milk while another needs to ring up an artisanal pastry. The 4-digit PIN switch means they trade the terminal in two seconds flat. The line keeps moving and nothing gets rung up under the wrong name.",
-    name: "Chef Marco",
+      "Mornings are chaos — one barista's steaming milk while another rings up a tray of ensaymada. With the 4-digit PIN they trade the terminal in two seconds, so the line keeps moving and nothing gets rung up under the wrong name.",
+    name: "Marco Villanueva",
     role: "Head Baker",
-    store: "TeaModern Bakes & Café",
+    store: "TeaModern Pastries",
     region: "Makati City",
-    initials: "CM",
+    initials: "MV",
     highlight: "2-second PIN switching",
+  },
+  {
+    quote:
+      "A brownout hit us mid-afternoon and I panicked — but the till just kept selling offline and synced everything the second power came back. Nothing lost. And at closing, the Z-reading and BIR receipts are already sorted, so I've stopped staying late to reconcile by hand.",
+    name: "Aira Santos",
+    role: "Owner",
+    store: "Kapehanan",
+    region: "Cebu City",
+    initials: "AS",
+    highlight: "Kept selling through a brownout",
   },
 ];
 
@@ -56,7 +66,7 @@ export function Testimonials() {
           </p>
         </div>
 
-        <div className="mt-14 grid md:grid-cols-2 gap-5 max-w-[920px] reveal">
+        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 reveal">
           {REVIEWS.map((r) => (
             <figure
               key={r.store}
