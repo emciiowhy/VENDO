@@ -276,9 +276,9 @@
   <h3>Plan catalogue (backend <code>billing/plans.ts</code>)</h3>
   <table>
     <tr><th>Plan</th><th>Billing price / month</th><th>Product capacity</th><th>Target</th></tr>
-    <tr><td><span class="tag t-s">Starter</span></td><td>₱599.00 (59,900 centavos)</td><td>30 products</td><td>Single-location coffee shops, small retailers</td></tr>
-    <tr><td><span class="tag t-b">Business</span></td><td>₱1,999.00 (199,900 centavos)</td><td>300 products</td><td>Growing multi-staff retailers and restaurants</td></tr>
-    <tr><td><span class="tag t-e">Enterprise</span></td><td>₱7,999.00 (799,900 centavos) for MRR; "Contact us" publicly</td><td>Unlimited</td><td>Full ERP, manufacturing, HR, multi-location</td></tr>
+    <tr><td><span class="tag t-s">Starter</span></td><td>₱299.00 (29,900 centavos)</td><td>30 products</td><td>Single-location coffee shops, small retailers</td></tr>
+    <tr><td><span class="tag t-b">Business</span></td><td>₱499.00 (49,900 centavos)</td><td>300 products</td><td>Growing multi-staff retailers and restaurants</td></tr>
+    <tr><td><span class="tag t-e">Enterprise</span></td><td>₱799.00 (79,900 centavos); sales-assisted ("Talk to our team")</td><td>Unlimited</td><td>Full ERP, manufacturing, HR, multi-location</td></tr>
   </table>
   <p>Exceeding capacity on <code>POST /api/inventory/products</code> returns <code>403 {"code":"plan_limit_exceeded"}</code>. The platform also models a <b>0.5%</b> transaction-fee rate on merchant GMV for fee-revenue charts.</p>
 

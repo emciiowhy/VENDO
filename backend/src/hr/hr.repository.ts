@@ -1,4 +1,5 @@
 import { pool, query } from "../db.js";
+import { hashPin } from "../auth/auth.crypto.js";
 import type {
   AttendanceDay,
   AttendanceRow,
@@ -18,7 +19,39 @@ import type {
   PerformanceReport,
   PerformanceRow,
   RosterEntry,
+  AdoptCashierInput,
+  TillAccessInput,
+  TillCashier,
+  UnlinkedCashier,
 } from "./hr.schema.js";
+
+/** Outcome of a till-access grant — a friendly code the router maps to HTTP. */
+export type GrantTillResult =
+  | { ok: true; cashier: TillCashier }
+  | {
+      ok: false;
+      code:
+        | "not_found"
+        | "inactive"
+        | "already_linked"
+        | "cashier_not_found"
+        | "cashier_disabled"
+        | "cashier_taken";
+    };
+
+/** Outcome of adopting an unlinked cashier into HR. */
+export type AdoptResult =
+  | { ok: true; employee: Employee }
+  | {
+      ok: false;
+      code:
+        | "cashier_not_found"
+        | "cashier_disabled"
+        | "already_adopted"
+        | "employee_not_found"
+        | "employee_inactive"
+        | "employee_linked";
+    };
 
 /**
  * Data access for HR. EVERY query is scoped by `tenantId` (read from the
@@ -184,6 +217,40 @@ export async function updateEmployee(
   if (sets.length === 0) return getEmployee(tenantId, id);
   sets.push("updated_at = now()");
 
+  // When employment status toggles, cascade to the linked cashier login in one
+  // transaction (ADR 0002): separation disables the till login so a departed
+  // worker can't sign in; reactivation (rehire) re-enables it. The reverse
+  // direction — deleting a cashier unlinking the employee — is handled by the
+  // employees.user_id ON DELETE SET NULL foreign key, so it needs no code here.
+  if (input.isActive !== undefined) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const { rows } = await client.query<EmployeeRow>(
+        `UPDATE employees SET ${sets.join(", ")} WHERE id = $1 AND tenant_id = $2 RETURNING ${EMP_COLUMNS}`,
+        [id, tenantId, ...vals],
+      );
+      const row = rows[0];
+      if (!row) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      if (row.user_id) {
+        await client.query(
+          `UPDATE users SET status = $3 WHERE id = $1 AND tenant_id = $2 AND role = 'CASHIER'`,
+          [row.user_id, tenantId, input.isActive ? "active" : "disabled"],
+        );
+      }
+      await client.query("COMMIT");
+      return toEmployee(row);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   const { rows } = await query<EmployeeRow>(
     `UPDATE employees SET ${sets.join(", ")} WHERE id = $1 AND tenant_id = $2 RETURNING ${EMP_COLUMNS}`,
     [id, tenantId, ...vals],
@@ -194,6 +261,209 @@ export async function updateEmployee(
 export async function deleteEmployee(tenantId: string, id: string): Promise<boolean> {
   const { rowCount } = await query(`DELETE FROM employees WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
   return (rowCount ?? 0) > 0;
+}
+
+// ── Till access (Employee ↔ Cashier bridge) ───────────────────────────────────
+
+/**
+ * Active cashier logins in this tenant with NO linked employee — the candidates
+ * the owner can link an employee to. Mirrors the "orphan till logins" an admin
+ * can also adopt from the HR side.
+ */
+export async function listUnlinkedCashiers(tenantId: string): Promise<UnlinkedCashier[]> {
+  const { rows } = await query<{ id: string; name: string; has_pin: boolean }>(
+    `SELECT u.id, u.name, (u.pin_hash IS NOT NULL) AS has_pin
+       FROM users u
+      WHERE u.tenant_id = $1 AND u.role = 'CASHIER' AND u.status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM employees e WHERE e.tenant_id = $1 AND e.user_id = u.id
+        )
+      ORDER BY lower(u.name) ASC`,
+    [tenantId],
+  );
+  return rows.map((r) => ({ id: r.id, name: r.name, hasPin: r.has_pin }));
+}
+
+/**
+ * Grant an employee till access (ADR 0002). Either provisions a fresh CASHIER
+ * login (optional 4-digit PIN + opening float) or links an existing unlinked
+ * cashier, then points `employees.user_id` at it. Once linked, the cashier shows
+ * in the live duty roster automatically (the roster reads `users`, not here).
+ *
+ * Runs in one transaction with the employee row locked, so two concurrent grants
+ * can't both win. `employees.user_id` is not UNIQUE, so the link path explicitly
+ * rejects a cashier already attached to another employee.
+ */
+export async function grantTillAccess(
+  tenantId: string,
+  employeeId: string,
+  input: TillAccessInput,
+): Promise<GrantTillResult> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const emp = await client.query<{ user_id: string | null; is_active: boolean; name: string }>(
+      `SELECT user_id, is_active, name FROM employees
+        WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+      [employeeId, tenantId],
+    );
+    if (emp.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "not_found" };
+    }
+    const e = emp.rows[0];
+    if (!e.is_active) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "inactive" };
+    }
+    if (e.user_id) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "already_linked" };
+    }
+
+    type CashierRow = {
+      id: string;
+      name: string;
+      status: string;
+      has_pin: boolean;
+      default_float_cents: number;
+    };
+    let row: CashierRow;
+
+    if (input.mode === "create") {
+      const ins = await client.query<CashierRow>(
+        `INSERT INTO users (tenant_id, email, name, role, pin_hash, status, default_float_cents)
+         VALUES ($1, 'cashier.' || gen_random_uuid() || '@cashier.local', $2, 'CASHIER', $3, 'active', $4)
+         RETURNING id, name, status, default_float_cents, (pin_hash IS NOT NULL) AS has_pin`,
+        [tenantId, e.name, input.pin ? hashPin(input.pin) : null, input.defaultFloatCents],
+      );
+      row = ins.rows[0];
+    } else {
+      const found = await client.query<CashierRow>(
+        `SELECT id, name, status, default_float_cents, (pin_hash IS NOT NULL) AS has_pin
+           FROM users WHERE id = $1 AND tenant_id = $2 AND role = 'CASHIER' FOR UPDATE`,
+        [input.cashierUserId, tenantId],
+      );
+      if (found.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "cashier_not_found" };
+      }
+      row = found.rows[0];
+      if (row.status !== "active") {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "cashier_disabled" };
+      }
+      const taken = await client.query(
+        `SELECT 1 FROM employees WHERE tenant_id = $1 AND user_id = $2`,
+        [tenantId, row.id],
+      );
+      if ((taken.rowCount ?? 0) > 0) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "cashier_taken" };
+      }
+    }
+
+    await client.query(
+      `UPDATE employees SET user_id = $3, updated_at = now() WHERE id = $1 AND tenant_id = $2`,
+      [employeeId, tenantId, row.id],
+    );
+    await client.query("COMMIT");
+    return {
+      ok: true,
+      cashier: {
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        hasPin: row.has_pin,
+        defaultFloatCents: row.default_float_cents,
+      },
+    };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Adopt an unlinked cashier into HR (ADR 0002, reverse direction): create a new
+ * Employee from the cashier (name copied, other fields default) or link the
+ * cashier to an existing unlinked Employee. One transaction with the cashier
+ * row locked; rejects a cashier already attached to an employee.
+ */
+export async function adoptCashier(
+  tenantId: string,
+  cashierUserId: string,
+  input: AdoptCashierInput,
+): Promise<AdoptResult> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const c = await client.query<{ name: string; status: string }>(
+      `SELECT name, status FROM users
+        WHERE id = $1 AND tenant_id = $2 AND role = 'CASHIER' FOR UPDATE`,
+      [cashierUserId, tenantId],
+    );
+    if (c.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "cashier_not_found" };
+    }
+    if (c.rows[0].status !== "active") {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "cashier_disabled" };
+    }
+    const already = await client.query(
+      `SELECT 1 FROM employees WHERE tenant_id = $1 AND user_id = $2`,
+      [tenantId, cashierUserId],
+    );
+    if ((already.rowCount ?? 0) > 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "already_adopted" };
+    }
+
+    let row: EmployeeRow;
+    if (input.mode === "create") {
+      const ins = await client.query<EmployeeRow>(
+        `INSERT INTO employees (tenant_id, name, user_id) VALUES ($1, $2, $3) RETURNING ${EMP_COLUMNS}`,
+        [tenantId, c.rows[0].name, cashierUserId],
+      );
+      row = ins.rows[0];
+    } else {
+      const emp = await client.query<{ user_id: string | null; is_active: boolean }>(
+        `SELECT user_id, is_active FROM employees WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+        [input.employeeId, tenantId],
+      );
+      if (emp.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "employee_not_found" };
+      }
+      if (!emp.rows[0].is_active) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "employee_inactive" };
+      }
+      if (emp.rows[0].user_id) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "employee_linked" };
+      }
+      const upd = await client.query<EmployeeRow>(
+        `UPDATE employees SET user_id = $3, updated_at = now()
+          WHERE id = $1 AND tenant_id = $2 RETURNING ${EMP_COLUMNS}`,
+        [input.employeeId, tenantId, cashierUserId],
+      );
+      row = upd.rows[0];
+    }
+
+    await client.query("COMMIT");
+    return { ok: true, employee: toEmployee(row) };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ── Attendance ───────────────────────────────────────────────────────────────

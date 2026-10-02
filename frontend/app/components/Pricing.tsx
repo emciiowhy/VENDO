@@ -17,9 +17,9 @@ const plans: Plan[] = [
   {
     name: "Starter",
     forWho: "For single-location coffee shops & small retailers.",
-    price: "₱599",
+    price: "₱299",
     per: "/mo",
-    indicative: true,
+    indicative: false,
     signupPlan: "starter",
     features: [
       "Point of Sale",
@@ -32,9 +32,9 @@ const plans: Plan[] = [
   {
     name: "Business",
     forWho: "For growing multi-staff retailers & restaurants.",
-    price: "₱1,999",
+    price: "₱499",
     per: "/mo",
-    indicative: true,
+    indicative: false,
     featured: true,
     signupPlan: "business",
     features: [
@@ -49,7 +49,8 @@ const plans: Plan[] = [
   {
     name: "Enterprise",
     forWho: "For large, complex, multi-location operations.",
-    price: "Contact us",
+    price: "₱799",
+    per: "/mo",
     indicative: false,
     features: [
       "Everything in Business",
@@ -166,9 +167,8 @@ export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean
           ))}
         </div>
         <p className="mt-8 text-center text-[0.9rem] text-ink-soft">
-          Prices shown in Philippine peso (₱) and are indicative placeholders pending finalisation.
-          Starter &amp; Business include a 14-day free trial — no card required. Enterprise starts with
-          a demo.
+          Prices shown in Philippine peso (₱), billed monthly. Starter &amp; Business include a 14-day
+          free trial — no card required. Enterprise starts with a demo.
         </p>
       </div>
     </section>

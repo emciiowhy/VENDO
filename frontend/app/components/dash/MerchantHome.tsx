@@ -12,11 +12,16 @@ import { asTier, featureAllowed } from "@/lib/tiers";
 import {
   getDashboardPulse,
   getReorderForecast,
+  getSalesTotals,
   getStockAlerts,
+  SALES_RANGES,
+  SALES_RANGE_LABELS,
   type DashboardPulse,
   type ForecastItem,
   type ForecastUrgency,
   type ReorderForecast,
+  type SalesRange,
+  type SalesTotals,
   type StockAlert,
 } from "@/lib/merchant";
 import { MERCHANT_EVENTS_URL, type LowStockEvent } from "@/lib/merchantEvents";
@@ -130,6 +135,9 @@ export function MerchantHome() {
         </Link>
       </div>
 
+      {/* Ranged sales totals — independent of the live "today" cockpit below. */}
+      <TotalsStrip />
+
       {state.status === "loading" && <Skeleton />}
       {state.status === "error" && (
         <div className="rounded-xl2 bg-surface hairline shadow-card p-8 text-center">
@@ -180,6 +188,129 @@ export function MerchantHome() {
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ranged sales totals above the live "today" cockpit. Fetches its own data per
+ * selected window (Today / 7d / 30d / This month / All-time) from the sales
+ * aggregation, independent of the Pulse snapshot — so the owner gets a period
+ * overview without disturbing the today panels.
+ */
+function TotalsStrip() {
+  const [range, setRange] = useState<SalesRange>("today");
+  const [totals, setTotals] = useState<SalesTotals | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      setLoading(true);
+      const res = await getSalesTotals(range);
+      if (!alive) return;
+      setTotals(res.ok ? res.totals : null);
+      setLoading(false);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [range]);
+
+  return (
+    <div className="rounded-xl2 bg-surface hairline shadow-card p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-extrabold tracking-tight">Sales totals</h3>
+          <p className="text-fine text-ink-soft">
+            {range === "today" ? "Today so far" : `${SALES_RANGE_LABELS[range]} to date`}
+          </p>
+        </div>
+        <div className="inline-flex flex-wrap gap-1 p-1 rounded-[11px] bg-paper hairline">
+          {SALES_RANGES.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setRange(r)}
+              className={
+                "px-3 py-1.5 rounded-[8px] text-[12.5px] font-semibold transition duration-150 " +
+                (range === r ? "bg-surface shadow-card text-ink" : "text-ink-soft hover:text-ink")
+              }
+            >
+              {SALES_RANGE_LABELS[r]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        <TotalTile label="Sales" value={loading || !totals ? "—" : formatCentsWhole(totals.grossCents)} loading={loading} wide />
+        {totals && totals.netCents !== null ? (
+          <>
+            <TotalTile
+              label="Expenses"
+              value={loading ? "—" : `−${formatCentsWhole(totals.expensesCents ?? 0)}`}
+              loading={loading}
+              tone="expense"
+            />
+            <TotalTile
+              label="Net profit"
+              value={loading ? "—" : formatCentsWhole(totals.netCents)}
+              loading={loading}
+              wide
+              tone="net"
+            />
+          </>
+        ) : (
+          <>
+            <TotalTile label="Transactions" value={loading || !totals ? "—" : formatCount(totals.txns)} loading={loading} />
+            <TotalTile label="Avg. order value" value={loading || !totals ? "—" : formatCents(totals.aovCents)} loading={loading} />
+          </>
+        )}
+      </div>
+
+      {/* When the money story (expenses/net) takes the tiles, keep txns + AOV visible. */}
+      {!loading && totals && totals.netCents !== null && (
+        <p className="mt-3 text-[12px] text-ink-soft tabular-nums">
+          {formatCount(totals.txns)} transactions · {formatCents(totals.aovCents)} avg. order value
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TotalTile({
+  label,
+  value,
+  loading,
+  wide,
+  tone,
+}: {
+  label: string;
+  value: string;
+  loading: boolean;
+  wide?: boolean;
+  tone?: "expense" | "net";
+}) {
+  const valueTone = loading
+    ? " animate-pulse text-ink-faint"
+    : tone === "expense"
+      ? " text-rose-600"
+      : tone === "net"
+        ? " text-accent-700 dark:text-accent-400"
+        : "";
+  return (
+    <div className="rounded-[12px] bg-paper hairline px-4 py-3.5">
+      <div className="text-[12px] font-semibold text-ink-soft">{label}</div>
+      <div
+        className={
+          "mt-1 font-extrabold tracking-tightest tabular-nums " +
+          (wide ? "text-[1.7rem] leading-none" : "text-[1.4rem] leading-none") +
+          valueTone
+        }
+      >
+        {value}
       </div>
     </div>
   );

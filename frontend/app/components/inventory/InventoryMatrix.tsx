@@ -233,6 +233,11 @@ export function InventoryMatrix() {
                     </td>
                     <td className="px-4 py-3 text-right font-bold tracking-tight tabular-nums">
                       {formatPesoExact(p.price)}
+                      {p.vatClass !== "VATABLE" && (
+                        <div className="mt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint">
+                          {p.vatClass === "EXEMPT" ? "VAT-exempt" : "Zero-rated"}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {out ? (

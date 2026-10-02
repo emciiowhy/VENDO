@@ -1,13 +1,18 @@
 import { Router, type Request, type Response } from "express";
 import { requireRole } from "../auth/auth.middleware.js";
 import { requireFeature } from "../auth/tier.middleware.js";
+import { tenantTierById } from "../auth/auth.repository.js";
+import { minTierForFeature, tierAtLeast } from "../lib/tiers.js";
 import {
   getComplianceLedger,
   getDashboardPulse,
   getLowStockCrossingsSince,
   getOwnerSummary,
   getReorderForecast,
+  getSalesTotals,
   getStockAlerts,
+  SALES_RANGES,
+  type SalesRange,
 } from "./merchant.repository.js";
 import { DEFAULT_FORECAST_OPTIONS, type ForecastOptions } from "./forecast.js";
 import { resolveMonth, toCsv } from "./compliance.csv.js";
@@ -42,6 +47,28 @@ merchantRouter.get("/analytics/dashboard", async (req, res) => {
   } catch (err) {
     console.error("[merchant] dashboard pulse failed:", err);
     res.status(500).json({ ok: false, error: "Could not load dashboard analytics." });
+  }
+});
+
+/**
+ * GET /api/v1/merchant/analytics/totals?range=today|7d|30d|month|all — ranged
+ * sales totals for the owner overview strip. Defaults to today; an unknown range
+ * falls back to today rather than erroring.
+ */
+merchantRouter.get("/analytics/totals", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const raw = req.query.range;
+  const range: SalesRange = SALES_RANGES.includes(raw as SalesRange) ? (raw as SalesRange) : "today";
+  try {
+    // Expenses + net are a Finance (Business+) feature — include them only when
+    // the tenant is entitled, so Starter sees Sales alone (no 403, just omitted).
+    const tier = await tenantTierById(tenantId);
+    const financeEntitled = tier ? tierAtLeast(tier, minTierForFeature("finance_accounting")) : false;
+    res.json({ ok: true, totals: await getSalesTotals(tenantId, range, financeEntitled) });
+  } catch (err) {
+    console.error("[merchant] sales totals failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load sales totals." });
   }
 });
 

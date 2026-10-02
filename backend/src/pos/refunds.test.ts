@@ -28,10 +28,10 @@ describe("Void / Return request validation", () => {
 });
 
 describe("computeRefund — no discount on the original sale", () => {
-  it("splits 12% inclusive VAT out of a plain ₱150 return", () => {
+  it("splits 12% inclusive VAT out of a plain ₱150 VATable return", () => {
     // Returning items worth ₱150 gross, original had no discount.
     const r = computeRefund({
-      returnedGrossCents: 15000,
+      returnedLines: [{ vatClass: "VATABLE", grossCents: 15000 }],
       originalTotalCents: 15000,
       originalDiscountCents: 0,
     });
@@ -39,6 +39,44 @@ describe("computeRefund — no discount on the original sale", () => {
     expect(r.refundNetCents).toBe(15000);
     expect(r.refundVatCents).toBe(1607); // round(15000 × 12/112)
     expect(r.refundSubtotalCents).toBe(13393);
+    expect(r.refundVatableSalesCents).toBe(13393);
+  });
+
+  it("charges no VAT when the returned line is VAT-exempt", () => {
+    const r = computeRefund({
+      returnedLines: [{ vatClass: "EXEMPT", grossCents: 15000 }],
+      originalTotalCents: 15000,
+      originalDiscountCents: 0,
+    });
+    expect(r.refundNetCents).toBe(15000);
+    expect(r.refundVatCents).toBe(0);
+    expect(r.refundVatExemptCents).toBe(15000);
+    expect(r.refundVatableSalesCents).toBe(0);
+  });
+
+  it("charges no VAT when the returned line is zero-rated", () => {
+    const r = computeRefund({
+      returnedLines: [{ vatClass: "ZERO_RATED", grossCents: 15000 }],
+      originalTotalCents: 15000,
+      originalDiscountCents: 0,
+    });
+    expect(r.refundVatCents).toBe(0);
+    expect(r.refundZeroRatedCents).toBe(15000);
+  });
+
+  it("splits VAT across mixed classes (VAT only on the VATable portion)", () => {
+    const r = computeRefund({
+      returnedLines: [
+        { vatClass: "VATABLE", grossCents: 15000 },
+        { vatClass: "EXEMPT", grossCents: 10000 },
+      ],
+      originalTotalCents: 25000,
+      originalDiscountCents: 0,
+    });
+    expect(r.refundNetCents).toBe(25000);
+    expect(r.refundVatCents).toBe(1607); // only the ₱150 VATable share
+    expect(r.refundVatExemptCents).toBe(10000);
+    expect(r.refundVatableSalesCents).toBe(13393);
   });
 });
 
@@ -47,7 +85,7 @@ describe("computeRefund — discount reversed pro-rata", () => {
     // Original: ₱200 gross, ₱20 discount → ₱180 net charged.
     // Return half the gross (₱100) → discount share = 20 × 100/200 = ₱10.
     const r = computeRefund({
-      returnedGrossCents: 10000,
+      returnedLines: [{ vatClass: "VATABLE", grossCents: 10000 }],
       originalTotalCents: 18000, // net after discount
       originalDiscountCents: 2000,
     });
@@ -59,7 +97,10 @@ describe("computeRefund — discount reversed pro-rata", () => {
 
   it("a full return reverses the entire discount and net", () => {
     const original = { originalTotalCents: 18000, originalDiscountCents: 2000 };
-    const r = computeRefund({ returnedGrossCents: 20000, ...original });
+    const r = computeRefund({
+      returnedLines: [{ vatClass: "VATABLE", grossCents: 20000 }],
+      ...original,
+    });
     expect(r.discountShareCents).toBe(2000);
     expect(r.refundNetCents).toBe(18000); // exactly the net that was charged
   });

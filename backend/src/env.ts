@@ -26,12 +26,34 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000")
   .map((o) => o.trim())
   .filter(Boolean);
 
+const isProd = (process.env.NODE_ENV ?? "development") === "production";
+
+/**
+ * The JWT/session-signing secret. In PRODUCTION it is mandatory and must be long
+ * enough to resist offline guessing — a short or missing secret would let anyone
+ * forge a session cookie (full account takeover), so we fail fast at boot rather
+ * than silently signing with a weak key. In dev/test it's optional (the OAuth and
+ * password flows that need it degrade with a clear message), so the app still
+ * boots for local work without any secret configured.
+ */
+function resolveJwtSecret(): string {
+  if (!isProd) return optional("JWT_SECRET");
+  const secret = required("JWT_SECRET");
+  if (secret.length < 32) {
+    throw new Error(
+      "JWT_SECRET must be at least 32 characters in production. " +
+        "Generate one with: node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\"",
+    );
+  }
+  return secret;
+}
+
 export const env = {
   databaseUrl: required("DATABASE_URL"),
   port,
   corsOrigins,
   nodeEnv: process.env.NODE_ENV ?? "development",
-  isProd: (process.env.NODE_ENV ?? "development") === "production",
+  isProd,
 
   /**
    * Where the browser lives. After the Google OAuth dance the backend redirects
@@ -68,10 +90,16 @@ export const env = {
    * logs the rendered message to the server console, so provisioning works with
    * no setup. Set the key (https://resend.com → API Keys) to deliver for real,
    * and EMAIL_FROM to a verified sender on your domain. See notifications/email.ts.
+   *
+   * The default `from` is a cosmetic placeholder for the pre-deploy phase. NOTE:
+   * before real delivery, this MUST change — a gmail.com sender is rejected by
+   * Resend (you can only send from a domain you verify). At deploy, either verify
+   * a real domain in Resend (e.g. noreply@vendopos.app) or swap the transport to
+   * Gmail SMTP/API. See docs/staging-validation.md §7.
    */
   email: {
     resendApiKey: optional("RESEND_API_KEY"),
-    from: optional("EMAIL_FROM", "VendoPOS <onboarding@vendopos.app>"),
+    from: optional("EMAIL_FROM", "VendoPOS <vendopos@gmail.com>"),
     /**
      * Where internal/operations alerts are sent (e.g. an Enterprise concierge
      * inquiry). Optional: when unset we fall back to the `from` mailbox, and with
@@ -81,8 +109,8 @@ export const env = {
     adminAlertTo: optional("ADMIN_ALERT_EMAIL"),
   },
 
-  /** Application JWT signed after Google identifies the user. */
-  jwtSecret: optional("JWT_SECRET"),
+  /** Application JWT signed after Google identifies the user. Required in prod. */
+  jwtSecret: resolveJwtSecret(),
 
   /** Secure HTTP-only session cookie carrying the application JWT. */
   session: {

@@ -15,8 +15,8 @@ import { signUp, type SignupPlan } from "@/lib/auth";
  */
 
 const PLAN_COPY: Record<SignupPlan, { label: string; price: string; blurb: string }> = {
-  starter: { label: "Starter", price: "₱599/mo", blurb: "POS, inventory & BIR receipts." },
-  business: { label: "Business", price: "₱1,999/mo", blurb: "Adds procurement, CRM & finance." },
+  starter: { label: "Starter", price: "₱299/mo", blurb: "POS, inventory & BIR receipts." },
+  business: { label: "Business", price: "₱499/mo", blurb: "Adds procurement, CRM & finance." },
 };
 
 const MIN_PASSWORD = 8;
