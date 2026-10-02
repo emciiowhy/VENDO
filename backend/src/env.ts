@@ -70,6 +70,15 @@ export const env = {
   publicBaseUrl: optional("PUBLIC_BASE_URL", `http://localhost:${port}`),
 
   /**
+   * Absolute directory the local-disk media provider writes uploads to (product
+   * images, payment QRs), served at /uploads. Defaults to `./uploads` under the
+   * process CWD. On an ephemeral host (e.g. Render free tier) point this at a
+   * mounted persistent disk (e.g. /data/uploads) so images survive redeploys —
+   * or wire a real object store and this becomes inert. See products.storage.ts.
+   */
+  uploadsDir: optional("UPLOADS_DIR"),
+
+  /**
    * Direct Google OAuth (handled on the backend to keep the client secret and
    * full session control server-side — see the VendoPOS auth architecture).
    * These are read lazily; the auth router fails with a clear message if a
