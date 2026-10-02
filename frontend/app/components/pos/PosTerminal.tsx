@@ -37,7 +37,7 @@ import { useThermalPrinter, type UseThermalPrinter } from "./useThermalPrinter";
 import { useBarcodeScanner } from "./useBarcodeScanner";
 import { ClockWidget } from "./ClockWidget";
 import { ActivationWizard } from "./ActivationWizard";
-import { getClockStatus } from "@/lib/timecard";
+import { clockOut as apiClockOut, getClockStatus } from "@/lib/timecard";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
   DISPLAY_CHANNEL,
@@ -586,6 +586,12 @@ export function PosTerminal() {
   //    bound to this register; return them straight to the back office.
   const isCashier = user.role === "CASHIER";
   const endShiftExit = () => {
+    // Ending the shift also closes the labor clock — one action, no separate
+    // "clock out" tap. The outgoing cashier's session is still active here, so
+    // the punch lands on the right worker; it's a safe no-op if already off the
+    // clock (e.g. an owner who rang up without clocking in).
+    void apiClockOut();
+    setClockedIn(false);
     if (isCashier) {
       setCloseShiftOpen(false);
       setShift(null);
@@ -718,7 +724,7 @@ export function PosTerminal() {
               <Icon name="monitor" className="w-[18px] h-[18px]" strokeWidth={1.7} />
               <span className="hidden lg:inline">Customer display</span>
             </button>
-            <ClockWidget open={clockOpen} onOpenChange={setClockOpen} />
+            <ClockWidget open={clockOpen} onOpenChange={setClockOpen} clockOutViaEndShift={isCashier} />
             <Link
               href="/me"
               title="My record — hours, PTO & paystubs"
