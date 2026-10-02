@@ -13,7 +13,6 @@ export function Hero() {
           {/* Left */}
           <div className="reveal">
             <span className="inline-flex items-center gap-2 text-[12.5px] font-bold tracking-wide uppercase text-brand-600 bg-brand-50 hairline px-3 py-1.5 rounded-full">
-              <Icon name="bolt" className="w-3.5 h-3.5" strokeWidth={2} />
               POS + ERP · 7 tools, one login
             </span>
             <h1 className="mt-6 text-[clamp(2.5rem,5.4vw,3.85rem)] leading-[1.04] tracking-tightest font-extrabold text-ink">
