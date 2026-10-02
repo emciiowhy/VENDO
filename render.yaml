@@ -1,6 +1,6 @@
 # Render Blueprint — VendoPOS backend API (Express + Postgres/Neon).
 # The Next.js frontend deploys separately on Vercel (root dir: frontend),
-# with NEXT_PUBLIC_API_URL=https://api.vendopos.shop.
+# with NEXT_PUBLIC_API_URL=https://vendopos.shop (same-origin proxy to this API).
 #
 # After the first apply: add the custom domain `api.vendopos.shop` to this
 # service in the Render dashboard, and point a CNAME there from Hostinger.
@@ -36,7 +36,7 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_REDIRECT_URI
-        value: https://api.vendopos.shop/auth/google/callback
+        value: https://vendopos.shop/auth/google/callback   # via the Vercel same-origin proxy
       - key: RESEND_API_KEY
         sync: false            # leave blank to log emails instead of sending
       - key: EMAIL_FROM

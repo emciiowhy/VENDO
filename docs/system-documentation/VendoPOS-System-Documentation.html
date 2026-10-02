@@ -62,9 +62,10 @@
     <tr><td class="muted">Product</td><td><b>VendoPOS</b> — Point of Sale + Enterprise Resource Planning</td></tr>
     <tr><td class="muted">Market</td><td>Philippine retail, food &amp; beverage, and small manufacturing</td></tr>
     <tr><td class="muted">Stack</td><td>Next.js 16 · React 19 · Tailwind CSS v4 · Express · TypeScript · PostgreSQL (NeonDB)</td></tr>
+    <tr><td class="muted">Live</td><td>https://vendopos.shop · API https://api.vendopos.shop</td></tr>
     <tr><td class="muted">Repository</td><td>emciiowhy/VENDO</td></tr>
     <tr><td class="muted">Document date</td><td>2 October 2026</td></tr>
-    <tr><td class="muted">Version</td><td>1.0 — reflects backend <code>vendopos-backend 0.1.0</code></td></tr>
+    <tr><td class="muted">Version</td><td>1.1 — reflects <code>main</code> as deployed to vendopos.shop (backend <code>vendopos-backend 0.1.0</code>)</td></tr>
   </table>
 </div>
 
@@ -128,17 +129,18 @@
       <li>Procurement: suppliers, purchase orders, receiving, reorder suggestions</li>
       <li>Manufacturing: recipes / bill of materials and production runs</li>
       <li>Finance: expenses, P&amp;L, Balance Sheet, Cash Flow</li>
-      <li>HR: employees, attendance, timecards, payroll runs &amp; CSV export</li>
+      <li>HR: employees, attendance, timecards, gross→net payroll with SSS / PhilHealth / Pag-IBIG / withholding tax, CSV export</li>
       <li>CRM: customers and loyalty points</li>
     </ul></div>
     <div class="card"><h4>Compliance &amp; control</h4><ul>
       <li>Serialized invoices per tenant (<code>SI-000123</code>), locked under concurrency</li>
+      <li>Per-product VAT class (VATable / Exempt / Zero-rated) on receipts and the BIR ledger</li>
       <li>Monthly BIR sales ledger (JSON + CSV)</li>
       <li>Voids/returns as contra-entries; POS audit log of sensitive actions</li>
       <li>Cash-drawer variance flags to the centavo</li>
     </ul></div>
     <div class="card"><h4>Platform operations</h4><ul>
-      <li>Lead pipeline and atomic lead → tenant provisioning</li>
+      <li>Lead pipeline with e-mail verification and atomic lead → tenant provisioning</li>
       <li>Self-serve sign-up with a 14-day trial</li>
       <li>MRR / ARPA billing analytics, subscriber register</li>
       <li>Live system-health stream (SSE), cross-tenant compliance register</li>
@@ -197,19 +199,20 @@
   <h2>3. System Architecture</h2>
   <pre class="flow">
    Browser (Merchant back office · POS terminal · Customer display · Super Admin · Marketing site)
-                 │  HTTPS, credentialed fetch (HTTP-only session cookie)
+                 │  HTTPS to https://vendopos.shop only (first-party HTTP-only session cookie)
                  ▼
    ┌───────────────────────────────┐        ┌──────────────────────────────────┐
-   │  Frontend — Next.js 16        │        │  Hardware (browser APIs)          │
+   │  Frontend — Next.js 16 (Vercel)│       │  Hardware (browser APIs)          │
    │  App Router, React 19,        │◀──────▶│  WebUSB / Web Bluetooth printers  │
    │  Tailwind v4, Recharts        │        │  Keyboard-wedge barcode scanners  │
    │  BroadcastChannel → 2nd screen│        └──────────────────────────────────┘
    └──────────────┬────────────────┘
+                  │  same-origin proxy: /api/*  /auth/*  /uploads/*  →  https://api.vendopos.shop
                   │  REST (JSON / multipart / CSV)  +  Server-Sent Events
                   ▼
    ┌──────────────────────────────────────────────────────────────────────────┐
-   │  Backend — Express + TypeScript                                          │
-   │  helmet · cors(credentials) · cookie-parser · morgan · zod · multer      │
+   │  Backend — Express + TypeScript (Render, Singapore)                       │
+   │  helmet · cors · cookie-parser · morgan · zod · multer · rate limiting   │
    │  auth (JWT cookie) → enforceTrialStatus → role guard → tier guard → route│
    │  modules: auth · leads · public · products · pos · shifts · merchant ·   │
    │  inventory · staff · finance · procurement · manufacturing · hr · ess ·  │
@@ -218,7 +221,7 @@
                   │ pg pool                        │ Resend (transactional e-mail)
                   ▼                                ▼
    ┌───────────────────────────────┐    ┌───────────────────────────┐
-   │  PostgreSQL — NeonDB          │    │  /uploads (local disk)    │
+   │  PostgreSQL — NeonDB          │    │  /uploads (UPLOADS_DIR)   │
    │  serverless, ap-southeast-1   │    │  product images, logos,   │
    │  idempotent migrate.ts        │    │  avatars, payment QRs     │
    └───────────────────────────────┘    └───────────────────────────┘</pre>
@@ -230,8 +233,12 @@
     <li>Public seams mount first: <code>/health</code>, <code>/uploads</code>, <code>/auth</code>, <code>/api/v1/public</code>, <code>/api/leads</code>.</li>
     <li><b>Trial checkpoint</b> (<code>enforceTrialStatus</code>) fences a lapsed-trial store out of every authenticated merchant module with <code>402</code> and a recovery marker. It is a no-op for anonymous and Super Admin requests.</li>
     <li>Each module router applies <code>requireRole(...)</code> and, where premium, <code>requireFeature(...)</code>.</li>
-    <li>Unknown routes return <code>404 {"ok":false,"error":"Not found"}</code>.</li>
+    <li><b>Rate limiting</b> (<code>express-rate-limit</code>) throttles brute force on login, PIN, sign-up and forgot-PIN (10 <i>failed</i> attempts per 15 minutes per IP) and floods on lead forms (30 per hour per IP), answering <code>429</code>.</li>
+    <li>Unknown routes return <code>404 {"ok":false,"error":"Not found"}</code>; a <b>central error handler</b> returns a generic <code>500</code> and never leaks stack traces.</li>
   </ol>
+
+  <h3>Same-origin API proxy</h3>
+  <p>The website and the API live on different hosts (Vercel and Render). To keep the session cookie first-party — browsers increasingly refuse cross-site cookies — <code>frontend/next.config.ts</code> rewrites <code>/api/*</code>, <code>/auth/*</code> and <code>/uploads/*</code> on <code>vendopos.shop</code> to the backend (<code>API_PROXY_TARGET</code>, default <code>https://api.vendopos.shop</code>). The browser therefore only ever talks to <code>vendopos.shop</code>. Consequence: no frontend page may live under <code>/api</code>, <code>/auth</code> or <code>/uploads</code> (the sign-up page is <code>/signup</code>).</p>
 
   <h3>Backend module layout</h3>
   <p>Each module follows a <b>router → schema (zod) → repository (SQL)</b> pattern, with pure helpers alongside and a vitest file per module.</p>
@@ -254,7 +261,7 @@
   <h2>4. Technology Stack</h2>
   <table>
     <tr><th style="width:22%">Layer</th><th>Technology</th><th>Notes</th></tr>
-    <tr><td>Frontend framework</td><td>Next.js 16.2 (App Router), React 19.2</td><td><code>frontend/</code>, runs on port 3000</td></tr>
+    <tr><td>Frontend framework</td><td>Next.js 16.3 (App Router), React 19.2</td><td><code>frontend/</code>, runs on port 3000</td></tr>
     <tr><td>Styling</td><td>Tailwind CSS v4, design tokens</td><td>Light / dark themes; tenant theme tokens injected as scoped styles (ADR 0001: redesign within the token system)</td></tr>
     <tr><td>Charts</td><td>Recharts 3</td><td>MRR line, plan donut, fee bars, finance and labor charts</td></tr>
     <tr><td>Backend</td><td>Express 4, TypeScript 5, ES modules</td><td><code>backend/</code>, runs on port 4000; <code>tsx</code> for dev</td></tr>
@@ -264,7 +271,9 @@
     <tr><td>Uploads</td><td>multer</td><td>Images ≤ 2 MB, served from <code>/uploads</code></td></tr>
     <tr><td>E-mail</td><td>Resend</td><td>Optional — without <code>RESEND_API_KEY</code> messages are logged</td></tr>
     <tr><td>Security headers / logs</td><td>helmet, morgan</td><td></td></tr>
-    <tr><td>Testing</td><td>vitest, supertest; Playwright (screenshots)</td><td>~288 backend test cases</td></tr>
+    <tr><td>Rate limiting</td><td>express-rate-limit</td><td>Credential and lead-form throttles</td></tr>
+    <tr><td>Testing</td><td>vitest, supertest; Playwright (screenshots)</td><td>338 backend test cases in 37 files</td></tr>
+    <tr><td>Hosting</td><td>Vercel (frontend), Render (API), NeonDB (Postgres), Hostinger (domain &amp; DNS), Resend (e-mail)</td><td>See section 29</td></tr>
   </table>
 </div>
 
@@ -311,9 +320,9 @@
   <h3>Two onboarding paths</h3>
   <div class="grid2">
     <div class="card"><h4>Path A — self-serve sign-up</h4>
-      <p><code>POST /auth/signup</code> from the pricing page creates a fresh, isolated tenant on the chosen plan, opened on a <b>14-day trial</b>, with the owner account and an onboarding e-mail.</p></div>
+      <p><code>POST /auth/signup</code> from the <code>/signup</code> page (linked from pricing) creates a fresh, isolated tenant on the chosen plan, opened on a <b>14-day trial</b>, with the owner account and an onboarding e-mail.</p></div>
     <div class="card"><h4>Path B — sales-led (Lead)</h4>
-      <p>The demo form writes a Lead (<code>PENDING_DEMO</code>). The Super Admin approves it, which <b>atomically</b> inserts the tenant, inserts the owner as <code>MERCHANT_OWNER</code> and flips the lead to <code>APPROVED</code>. Slug or owner-email collisions roll back with <code>409</code>.</p></div>
+      <p>The demo form writes a Lead (<code>PENDING_DEMO</code>) and e-mails the prospect a verification link; the admin pipeline shows a <b>verified / unverified</b> badge. The Super Admin approves it, which <b>atomically</b> inserts the tenant, inserts the owner as <code>MERCHANT_OWNER</code> and flips the lead to <code>APPROVED</code>. Slug or owner-email collisions roll back with <code>409</code>.</p></div>
   </div>
   <h3>Lazy trial expiry (no cron)</h3>
   <ol>
@@ -331,7 +340,7 @@
   <h3>Sign-in methods</h3>
   <table>
     <tr><th style="width:24%">Method</th><th>Flow</th></tr>
-    <tr><td>Google OAuth</td><td><code>GET /auth/google</code> mints a CSRF <code>state</code> and redirects to Google. <code>/auth/google/callback</code> verifies state, exchanges the code, looks up the e-mail in <code>users</code>, signs the JWT, sets the cookie and redirects to the role's dashboard. Unknown e-mails get <code>?error=not_provisioned</code>.</td></tr>
+    <tr><td>Google OAuth</td><td><code>GET /auth/google</code> mints a CSRF <code>state</code> — a signed (HMAC with the JWT secret), timestamped token carried in the URL, so it needs no cookie and survives the proxy — and redirects to Google. <code>/auth/google/callback</code> verifies state, exchanges the code, looks up the e-mail in <code>users</code>, signs the JWT, sets the cookie and redirects to the role's dashboard. Unknown e-mails get <code>?error=not_provisioned</code>.</td></tr>
     <tr><td>Owner / manager password</td><td><code>POST /auth/password-login</code> with Store ID + e-mail + password. Owners set or change a password via <code>/auth/password</code>; status via <code>/auth/password/status</code>. A first-login onboarding card prompts owners to set one.</td></tr>
     <tr><td>Cashier PIN</td><td><code>POST /auth/store</code> resolves the Store ID (tenant slug); <code>POST /auth/pin</code> verifies a 4-digit PIN <b>within that tenant</b> (optionally pinned to a selected <code>userId</code>) and swaps the cookie. On a warm terminal the active session's tenant always wins, so a typed Store ID can never reach across tenants.</td></tr>
   </table>
@@ -339,7 +348,9 @@
   <p>Cashiers never set their own PIN. <code>POST /auth/cashiers</code> lists a store's cashier names; <code>POST /auth/pin/forgot</code> raises one pending reset request per cashier (partial unique index, idempotent). The owner resolves it in <b>Cashiers</b> by setting a new PIN (resolves the request in the same transaction) or rejecting it.</p>
   <h3>Sessions &amp; security</h3>
   <ul>
-    <li>JWT in an HTTP-only cookie (<code>vendopos_session</code>), 7-day lifetime, optional <code>COOKIE_DOMAIN</code> for split subdomains.</li>
+    <li>JWT in an HTTP-only cookie (<code>vendopos_session</code>), 7-day lifetime. Served first-party through the same-origin proxy; <code>SameSite</code> is derived from the frontend URL scheme (HTTPS → <code>None</code> + <code>Secure</code>, HTTP → <code>Lax</code>) and can be forced with <code>COOKIE_SAMESITE</code>.</li>
+    <li>In production the API refuses to boot without a <code>JWT_SECRET</code> of at least 32 characters.</li>
+    <li>Login, PIN, sign-up and forgot-PIN are rate-limited (10 failed attempts / 15 min / IP).</li>
     <li>Each sign-in creates a row in <code>sessions</code> (revocable device sessions) and <code>login_events</code> (login audit). Users can revoke a single session or all others.</li>
     <li>PINs hashed as <code>scrypt$salt$hash</code>; passwords as <code>pw1$salt$hash</code> (scrypt, per-user salt); verification is constant-time (<code>timingSafeEqual</code>).</li>
     <li><code>GET /auth/me</code> returns <code>{userId, tenantId, role, email, name, tenantName, …}</code> with the tenant name, tier, status and theme looked up live.</li>
@@ -362,8 +373,8 @@
     <li><b>Receipts</b>: printable HTML receipt and direct ESC/POS thermal printing; reprint from sales history.</li>
     <li><b>Sales history &amp; returns</b> modal: list sales, view details, void or return lines.</li>
     <li><b>Shift controls</b>: open shift with float, X-Read, close (Z-Read), open-drawer (logged).</li>
-    <li><b>Cashier switch</b>: PIN pad with profile selector for shared terminals; terminal lock.</li>
-    <li><b>Clock widget</b>: staff clock-in / clock-out (timecards).</li>
+    <li><b>Cashier switch</b>: PIN pad with profile selector for shared terminals; terminal lock. If a store has no cashiers yet, the picker shows "No cashiers set up yet" and routes the owner to sign in and add them.</li>
+    <li><b>Labor clock</b>: cashiers are <b>clocked in automatically</b> when they log in; <b>End shift</b> also clocks them out (owners and managers keep manual clock controls). A live shift-clock pill ticks in the header.</li>
     <li><b>Theming</b>: the tenant theme and announcement bar apply to the terminal.</li>
   </ul>
   <h3>Customer-Facing Display</h3>
@@ -390,7 +401,7 @@
     <li>Abort with <code>400</code> (+ <code>productId</code>, <code>available</code>) if any line lacks stock.</li>
     <li>Apply the cart discount server-side (percent 0–100 or fixed centavos).</li>
     <li>Redeem loyalty: <b>1 point = ₱1</b>, clamped to the live balance and to what remains payable.</li>
-    <li>Compute VAT on the <b>net</b>: <code>vat = round(net × 12 / 112)</code>, <code>subtotal = net − vat</code> (12% price-inclusive).</li>
+    <li>Compute VAT per <b>VAT class</b> with the shared <code>computeVatBreakdown()</code>: discounts are allocated pro-rata across classes, and VAT is extracted only from the <b>VATable</b> portion (<code>vat = round(vatable × 12 / 112)</code>, 12% price-inclusive). <b>Exempt</b> and <b>Zero-rated</b> lines carry no VAT.</li>
     <li>Earn loyalty on what was actually paid: <b>1 point per ₱100</b> of net.</li>
     <li>Lock the per-tenant <code>invoice_counters</code> row and assign a <b>gap-free, chronological</b> reference <code>SI-000123</code> (unique index backstop).</li>
     <li>Decrement stock through the stock ledger (<code>reason='sale'</code>), stamp the open <code>shift_id</code>, write the <code>sales</code> header and <code>sale_items</code> snapshots.</li>
@@ -401,6 +412,7 @@
     <tr><th>Field</th><th>Meaning</th></tr>
     <tr><td><code>reference</code></td><td>BIR-style serial, unique per tenant</td></tr>
     <tr><td><code>subtotal_cents / vat_cents / total_cents</code></td><td>Net-of-VAT, output VAT, gross (VAT-inclusive)</td></tr>
+    <tr><td><code>vatable_sales_cents / vat_exempt_cents / zero_rated_cents</code></td><td>Per-class breakdown; the three sum to the subtotal (legacy sales back-filled as wholly VATable)</td></tr>
     <tr><td><code>discount_cents / discount_label</code></td><td>Total discount (incl. points) and its description</td></tr>
     <tr><td><code>payment_method / payment_ref</code></td><td>Settlement channel and e-wallet reference</td></tr>
     <tr><td><code>tendered / change</code></td><td>Cash handling</td></tr>
@@ -443,7 +455,7 @@
   <h2>12. Inventory &amp; Stock Ledger</h2>
   <h3>Catalog</h3>
   <ul>
-    <li><b>Products</b>: name, SKU (unique per tenant), price (pesos in, stored as centavos), stock, low-stock threshold, category, active flag, optional image (≤ 2 MB, <code>image/*</code>). Derived <code>lowStock</code> flag.</li>
+    <li><b>Products</b>: name, SKU (unique per tenant), price (pesos in, stored as centavos), stock, low-stock threshold, category, <b>VAT class</b> (VATable / Exempt / Zero-rated), active flag, optional image (≤ 2 MB, <code>image/*</code>). Derived <code>lowStock</code> flag.</li>
     <li><b>Categories</b>: nested via self-referential <code>parent_id</code>; unique name per tenant. Deleting a category makes its products uncategorised.</li>
     <li>UI: <b>Inventory Matrix</b>, product form with image picker, category manager.</li>
   </ul>
@@ -515,6 +527,12 @@
   <h2>16. Human Resources &amp; Payroll <span class="tag t-e">Enterprise</span></h2>
   <h3>Employees</h3>
   <p>Name, position, employment type (<code>Full-time, Part-time, Contract</code>), pay type (<code>Monthly, Daily, Hourly</code>), pay rate, hire / separation dates, PTO balance, bank details, address, emergency contact, optional link to a cashier login. Profile page at <code>/dashboard/hr/employees/[id]</code>.</p>
+  <h3>Employee ↔ cashier bridge (ADR 0002)</h3>
+  <ul>
+    <li><b>Grant till access</b> (<code>POST /hr/employees/:id/till-access</code>): from an employee, either create a new cashier login (optional PIN and opening float) or link an existing unlinked cashier. Linked cashiers appear in the live duty roster.</li>
+    <li><b>Adopt unlinked till logins</b> (<code>GET /hr/cashiers/unlinked</code>, <code>POST /hr/cashiers/:id/adopt</code>): cashiers with no employee record show on the HR overview and can be turned into, or linked to, an employee.</li>
+    <li><b>Lifecycle coupling</b>: separating or deactivating an employee disables the linked till login in the same transaction; rehiring re-enables it.</li>
+  </ul>
   <h3>Attendance &amp; timecards</h3>
   <ul>
     <li><b>Attendance</b> (<code>PUT /hr/attendance</code>): one row per employee per day — <code>Present, Absent, Leave, Half-day</code> with hours. Calendar view.</li>
@@ -522,7 +540,15 @@
     <li><b>Employee Self-Service</b> (<code>/me</code>, <code>/api/v1/ess/me</code>): staff view their own clock records.</li>
   </ul>
   <h3>Payroll runs</h3>
-  <p><code>POST /hr/payroll</code> computes gross for a period in one transaction with a per-tenant serial: Monthly → flat rate; Daily → rate × (Present days + ½ Half-days); Hourly → rate × hours logged. Statutory deductions (SSS, PhilHealth, Pag-IBIG, withholding tax) are out of scope for v1.</p>
+  <p><code>POST /hr/payroll</code> computes gross for a period in one transaction with a per-tenant serial: Monthly → flat rate; Daily → rate × (Present days + ½ Half-days); Hourly → rate × hours logged. Each run then goes <b>gross → net</b> with Philippine statutory deductions (employee share, 2025 schedules, pure and centavo-exact in <code>hr/deductions.ts</code>):</p>
+  <table>
+    <tr><th style="width:24%">Deduction</th><th>Rule</th></tr>
+    <tr><td>SSS</td><td>5% of the Monthly Salary Credit (₱5,000–₱35,000)</td></tr>
+    <tr><td>PhilHealth</td><td>2.5% (half of 5%), salary floor ₱10,000, ceiling ₱100,000</td></tr>
+    <tr><td>Pag-IBIG</td><td>1% (compensation ≤ ₱1,500) or 2%, base capped at ₱5,000 (max ₱100)</td></tr>
+    <tr><td>Withholding tax</td><td>BIR TRAIN graduated monthly table on gross − the three contributions</td></tr>
+  </table>
+  <p>The payroll detail drawer and the CSV export show SSS, PhilHealth, Pag-IBIG, tax, total deductions and net pay per employee. Zero gross produces no deductions, so net pay is never negative. A run is treated as a monthly pay period.</p>
   <h3>Automated payroll exporter</h3>
   <p><code>GET /hr/payroll/export[/preview]</code> turns timecards into accounting-ready CSV using a pure processor in Manila time:</p>
   <table>
@@ -553,6 +579,7 @@
   <h2>18. Merchant Dashboard, Analytics &amp; Forecasting</h2>
   <ul>
     <li><b>Live Pulse</b> (<code>GET /api/v1/merchant/analytics/dashboard</code>): today's gross, transaction count, AOV, units sold, net / VAT / discount totals, hourly revenue velocity, payment-channel mix and best sellers — all real SQL aggregates, "today" in Manila time.</li>
+    <li><b>Sales totals strip</b> (<code>GET /api/v1/merchant/analytics/totals?range=</code>): Today / 7 days / 30 days / This month / All-time — sales, transactions and AOV. On Business and above it also shows <b>Expenses</b> and <b>Net profit</b> for the same window.</li>
     <li><b>Owner Summary</b> (<code>/analytics/summary</code>, page <code>/dashboard/summary</code>): period rollups.</li>
     <li><b>Predictive inventory</b> <span class="tag t-e">Enterprise</span>: a pure forecast engine computes per-product sales velocity over a window, projects days of cover and flags at-risk items with suggested order quantities.</li>
     <li>Low-stock panel live-merged from the SSE stream; trial recovery, compliance tray and tier badge components.</li>
@@ -571,7 +598,7 @@
   <h2>19. BIR Compliance</h2>
   <ul>
     <li><b>Serialized invoices</b>: immutable, gap-free, chronological <code>SI-</code> numbers per tenant, assigned under a row lock (no <code>count(*)+1</code> collisions between simultaneous tills).</li>
-    <li><b>12% VAT</b> price-inclusive, computed on the net after discounts and frozen on the sale.</li>
+    <li><b>12% VAT</b> price-inclusive, computed on the net after discounts and frozen on the sale; receipts (HTML and ESC/POS) and the BIR CSV show real <b>VATable / VAT-exempt / Zero-rated</b> figures from each product's VAT class.</li>
     <li><b>Receipt fields</b>: registered name, business style, address, TIN, VAT label (e.g. "VAT REG TIN"), invoice prefix, header and footer text, logo toggle, and machine-accreditation footer — <b>PTU No.</b>, <b>MIN</b> and machine <b>serial</b>.</li>
     <li><b>Monthly sales ledger</b>: <code>GET /api/v1/merchant/compliance/export?month=YYYY-MM</code> — invoices with gross, net taxable, output VAT, discounts and e-wallet references; JSON for the on-screen audit tray or <code>&amp;format=csv</code> for tax preparation.</li>
     <li><b>Platform compliance register</b> for the Super Admin: cross-tenant summary and consolidated CSV.</li>
@@ -618,7 +645,7 @@
   <table>
     <tr><th style="width:22%">Page</th><th>Function</th></tr>
     <tr><td><code>/admin</code></td><td>Metrics bento overview, platform shortcuts</td></tr>
-    <tr><td><code>/admin/leads</code></td><td>Leads Matrix: pipeline <code>PENDING_DEMO / APPROVED / REJECTED</code>; approve (atomic provisioning with store name, slug, plan, owner) or reject</td></tr>
+    <tr><td><code>/admin/leads</code></td><td>Leads Matrix: pipeline <code>PENDING_DEMO / APPROVED / REJECTED</code> with an e-mail <b>verified</b> badge; approve (atomic provisioning with store name, slug, plan, owner) or reject</td></tr>
     <tr><td><code>/admin/tenants</code></td><td>Tenants Directory: all stores, plan, status, owner; change plan/status; impersonate owner</td></tr>
     <tr><td><code>/admin/billing</code></td><td>MRR engine: MRR, active subscribers, ARPA, annual run rate, per-tier breakdown, six-month fee trend and cumulative MRR growth; Subscribers drawer</td></tr>
     <tr><td><code>/admin/health</code></td><td>Health Matrix: NeonDB pool occupancy, query round-trip latency, cross-tenant activity ticker, shift-variance alerts</td></tr>
@@ -629,9 +656,11 @@
 <!-- ============================ 23 ============================ -->
 <div class="section" style="page-break-before:auto;margin-top:18px">
   <h2>23. Marketing Website &amp; Lead Capture</h2>
-  <p>Public pages: home (hero, problem, core tools, how it works, comparison vs. Square and Lightspeed, testimonials, pricing, FAQ, why-PH, sticky CTA), <code>/products/[slug]</code>, <code>/industry/[slug]</code>, <code>/hardware/[slug]</code>, <code>/enterprise</code> (concierge), <code>/company/[slug]</code>, <code>/about</code>, <code>/careers</code>, <code>/blog/[slug]</code>, <code>/resources</code>, <code>/security</code>, <code>/contact</code>, <code>/terms</code>, <code>/privacy</code>, and stateless previews <code>/preview/merchant</code> and <code>/preview/pos</code>.</p>
+  <p>Public pages: home (hero with a live animated POS demo, problem, core tools, how it works, comparison vs. Square and Lightspeed, testimonials, pricing, FAQ, why-PH, sticky CTA), <code>/products/[slug]</code>, <code>/industry/[slug]</code>, <code>/hardware/[slug]</code>, <code>/enterprise</code> (concierge), <code>/company/[slug]</code>, <code>/about</code>, <code>/careers</code>, <code>/blog/[slug]</code>, <code>/resources</code>, <code>/security</code>, <code>/contact</code>, <code>/terms</code>, <code>/privacy</code>, and stateless previews <code>/preview/merchant</code> and <code>/preview/pos</code>.</p>
   <ul>
-    <li><code>POST /api/leads</code> — demo request <code>{name, businessName, email, phone, businessType, message?}</code>; upsert on e-mail; <code>400 {errors}</code> on invalid input.</li>
+    <li><code>POST /api/leads</code> (rate-limited) — demo request <code>{name, businessName, email, phone, businessType, message?}</code>; upsert on e-mail; <code>400 {errors}</code> on invalid input.</li>
+    <li><code>POST /api/leads/verify-email</code> — confirms the prospect's e-mail from the link (single-use, 24-hour token stored only as a SHA-256 hash); page <code>/verify-email</code>.</li>
+    <li><code>GET /api/leads</code> — now <b>Super Admin only</b> (prospect personal data).</li>
     <li><code>POST /api/leads/enterprise</code> — enterprise concierge request; e-mails the sales alert.</li>
     <li><code>GET /api/v1/public/tenants</code> — public directory of stores (trust strip).</li>
   </ul>
@@ -659,10 +688,10 @@
     <tr><td><code>tenants</code></td><td>name, slug, plan (starter/business/enterprise), tier, status (trial/active/trial_expired/suspended), trial dates, store profile, TIN, business style, logo, theme_color, theme_config JSONB, receipt fields (header, footer, VAT label, prefix, PTU, MIN, serial)</td></tr>
     <tr><td><code>users</code></td><td>tenant_id, email (unique, case-insensitive), name, role, status, PIN hash, password hash, default float, phone, avatar, theme, notification prefs. Check: SUPER_ADMIN ⇔ no tenant</td></tr>
     <tr><td><code>sessions</code>, <code>login_events</code></td><td>Revocable device sessions; login audit trail</td></tr>
-    <tr><td><code>leads</code></td><td>Demo requests; status PENDING_DEMO/APPROVED/REJECTED; unique email</td></tr>
-    <tr><td><code>categories</code>, <code>products</code></td><td>Nested categories; products with SKU (unique per tenant), price_cents, stock ≥ 0, low_stock_threshold, image_url, active</td></tr>
+    <tr><td><code>leads</code></td><td>Demo requests; status PENDING_DEMO/APPROVED/REJECTED; unique email; email_verified_at, verify_token_hash, verify_token_expires_at</td></tr>
+    <tr><td><code>categories</code>, <code>products</code></td><td>Nested categories; products with SKU (unique per tenant), vat_class (VATABLE/EXEMPT/ZERO_RATED), price_cents, stock ≥ 0, low_stock_threshold, image_url, active</td></tr>
     <tr><td><code>stock_movements</code></td><td>Immutable ledger: qty_delta, balance_after ≥ 0, reason, ref_table/ref_id, note, created_by</td></tr>
-    <tr><td><code>sales</code>, <code>sale_items</code></td><td>Sale headers and line snapshots; status, kind (sale/void/return), reverses links, shift, customer, points; qty ≠ 0</td></tr>
+    <tr><td><code>sales</code>, <code>sale_items</code></td><td>Sale headers and line snapshots; per-line vat_class and per-sale vatable / exempt / zero-rated amounts; status, kind (sale/void/return), reverses links, shift, customer, points; qty ≠ 0</td></tr>
     <tr><td><code>invoice_counters</code>, <code>reversal_counters</code></td><td>Per-tenant locked serial counters</td></tr>
     <tr><td><code>cashier_shifts</code></td><td>Opening/expected/counted cash, variance, channel rollups, audit snapshot; one open per user</td></tr>
     <tr><td><code>timecards</code></td><td>Clock-in/out punches; ACTIVE ⇔ no clock_out; one active per user</td></tr>
@@ -690,7 +719,8 @@
     <tr><th style="width:44%">Endpoint</th><th>Access</th><th>Purpose</th></tr>
     <tr><td><code>GET /health</code></td><td>public</td><td>Liveness</td></tr>
     <tr><td><code>GET /uploads/*</code></td><td>public</td><td>Uploaded media</td></tr>
-    <tr><td><code>POST /api/leads</code> · <code>POST /api/leads/enterprise</code> · <code>GET /api/leads</code></td><td>public</td><td>Lead capture / list</td></tr>
+    <tr><td><code>POST /api/leads</code> · <code>/api/leads/verify-email</code> · <code>/api/leads/enterprise</code></td><td>public (rate-limited)</td><td>Lead capture and e-mail verification</td></tr>
+    <tr><td><code>GET /api/leads</code></td><td>SA</td><td>Lead list</td></tr>
     <tr><td><code>GET /api/v1/public/tenants</code></td><td>public</td><td>Public store directory</td></tr>
     <tr><td><code>GET /auth/google</code> · <code>GET /auth/google/callback</code></td><td>public</td><td>Google OAuth</td></tr>
     <tr><td><code>GET /auth/me</code> · <code>POST /auth/logout</code></td><td>any session</td><td>Current session / sign out</td></tr>
@@ -723,7 +753,7 @@
   <h4>Merchant — <code>/api/v1/merchant</code> (OW, MG unless noted)</h4>
   <table>
     <tr><th style="width:44%">Endpoint</th><th>Purpose</th></tr>
-    <tr><td><code>GET /analytics/dashboard</code> · <code>/analytics/summary</code></td><td>Live Pulse; owner summary</td></tr>
+    <tr><td><code>GET /analytics/dashboard</code> · <code>/analytics/summary</code> · <code>/analytics/totals?range=</code></td><td>Live Pulse; owner summary; ranged totals</td></tr>
     <tr><td><code>GET /analytics/forecast</code> <span class="tag t-e">Ent</span></td><td>Predictive inventory</td></tr>
     <tr><td><code>GET /compliance/export?month=&amp;format=csv</code></td><td>BIR sales ledger</td></tr>
     <tr><td><code>GET /inventory/alerts</code> · <code>GET /events/stream</code></td><td>Alerts; SSE</td></tr>
@@ -758,6 +788,7 @@
   <table><tr><td style="width:44%"><code>GET /summary</code> · <code>/overview</code> · <code>/performance</code> · <code>/labor-analytics</code> · <code>/shift-reconciliations</code></td><td>Analytics</td></tr>
   <tr><td><code>GET|POST /employees</code> · <code>GET|PATCH|DELETE /employees/:id</code></td><td>Employees</td></tr>
   <tr><td><code>GET|PUT /attendance</code></td><td>Attendance</td></tr>
+  <tr><td><code>POST /employees/:id/till-access</code> · <code>GET /cashiers/unlinked</code> · <code>POST /cashiers/:id/adopt</code></td><td>Employee ↔ cashier bridge</td></tr>
   <tr><td><code>GET|POST /payroll</code> · <code>GET /payroll/:id</code> · <code>GET /payroll/export[/preview]</code></td><td>Payroll runs and CSV export</td></tr>
   <tr><td><code>GET /api/v1/ess/me</code> (any staff)</td><td>Employee self-service</td></tr></table>
 
@@ -784,7 +815,7 @@
   <tr><td><code>GET /compliance/summary</code> · <code>GET /compliance/export</code></td><td>Compliance register</td></tr></table>
 
   <h4>Standard responses</h4>
-  <p><code>200/201 {ok:true,…}</code> · <code>400 {ok:false,errors}</code> validation · <code>401</code> no session · <code>402</code> trial expired · <code>403</code> wrong role, tier (feature locked) or <code>plan_limit_exceeded</code> · <code>404</code> not found / other tenant · <code>409</code> conflict (duplicate, open shift, slug collision).</p>
+  <p><code>200/201 {ok:true,…}</code> · <code>400 {ok:false,errors}</code> validation · <code>401</code> no session · <code>402</code> trial expired · <code>403</code> wrong role, tier (feature locked) or <code>plan_limit_exceeded</code> · <code>404</code> not found / other tenant · <code>409</code> conflict (duplicate, open shift, slug collision) · <code>429</code> rate-limited · <code>500</code> generic error (no stack trace).</p>
 </div>
 
 <!-- ============================ 27 ============================ -->
@@ -794,7 +825,8 @@
     <tr><th style="width:34%">Route</th><th>Audience</th><th>Purpose</th></tr>
     <tr><td><code>/</code> and marketing pages</td><td>Public</td><td>Landing, products, industries, hardware, enterprise, company, blog, legal</td></tr>
     <tr><td><code>/login</code></td><td>All staff</td><td>Google, owner password, Store ID → PIN</td></tr>
-    <tr><td><code>/auth/signup</code></td><td>Prospects</td><td>Self-serve 14-day trial sign-up</td></tr>
+    <tr><td><code>/signup</code></td><td>Prospects</td><td>Self-serve 14-day trial sign-up</td></tr>
+    <tr><td><code>/verify-email</code></td><td>Prospects</td><td>Confirms a demo request's e-mail address</td></tr>
     <tr><td><code>/pos</code></td><td>CA, MG, OW</td><td>POS terminal</td></tr>
     <tr><td><code>/pos/customer-display</code></td><td>Customer</td><td>Second screen</td></tr>
     <tr><td><code>/dashboard</code></td><td>OW, MG</td><td>Merchant home (Live Pulse)</td></tr>
@@ -814,7 +846,9 @@
     <li><b>Tenant isolation</b>: tenant id comes only from the signed session and is threaded into every query; cross-tenant ids resolve as not found.</li>
     <li><b>Defence in depth</b>: role guard → tier guard → trial checkpoint → zod validation → parameterised SQL (no string-built queries) → DB check constraints.</li>
     <li><b>Credentials</b>: scrypt-hashed PINs and passwords with per-secret salts; constant-time comparison; PIN hashes never leave the DB.</li>
-    <li><b>Sessions</b>: HTTP-only cookie, CSRF <code>state</code> on OAuth, revocable sessions, login audit, 7-day expiry.</li>
+    <li><b>Sessions</b>: first-party HTTP-only cookie via the same-origin proxy, signed stateless CSRF <code>state</code> on OAuth, revocable sessions, login audit, 7-day expiry.</li>
+    <li><b>Abuse protection</b>: per-IP rate limits on credentials and public forms; lead e-mail verification; the lead list is Super Admin only.</li>
+    <li><b>Fail-safe configuration</b>: production requires a ≥ 32-character <code>JWT_SECRET</code>; a central error handler never exposes internals; dependencies patched for known Express and Next.js advisories.</li>
     <li><b>Transport</b>: helmet headers, explicit CORS allow-list with credentials, 100 kB JSON cap, 2 MB image cap with MIME filter.</li>
     <li><b>Integrity</b>: immutable stock ledger, contra-entry reversals, locked serial counters, frozen Z-Read snapshots, POS audit log.</li>
     <li><b>Infrastructure</b>: managed NeonDB (encryption at rest, backups) and HTTPS hosting.</li>
@@ -850,24 +884,42 @@ npm run build &amp;&amp; npm start  # production</pre>
     <tr><td><code>CORS_ORIGIN</code></td><td>Comma-separated allowed origins</td></tr>
     <tr><td><code>FRONTEND_URL</code></td><td>Post-login redirect base</td></tr>
     <tr><td><code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code></td><td>OAuth web client (blank = Google sign-in disabled)</td></tr>
-    <tr><td><code>GOOGLE_REDIRECT_URI</code></td><td>e.g. <code>http://localhost:4000/auth/google/callback</code></td></tr>
-    <tr><td><code>JWT_SECRET</code></td><td>Long random string; signs sessions</td></tr>
+    <tr><td><code>GOOGLE_REDIRECT_URI</code></td><td>Local <code>http://localhost:4000/auth/google/callback</code>; production <code>https://vendopos.shop/auth/google/callback</code> (through the proxy)</td></tr>
+    <tr><td><code>JWT_SECRET</code></td><td>Random string, ≥ 32 characters in production (boot fails otherwise); signs sessions and OAuth state</td></tr>
     <tr><td><code>SESSION_COOKIE_NAME</code> / <code>COOKIE_DOMAIN</code></td><td>Cookie name (default <code>vendopos_session</code>) and optional shared domain</td></tr>
     <tr><td><code>PUBLIC_BASE_URL</code></td><td>Origin used to build upload URLs</td></tr>
+    <tr><td><code>UPLOADS_DIR</code></td><td>Where uploads are written (default <code>./uploads</code>); point at a persistent disk in production</td></tr>
+    <tr><td><code>COOKIE_SAMESITE</code></td><td>Optional override of the derived cookie SameSite</td></tr>
+    <tr><td><code>ADMIN_ALERT_EMAIL</code></td><td>Inbox for Enterprise enquiry alerts</td></tr>
+    <tr><td><code>SUPER_ADMIN_EMAIL</code></td><td>Used by <code>npm run seed:super-admin</code></td></tr>
     <tr><td><code>RESEND_API_KEY</code> / <code>EMAIL_FROM</code></td><td>Transactional e-mail (optional)</td></tr>
   </table>
   <h3>Environment variables — frontend</h3>
-  <table><tr><td style="width:30%"><code>NEXT_PUBLIC_API_URL</code></td><td>Base URL of the Express API</td></tr></table>
+  <table><tr><td style="width:30%"><code>NEXT_PUBLIC_API_URL</code></td><td>Where the browser sends API calls: <code>http://localhost:4000</code> locally; <code>https://vendopos.shop</code> in production (same-origin proxy)</td></tr>
+  <tr><td><code>API_PROXY_TARGET</code></td><td>Backend origin the proxy forwards to (default <code>https://api.vendopos.shop</code>)</td></tr></table>
   <h3>Bootstrapping the first Super Admin</h3>
-  <pre>INSERT INTO users (email, name, role) VALUES ('you@gmail.com', 'You', 'SUPER_ADMIN');</pre>
+  <pre>SUPER_ADMIN_EMAIL=you@gmail.com npm run seed:super-admin   # idempotent
+# or in SQL:
+INSERT INTO users (email, name, role) VALUES ('you@gmail.com', 'You', 'SUPER_ADMIN');</pre>
   <p>Then sign in with Google using that e-mail. Merchants are created through Lead approval or self-serve sign-up.</p>
+
+  <h3>Production deployment (vendopos.shop)</h3>
+  <table>
+    <tr><th style="width:22%">Piece</th><th>Setup</th></tr>
+    <tr><td>Frontend — Vercel</td><td>Root directory <code>frontend</code>; <code>NEXT_PUBLIC_API_URL=https://vendopos.shop</code>; domain <code>vendopos.shop</code> (+ <code>www</code> redirect).</td></tr>
+    <tr><td>API — Render</td><td><code>render.yaml</code> blueprint: root <code>backend</code>, Singapore, build <code>npm install --include=dev &amp;&amp; npm run build &amp;&amp; npm run migrate</code>, start <code>npm start</code>, health check <code>/health</code>; custom domain <code>api.vendopos.shop</code>. Free plan by default — use Starter plus a disk at <code>UPLOADS_DIR</code> so uploads survive deploys.</td></tr>
+    <tr><td>Database — NeonDB</td><td>Pooled connection string in <code>DATABASE_URL</code>; migrations run on every deploy.</td></tr>
+    <tr><td>DNS — Hostinger</td><td><code>A @ → 216.198.79.1</code> (Vercel), <code>CNAME www → vendopos.shop</code>, <code>CNAME api → vendopos-api.onrender.com</code>, plus Resend records (<code>resend._domainkey</code>, <code>send</code>, <code>rsend</code>) and existing mail SPF/DMARC.</td></tr>
+    <tr><td>E-mail — Resend</td><td>Domain <code>vendopos.shop</code> verified (Tokyo region); <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code> on Render.</td></tr>
+    <tr><td>Google sign-in</td><td>Authorised origin <code>https://vendopos.shop</code>; redirect URI <code>https://vendopos.shop/auth/google/callback</code>.</td></tr>
+  </table>
 </div>
 
 <!-- ============================ 30 ============================ -->
 <div class="section" style="page-break-before:auto;margin-top:18px">
   <h2>30. Testing &amp; Quality Assurance</h2>
   <ul>
-    <li><b>Backend</b>: vitest + supertest, ~288 test cases across every module (auth, tier middleware, trial, checkout, refunds, shifts, audit, stock ledger, finance reports, reorder, forecast, payroll processor, timecards, HR, CRM, manufacturing, procurement, admin, billing, health, payment QRs, theme config, e-mails). Validation seams are tested without a database.</li>
+    <li><b>Backend</b>: vitest + supertest, 338 test cases in 37 files across every module (auth, rate limits, lead verification, statutory deductions, VAT classes, till-access bridge, tier middleware, trial, checkout, refunds, shifts, audit, stock ledger, finance reports, reorder, forecast, payroll processor, timecards, HR, CRM, manufacturing, procurement, admin, billing, health, payment QRs, theme config, e-mails). Validation seams are tested without a database.</li>
     <li><b>Pure cores</b>: <code>finance.reports</code>, <code>procurement.reorder</code>, <code>forecast</code>, <code>payroll.processor</code>, <code>theme.config</code>, <code>tiers</code> are IO-free and fully unit-tested.</li>
     <li><b>Static checks</b>: <code>tsc --noEmit</code> (backend and frontend), ESLint, <code>next build</code> prerenders all routes.</li>
     <li><b>Visual</b>: Playwright screenshot scripts (<code>frontend/__shots</code>) for light/dark modals, POS and customer display.</li>
@@ -910,6 +962,7 @@ npm run validate:reports</pre>
     <li>All five ERP pillars wired to the POS: Finance, Procurement, Manufacturing, HR, CRM.</li>
     <li>Balance Sheet and Cash Flow (A1), barcode scan-to-cart (A3), low-stock → draft PO reorder (A4).</li>
     <li>Immutable stock ledger, contra-entry voids/returns, gap-free BIR invoicing, Z-Read variance flags.</li>
+    <li>Philippine statutory payroll deductions, per-product VAT classes, HR ↔ cashier till-access bridge, lead e-mail verification, rate limiting, same-origin deployment.</li>
     <li>Billing/MRR, trials, health telemetry, notifications, revocable sessions, login audit, Theme Studio, thermal printing, customer display.</li>
   </ul>
   <h3>Open items</h3>
@@ -919,9 +972,10 @@ npm run validate:reports</pre>
     <tr><td>B1</td><td>Sales commissions in payroll</td><td>Needs decision — opt-in separate payroll line</td></tr>
     <tr><td>B2</td><td>Multi-location / inter-branch transfers</td><td>Invasive (<code>location_id</code> across stock and sales); separate effort. Feature key <code>multi_location</code> is declared</td></tr>
     <tr><td>—</td><td>Offline register mode</td><td>Feature key <code>offline_mode</code> is declared and marketed; no offline queue/sync is implemented yet</td></tr>
-    <tr><td>—</td><td>Statutory payroll deductions</td><td>SSS, PhilHealth, Pag-IBIG, withholding tax not yet computed</td></tr>
-    <tr><td>—</td><td>Subscription payment collection</td><td>MRR is reported; card / e-wallet charging is not yet wired</td></tr>
-    <tr><td>—</td><td>Cloud object storage</td><td>Uploads use local disk; swap the storage provider for S3 / Supabase / Cloudinary in production</td></tr>
+    <tr><td>—</td><td>Subscription payment collection</td><td>MRR is reported; charging is not yet wired. Recommended: PayMongo (GCash, Maya, QR Ph, cards) with monthly invoice + pay link, card auto-renew, webhook activation and grace-period suspension</td></tr>
+    <tr><td>—</td><td>Cloud object storage</td><td>Uploads use local disk (<code>UPLOADS_DIR</code>); on Render's free plan they are lost on each deploy — attach a disk (Starter) or move to S3 / Supabase / Cloudinary</td></tr>
+    <tr><td>—</td><td>BIR accreditation of VendoPOS as POS software</td><td>Merchants need a PTU for their POS; confirm software accreditation requirements with BIR / an accountant</td></tr>
+    <tr><td>—</td><td>Statutory rate tables</td><td>2025 schedules are code constants; DB-editable tables are a possible follow-up</td></tr>
     <tr><td>C</td><td>Biometric attendance, controlled-substance register, weight pricing, promotions engine, wholesale tiers</td><td>Vertical-specific; not core</td></tr>
   </table>
   <p class="muted" style="margin-top:20px">— End of document —</p>

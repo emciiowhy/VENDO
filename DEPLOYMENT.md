@@ -9,10 +9,10 @@
 
 Domain: **vendopos.shop** (registered at Hostinger) — already filled in below and in `render.yaml`.
 
-> **Why the custom domain is required:** the session cookie is `SameSite=Lax`. The browser
-> only sends it to the API when the frontend and API share a site, e.g. `vendopos.shop` and
-> `api.vendopos.shop`. On the default `*.vercel.app` + `*.onrender.com` addresses, login
-> appears to succeed but every later request is rejected with 401.
+> **How the browser reaches the API:** `frontend/next.config.ts` proxies `/api/*`, `/auth/*`
+> and `/uploads/*` on `vendopos.shop` to `https://api.vendopos.shop`, so the browser only talks
+> to `vendopos.shop` and the session cookie is first-party. Always use `https://vendopos.shop`
+> (not `*.vercel.app`) when signing in.
 
 ## 0. Before you start
 
@@ -36,15 +36,16 @@ Domain: **vendopos.shop** (registered at Hostinger) — already filled in below 
 5. Service → **Settings → Custom Domains → Add** `api.vendopos.shop`. Render shows a
    CNAME target — keep it for step 3.
 
-The plan is **Starter** with a 1 GB disk for uploaded images. On the Free plan the server
-sleeps after 15 minutes idle (about 50 s to wake at the till) and uploaded images are erased
-on every deploy; to use Free anyway, change `plan: free` and delete the `disk:` block.
+`render.yaml` uses the **Free** plan. It sleeps after 15 minutes idle (about 50 s to wake at
+the till) and uploaded images are erased on every deploy. For production, follow the comment at
+the bottom of `render.yaml`: switch to `plan: starter`, add a 1 GB disk at `/data/uploads`, and
+set `UPLOADS_DIR=/data/uploads`.
 
 ## 2. Frontend on Vercel
 
 1. vercel.com → **Add New → Project** → import `emciiowhy/VENDO`.
 2. **Root Directory:** `frontend` (Framework preset: Next.js — build settings stay default).
-3. **Environment Variables:** `NEXT_PUBLIC_API_URL` = `https://api.vendopos.shop`.
+3. **Environment Variables:** `NEXT_PUBLIC_API_URL` = `https://vendopos.shop` (same-origin proxy).
 4. **Deploy.**
 5. Project → **Settings → Domains** → add `vendopos.shop` and `www.vendopos.shop`
    (set `www` to redirect to the apex). Vercel shows the DNS records to create.
@@ -72,7 +73,9 @@ Google Cloud Console → **APIs & Services → Credentials → Create OAuth clie
 application**:
 
 - Authorized JavaScript origins: `https://vendopos.shop`
-- Authorized redirect URIs: `https://api.vendopos.shop/auth/google/callback`
+- Authorized redirect URIs: `https://vendopos.shop/auth/google/callback` (goes through the proxy)
+
+Set the same value as `GOOGLE_REDIRECT_URI` on Render.
 
 Put the client ID/secret into Render's environment, then **Manual Deploy → Deploy latest commit**.
 On the OAuth consent screen, publish the app (or add your accounts as test users).
@@ -98,7 +101,7 @@ Sign in at `https://vendopos.shop/login` with that Google account → you land o
 
 | Symptom | Fix |
 | ------- | --- |
-| Signed in, but next page says signed out / 401 | `COOKIE_DOMAIN` must be `.vendopos.shop`, and the site must be opened on the custom domain, not `*.vercel.app` |
+| Signed in, but next page says signed out / 401 | Open the site on `https://vendopos.shop` (not `*.vercel.app`) and check `NEXT_PUBLIC_API_URL=https://vendopos.shop` on Vercel |
 | "Could not reach the server" / CORS error | `CORS_ORIGIN` must list the exact origin in the browser bar (`https://`, with or without `www`) |
 | Google says `redirect_uri_mismatch` | `GOOGLE_REDIRECT_URI` and the Google console entry must match exactly |
 | Product images vanish after a deploy | Uploads disk missing (Free plan) — see §1 |
