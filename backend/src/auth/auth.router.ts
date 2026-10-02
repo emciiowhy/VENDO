@@ -87,7 +87,8 @@ authRouter.get("/google", (req, res) => {
   const state = randomState();
   res.cookie(STATE_COOKIE, sign(state), {
     httpOnly: true,
-    secure: env.isProd,
+    // Match the session cookie: None requires Secure (see setSessionCookie).
+    secure: env.isProd || env.session.sameSite === "none",
     sameSite: env.session.sameSite,
     path: "/",
     maxAge: STATE_MAX_AGE_MS,
