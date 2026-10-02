@@ -54,3 +54,17 @@ describe("POST /api/leads validation (the Lead capture seam)", () => {
     expect(res.body.ok).toBe(true);
   });
 });
+
+describe("POST /api/leads/verify-email validation", () => {
+  it("rejects a missing token with 400 (no DB touched)", async () => {
+    const res = await request(app).post("/api/leads/verify-email").send({});
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it("rejects a blank token with 400", async () => {
+    const res = await request(app).post("/api/leads/verify-email").send({ token: "   " });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+});

@@ -12,6 +12,7 @@ interface LeadRow {
   business_type: string;
   message: string | null;
   created_at: Date;
+  email_verified_at: Date | null;
 }
 
 function toLead(row: LeadRow): Lead {
@@ -24,6 +25,7 @@ function toLead(row: LeadRow): Lead {
     businessType: row.business_type as Lead["businessType"],
     message: row.message ?? undefined,
     createdAt: row.created_at.toISOString(),
+    emailVerified: row.email_verified_at !== null,
   };
 }
 
@@ -50,7 +52,7 @@ export async function insertLead(input: LeadInput): Promise<Lead> {
        message = EXCLUDED.message,
        owner_password_hash = COALESCE(EXCLUDED.owner_password_hash, leads.owner_password_hash),
        created_at = now()
-     RETURNING id, name, business_name, email, phone, business_type, message, created_at`,
+     RETURNING id, name, business_name, email, phone, business_type, message, created_at, email_verified_at`,
     [input.name, input.businessName, input.email, input.phone, input.businessType, message, ownerPasswordHash],
   );
   const lead = toLead(rows[0]);
@@ -62,11 +64,49 @@ export async function insertLead(input: LeadInput): Promise<Lead> {
 /** Most-recent Leads first — a thin read for a future Super Admin pipeline view. */
 export async function listLeads(limit = 50): Promise<Lead[]> {
   const { rows } = await query<LeadRow>(
-    `SELECT id, name, business_name, email, phone, business_type, message, created_at
+    `SELECT id, name, business_name, email, phone, business_type, message, created_at, email_verified_at
      FROM leads
      ORDER BY created_at DESC
      LIMIT $1`,
     [limit],
   );
   return rows.map(toLead);
+}
+
+/** Store a freshly-minted verification token (hash + expiry) on a lead. */
+export async function setLeadVerifyToken(
+  leadId: string,
+  hash: string,
+  expiresAt: Date,
+): Promise<void> {
+  await query(
+    `UPDATE leads SET verify_token_hash = $2, verify_token_expires_at = $3 WHERE id = $1`,
+    [leadId, hash, expiresAt.toISOString()],
+  );
+}
+
+export interface VerifyOutcome {
+  ok: boolean;
+  email?: string;
+}
+
+/**
+ * Consume a verification token: stamp `email_verified_at` and clear the token
+ * (single-use) when the hash matches an unexpired, not-yet-verified lead. Returns
+ * `{ ok: false }` for an unknown, expired, or already-consumed token — the route
+ * maps both to one neutral message so the endpoint never reveals which leads exist.
+ */
+export async function verifyLeadEmailByToken(hash: string): Promise<VerifyOutcome> {
+  const { rows } = await query<{ email: string }>(
+    `UPDATE leads
+        SET email_verified_at = now(),
+            verify_token_hash = NULL,
+            verify_token_expires_at = NULL
+      WHERE verify_token_hash = $1
+        AND verify_token_expires_at > now()
+        AND email_verified_at IS NULL
+      RETURNING email`,
+    [hash],
+  );
+  return rows[0] ? { ok: true, email: rows[0].email } : { ok: false };
 }

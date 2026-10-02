@@ -21,6 +21,7 @@ interface LeadRow {
   business_type: string | null;
   message: string | null;
   owner_password_hash: string | null;
+  email_verified_at: Date | null;
 }
 
 function toAdminLead(row: LeadRow): AdminLead {
@@ -36,11 +37,13 @@ function toAdminLead(row: LeadRow): AdminLead {
     message: row.message,
     // Expose only whether a password exists — never the hash itself.
     hasOwnerPassword: row.owner_password_hash !== null,
+    // Whether the prospect confirmed ownership of their email address.
+    emailVerified: row.email_verified_at !== null,
   };
 }
 
 const SELECT = `id, business_name, name, email, phone, status,
-  created_at AS requested_at, business_type, message, owner_password_hash`;
+  created_at AS requested_at, business_type, message, owner_password_hash, email_verified_at`;
 
 /** Whole pipeline, most-recent first (pending naturally bubble up as newest). */
 export async function listLeads(): Promise<AdminLead[]> {

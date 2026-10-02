@@ -204,6 +204,18 @@ CREATE INDEX IF NOT EXISTS leads_status_idx ON leads (status);
 -- Google-only owner exactly as before, and the Super Admin may still set one.
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS owner_password_hash TEXT;
 
+-- Email verification for demo requests. On submit we mint a single-use token,
+-- store only its SHA-256 hash (never the raw value) with a short expiry, and
+-- email the prospect a link; clicking it stamps \`email_verified_at\`. This proves
+-- the prospect controls the address before the Super Admin provisions a store,
+-- so a typo'd or fake email is caught up front. The token columns are cleared on
+-- a successful verify; the lookup index is partial (only unconsumed tokens).
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS email_verified_at      TIMESTAMPTZ;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS verify_token_hash      TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS verify_token_expires_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS leads_verify_token_idx
+  ON leads (verify_token_hash) WHERE verify_token_hash IS NOT NULL;
+
 -- ---------------------------------------------------------------------------
 -- Sales ledger (POS checkout). A \`sales\` header carries the BIR-style invoice
 -- reference, VAT breakdown (12% inclusive), settlement channel and (for cash)
