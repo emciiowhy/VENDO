@@ -178,6 +178,88 @@ export async function getDashboardPulse(tenantId: string): Promise<DashboardPuls
   };
 }
 
+// ── Ranged sales totals (owner overview strip) ──────────────────────────────
+
+/** The windows the owner overview can total sales over. */
+export const SALES_RANGES = ["today", "7d", "30d", "month", "all"] as const;
+export type SalesRange = (typeof SALES_RANGES)[number];
+
+export interface SalesTotals {
+  range: SalesRange;
+  /** Inclusive window start (YYYY-MM-DD, Manila). */
+  from: string;
+  /** Window end = today (YYYY-MM-DD, Manila). */
+  to: string;
+  /** Total sales over the window (centavos); voids/returns net automatically. */
+  grossCents: number;
+  /** Count of forward sales (contra void/return rows excluded). */
+  txns: number;
+  /** Average order value = gross / txns (centavos), 0 when no sales. */
+  aovCents: number;
+}
+
+/** Subtract `n` calendar days from a YYYY-MM-DD string (PH has no DST). */
+function subtractDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Total sales over a range for the owner overview. One cheap aggregate over
+ * `sales`, scoped to the Tenant and the Manila calendar window. `grossCents`
+ * sums `total_cents` across all rows so contra void/return rows net out (they
+ * already net in the Pulse); `txns` counts only forward `kind = 'sale'` rows.
+ */
+export async function getSalesTotals(tenantId: string, range: SalesRange): Promise<SalesTotals> {
+  const day = `(s.created_at AT TIME ZONE $2)::date`;
+  const today = `(now() AT TIME ZONE $2)::date`;
+  // `range` is a validated enum (never user text), safe to interpolate.
+  const windowClause =
+    range === "today"
+      ? `${day} = ${today}`
+      : range === "7d"
+        ? `${day} > ${today} - 7`
+        : range === "30d"
+          ? `${day} > ${today} - 30`
+          : range === "month"
+            ? `${day} >= date_trunc('month', ${today})::date`
+            : `TRUE`;
+
+  const { rows } = await query<{ gross: string; txns: number; first_day: string | null; today: string }>(
+    `SELECT coalesce(sum(s.total_cents), 0)::bigint          AS gross,
+            count(*) FILTER (WHERE s.kind = 'sale')::int     AS txns,
+            to_char(min(${day}), 'YYYY-MM-DD')               AS first_day,
+            to_char(${today}, 'YYYY-MM-DD')                  AS today
+       FROM sales s
+      WHERE s.tenant_id = $1 AND (${windowClause})`,
+    [tenantId, MNL],
+  );
+  const r = rows[0];
+  const to = r.today;
+  const grossCents = Number(r.gross);
+  const txns = r.txns;
+  const from =
+    range === "today"
+      ? to
+      : range === "7d"
+        ? subtractDays(to, 6)
+        : range === "30d"
+          ? subtractDays(to, 29)
+          : range === "month"
+            ? `${to.slice(0, 7)}-01`
+            : (r.first_day ?? to);
+
+  return {
+    range,
+    from,
+    to,
+    grossCents,
+    txns,
+    aovCents: txns > 0 ? Math.round(grossCents / txns) : 0,
+  };
+}
+
 // ── Low-stock alert engine ──────────────────────────────────────────────────
 
 export interface StockAlert {

@@ -12,6 +12,11 @@ describe("Merchant analytics & compliance require store-management auth", () => 
     expect(res.status).toBe(401);
   });
 
+  it("blocks the ranged sales totals for the unauthenticated with 401", async () => {
+    const res = await request(app).get("/api/v1/merchant/analytics/totals?range=30d");
+    expect(res.status).toBe(401);
+  });
+
   it("blocks the compliance export for the unauthenticated with 401", async () => {
     const res = await request(app).get("/api/v1/merchant/compliance/export");
     expect(res.status).toBe(401);

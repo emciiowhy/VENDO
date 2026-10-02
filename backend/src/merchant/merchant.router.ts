@@ -7,7 +7,10 @@ import {
   getLowStockCrossingsSince,
   getOwnerSummary,
   getReorderForecast,
+  getSalesTotals,
   getStockAlerts,
+  SALES_RANGES,
+  type SalesRange,
 } from "./merchant.repository.js";
 import { DEFAULT_FORECAST_OPTIONS, type ForecastOptions } from "./forecast.js";
 import { resolveMonth, toCsv } from "./compliance.csv.js";
@@ -42,6 +45,24 @@ merchantRouter.get("/analytics/dashboard", async (req, res) => {
   } catch (err) {
     console.error("[merchant] dashboard pulse failed:", err);
     res.status(500).json({ ok: false, error: "Could not load dashboard analytics." });
+  }
+});
+
+/**
+ * GET /api/v1/merchant/analytics/totals?range=today|7d|30d|month|all — ranged
+ * sales totals for the owner overview strip. Defaults to today; an unknown range
+ * falls back to today rather than erroring.
+ */
+merchantRouter.get("/analytics/totals", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const raw = req.query.range;
+  const range: SalesRange = SALES_RANGES.includes(raw as SalesRange) ? (raw as SalesRange) : "today";
+  try {
+    res.json({ ok: true, totals: await getSalesTotals(tenantId, range) });
+  } catch (err) {
+    console.error("[merchant] sales totals failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load sales totals." });
   }
 });
 
