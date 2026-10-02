@@ -116,6 +116,7 @@ interface ProductRow {
   low_stock_threshold: number;
   image_url: string | null;
   is_active: boolean;
+  vat_class: Product["vatClass"];
   created_at: Date;
   updated_at: Date;
 }
@@ -134,13 +135,14 @@ function toProduct(row: ProductRow): Product {
     lowStock: row.low_stock_threshold > 0 && row.stock <= row.low_stock_threshold,
     imageUrl: row.image_url,
     isActive: row.is_active,
+    vatClass: row.vat_class,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
 }
 
 const PRODUCT_COLUMNS = `p.id, p.category_id, p.name, p.sku, p.price_cents, p.stock,
-  p.low_stock_threshold, p.image_url, p.is_active, p.created_at, p.updated_at,
+  p.low_stock_threshold, p.image_url, p.is_active, p.vat_class, p.created_at, p.updated_at,
   c.name AS category_name`;
 
 export async function listProducts(tenantId: string): Promise<Product[]> {
@@ -182,8 +184,8 @@ export async function createProduct(
     await client.query("BEGIN");
     const ins = await client.query<{ id: string }>(
       `INSERT INTO products
-         (tenant_id, name, sku, category_id, price_cents, stock, low_stock_threshold, image_url, is_active)
-       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8)
+         (tenant_id, name, sku, category_id, price_cents, stock, low_stock_threshold, image_url, is_active, vat_class)
+       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9)
        RETURNING id`,
       [
         tenantId,
@@ -194,6 +196,7 @@ export async function createProduct(
         input.lowStockThreshold,
         imageUrl,
         input.isActive ?? true,
+        input.vatClass ?? "VATABLE",
       ],
     );
     newId = ins.rows[0].id;
@@ -244,6 +247,7 @@ export async function updateProduct(
   if (input.price !== undefined) set("price_cents", input.price);
   if (input.lowStockThreshold !== undefined) set("low_stock_threshold", input.lowStockThreshold);
   if (input.isActive !== undefined) set("is_active", input.isActive);
+  if (input.vatClass !== undefined) set("vat_class", input.vatClass);
   if (imageUrl !== undefined) set("image_url", imageUrl);
 
   const stockRequested = input.stock !== undefined;

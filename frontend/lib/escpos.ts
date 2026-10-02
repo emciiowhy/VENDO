@@ -162,7 +162,9 @@ export function buildSaleReceipt(args: BuildReceiptArgs): Uint8Array {
     b.row("Gross", money(sale.grossCents));
     b.row(`Less: ${sale.discountLabel || "Discount"}`, `-${money(sale.discountCents)}`);
   }
-  b.row("VATable Sales", money(sale.subtotalCents));
+  b.row("VATable Sales", money(sale.vatableSalesCents));
+  if (sale.vatExemptCents > 0) b.row("VAT-Exempt Sales", money(sale.vatExemptCents));
+  if (sale.zeroRatedCents > 0) b.row("Zero-Rated Sales", money(sale.zeroRatedCents));
   b.row("VAT (12%)", money(sale.vatCents));
   b.rule();
   b.bold(true).doubleSize(true).row("TOTAL", money(sale.totalCents)).doubleSize(false).bold(false);

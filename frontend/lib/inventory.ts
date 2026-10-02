@@ -7,6 +7,7 @@
  * other fields; reads and category writes are plain JSON.
  */
 import { API_BASE_URL } from "./api";
+import type { VatClass } from "./pos";
 
 const BASE = `${API_BASE_URL}/api/inventory`;
 
@@ -31,6 +32,7 @@ export interface Product {
   lowStock: boolean;
   imageUrl: string | null;
   isActive: boolean;
+  vatClass: VatClass;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,6 +78,7 @@ export interface ProductFields {
   stock: string;
   lowStockThreshold: string;
   isActive: boolean;
+  vatClass: VatClass;
 }
 
 function toFormData(fields: Partial<ProductFields>, image: File | null, removeImage = false): FormData {

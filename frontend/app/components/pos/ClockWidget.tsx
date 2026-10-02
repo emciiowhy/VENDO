@@ -25,7 +25,21 @@ import {
  * state is owned by the parent so the terminal can suspend the global barcode
  * wedge while the sheet is up (a stray scan can't ring a hidden cart).
  */
-export function ClockWidget({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+export function ClockWidget({
+  open,
+  onOpenChange,
+  clockOutViaEndShift = false,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  /**
+   * When true (cashiers), clocking out is folded into "End shift" — the sheet
+   * shows a hint pointing there instead of a standalone Clock-out button, so the
+   * labor clock and the cash drawer always close together. Owners/managers, who
+   * ring up without a personal drawer, keep the manual control.
+   */
+  clockOutViaEndShift?: boolean;
+}) {
   const { theme } = useTheme();
   const [status, setStatus] = useState<ClockStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -226,7 +240,15 @@ export function ClockWidget({ open, onOpenChange }: { open: boolean; onOpenChang
                 </p>
               )}
 
-              {active ? (
+              {active && clockOutViaEndShift ? (
+                <div className="rounded-[10px] bg-paper hairline px-4 py-3 text-[12.5px] text-ink-soft flex items-start gap-2">
+                  <Icon name="clock" className="w-[15px] h-[15px] mt-0.5 shrink-0 text-brand-600" strokeWidth={1.8} />
+                  <span>
+                    You’ll be clocked out automatically when you <span className="font-semibold text-ink">End shift</span> —
+                    your hours and cash drawer close together.
+                  </span>
+                </div>
+              ) : active ? (
                 <button
                   type="button"
                   onClick={() => void doClockOut()}

@@ -67,6 +67,9 @@ export function randomState(): string {
  * the OAuth `state` nonce to a tamper-evident cookie value.
  */
 export function sign(value: string): string {
+  // `env.jwtSecret` is mandatory in production (see env.ts), so the fallback only
+  // ever applies to local dev/test where no secret is configured — it can never
+  // weaken a production signature.
   const sig = createHmac("sha256", env.jwtSecret || "dev-unsigned")
     .update(value)
     .digest("base64url");

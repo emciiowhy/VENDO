@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -36,6 +36,14 @@ import { enforceTrialStatus } from "./billing/trial.middleware.js";
  */
 export function createApp() {
   const app = express();
+
+  // Behind a hosting proxy in production, the client IP arrives in
+  // X-Forwarded-For. Trust exactly one hop so `req.ip` (and the rate limiters
+  // keyed on it) see the real caller, not the proxy. Left off in dev/test where
+  // there is no proxy, which also keeps express-rate-limit's spoofing check happy.
+  if (env.isProd) {
+    app.set("trust proxy", 1);
+  }
 
   app.use(helmet());
   app.use(
@@ -120,6 +128,23 @@ export function createApp() {
   // Unknown route
   app.use((_req, res) => {
     res.status(404).json({ ok: false, error: "Not found" });
+  });
+
+  // Central error handler (must be last, 4-arg signature). Turns any error that
+  // escapes a route into a consistent JSON shape and — crucially — never leaks a
+  // stack trace or internal message to the client; the full error is logged
+  // server-side only. Common body-parser failures get precise status codes.
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    const e = err as { type?: string; status?: number } | undefined;
+    if (e?.type === "entity.parse.failed" || err instanceof SyntaxError) {
+      return res.status(400).json({ ok: false, error: "Malformed request body." });
+    }
+    if (e?.type === "entity.too.large" || e?.status === 413) {
+      return res.status(413).json({ ok: false, error: "Request payload too large." });
+    }
+    console.error("[error]", err);
+    if (res.headersSent) return next(err);
+    return res.status(500).json({ ok: false, error: "Something went wrong. Please try again." });
   });
 
   return app;
