@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 
 const HQ = "Cebu City, Philippines";
 const PHONE = "0915 515 2314";
-const SECURITY_EMAIL = "security@vendopos.app";
+const SECURITY_EMAIL = "security@vendopos.shop";
 
 /** The two non-featured primary controls (stacked beside the featured tile). */
 const PRIMARY: { icon: IconName; eyebrow: string; title: string; body: string }[] = [

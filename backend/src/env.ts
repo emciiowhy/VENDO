@@ -111,7 +111,7 @@ export const env = {
    * The default `from` is a cosmetic placeholder for the pre-deploy phase. NOTE:
    * before real delivery, this MUST change — a gmail.com sender is rejected by
    * Resend (you can only send from a domain you verify). At deploy, either verify
-   * a real domain in Resend (e.g. noreply@vendopos.app) or swap the transport to
+   * a real domain in Resend (e.g. noreply@vendopos.shop) or swap the transport to
    * Gmail SMTP/API. See docs/staging-validation.md §7.
    */
   email: {

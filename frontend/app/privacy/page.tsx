@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 const EFFECTIVE_DATE = "June 14, 2026";
-const DPO_EMAIL = "privacy@vendopos.app";
+const DPO_EMAIL = "privacy@vendopos.shop";
 const HQ = "Cebu City, Philippines";
 const PHONE = "0915 515 2314";
 
