@@ -134,11 +134,25 @@ export const tillAccessSchema = z.discriminatedUnion("mode", [
   }),
 ]);
 
+/**
+ * Adopt an unlinked cashier into HR: create a fresh Employee record from the
+ * cashier (name copied, other fields default — the owner edits after), or link
+ * the cashier to an existing unlinked Employee.
+ */
+export const adoptCashierSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("create") }),
+  z.object({
+    mode: z.literal("link"),
+    employeeId: z.string().trim().uuid("Choose a valid employee."),
+  }),
+]);
+
 export type EmployeeCreateInput = z.infer<typeof employeeCreateSchema>;
 export type EmployeeUpdateInput = z.infer<typeof employeeUpdateSchema>;
 export type AttendanceUpsertInput = z.infer<typeof attendanceUpsertSchema>;
 export type PayrollRunInput = z.infer<typeof payrollRunSchema>;
 export type TillAccessInput = z.infer<typeof tillAccessSchema>;
+export type AdoptCashierInput = z.infer<typeof adoptCashierSchema>;
 
 // ── API-facing shapes ─────────────────────────────────────────────────────────
 

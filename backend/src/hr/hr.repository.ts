@@ -19,6 +19,7 @@ import type {
   PerformanceReport,
   PerformanceRow,
   RosterEntry,
+  AdoptCashierInput,
   TillAccessInput,
   TillCashier,
   UnlinkedCashier,
@@ -36,6 +37,20 @@ export type GrantTillResult =
         | "cashier_not_found"
         | "cashier_disabled"
         | "cashier_taken";
+    };
+
+/** Outcome of adopting an unlinked cashier into HR. */
+export type AdoptResult =
+  | { ok: true; employee: Employee }
+  | {
+      ok: false;
+      code:
+        | "cashier_not_found"
+        | "cashier_disabled"
+        | "already_adopted"
+        | "employee_not_found"
+        | "employee_inactive"
+        | "employee_linked";
     };
 
 /**
@@ -364,6 +379,85 @@ export async function grantTillAccess(
         defaultFloatCents: row.default_float_cents,
       },
     };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Adopt an unlinked cashier into HR (ADR 0002, reverse direction): create a new
+ * Employee from the cashier (name copied, other fields default) or link the
+ * cashier to an existing unlinked Employee. One transaction with the cashier
+ * row locked; rejects a cashier already attached to an employee.
+ */
+export async function adoptCashier(
+  tenantId: string,
+  cashierUserId: string,
+  input: AdoptCashierInput,
+): Promise<AdoptResult> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const c = await client.query<{ name: string; status: string }>(
+      `SELECT name, status FROM users
+        WHERE id = $1 AND tenant_id = $2 AND role = 'CASHIER' FOR UPDATE`,
+      [cashierUserId, tenantId],
+    );
+    if (c.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "cashier_not_found" };
+    }
+    if (c.rows[0].status !== "active") {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "cashier_disabled" };
+    }
+    const already = await client.query(
+      `SELECT 1 FROM employees WHERE tenant_id = $1 AND user_id = $2`,
+      [tenantId, cashierUserId],
+    );
+    if ((already.rowCount ?? 0) > 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, code: "already_adopted" };
+    }
+
+    let row: EmployeeRow;
+    if (input.mode === "create") {
+      const ins = await client.query<EmployeeRow>(
+        `INSERT INTO employees (tenant_id, name, user_id) VALUES ($1, $2, $3) RETURNING ${EMP_COLUMNS}`,
+        [tenantId, c.rows[0].name, cashierUserId],
+      );
+      row = ins.rows[0];
+    } else {
+      const emp = await client.query<{ user_id: string | null; is_active: boolean }>(
+        `SELECT user_id, is_active FROM employees WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+        [input.employeeId, tenantId],
+      );
+      if (emp.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "employee_not_found" };
+      }
+      if (!emp.rows[0].is_active) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "employee_inactive" };
+      }
+      if (emp.rows[0].user_id) {
+        await client.query("ROLLBACK");
+        return { ok: false, code: "employee_linked" };
+      }
+      const upd = await client.query<EmployeeRow>(
+        `UPDATE employees SET user_id = $3, updated_at = now()
+          WHERE id = $1 AND tenant_id = $2 RETURNING ${EMP_COLUMNS}`,
+        [input.employeeId, tenantId, cashierUserId],
+      );
+      row = upd.rows[0];
+    }
+
+    await client.query("COMMIT");
+    return { ok: true, employee: toEmployee(row) };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
