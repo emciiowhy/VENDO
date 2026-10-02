@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
 import { BrandMark } from "../BrandMark";
 import { PinPad } from "../auth/PinPad";
@@ -20,13 +20,18 @@ import { clockIn as apiClockIn, getClockStatus } from "@/lib/timecard";
  * unrelated "shift" concepts the floor depends on. Until then this overlay owns
  * the screen and the catalog/cart behind it are blurred and inert.
  *
+ * Clock In is AUTOMATIC: logging in IS clocking in. The moment an identified
+ * cashier lands on the Clock In stop the labor timecard opens on its own (no
+ * manual tap) and the tunnel advances to Open Drawer. The manual "Clock In for
+ * Duty" button remains only as a fallback if that automatic punch fails.
+ *
  * Reload discipline: binding a worker to the till is the existing PIN switch
  * (`/auth/pin`), which mints a fresh session cookie and reloads the page as that
  * cashier. So the Staff/PIN stops live *before* a reload and the Clock In/Drawer
  * stops live *after* it — the wizard derives its entry stage from live state, so
  * the reload is seamless. A cashier who reached the till via the login/handover
- * PIN screen is already identified, so they enter the tunnel at "Clock In" with
- * the first two stops already ticked; "Not you? Switch cashier" reopens them.
+ * PIN screen is already identified, so they enter the tunnel at "Clock In" (where
+ * the auto-punch fires); "Not you? Switch cashier" reopens the earlier stops.
  *
  * Hooks discipline: the only effect here is the PIN keyboard listener, and it
  * mutates state strictly inside its event callback (never synchronously in the
@@ -88,8 +93,13 @@ export function ActivationWizard({
 
   const [pin, setPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // Seed `busy` true when we enter at the Clock In stop: the labor punch fires
+  // automatically on mount (see effect below), so the button shows "Clocking
+  // in…" from the first paint rather than flashing an idle, tappable button.
+  const [busy, setBusy] = useState(() => !clockedIn);
   const [error, setError] = useState<string | null>(null);
+  // Guards the auto clock-in so it fires at most once per mount.
+  const autoClockFired = useRef(false);
 
   const [amount, setAmount] = useState(() => (defaultFloatCents > 0 ? String(defaultFloatCents / 100) : ""));
   const openingCents = Math.round((Number(amount) || 0) * 100);
@@ -177,6 +187,44 @@ export function ActivationWizard({
   }, [stage, pushDigit, backspace]);
 
   // ── Stage 3: clock in (open the labor timecard) ─────────────────────────────
+  // Auto clock-in: the instant an identified cashier lands on the Clock In stop,
+  // open their labor timecard without a manual tap — logging in IS clocking in.
+  // Idempotent: a 409 "already on the clock" is success for this gate. Fires at
+  // most once per mount (ref guard); if it genuinely fails we drop `busy` and
+  // surface the manual "Clock In for Duty" button as a fallback so the cashier is
+  // never stuck. Every setState lands AFTER an await (never synchronously in the
+  // effect body), satisfying `react-hooks/set-state-in-effect`.
+  // No `alive`/abort guard here on purpose: under dev StrictMode (and whenever the
+  // parent re-renders, since `onClockedIn` is an inline prop) the effect runs
+  // setup→cleanup→setup. An abort flag would mark the single in-flight punch dead
+  // on the cleanup, so it would resolve into a no-op while the `autoClockFired`
+  // guard blocks any retry — leaving the wizard stuck on "Clocking in…" forever.
+  // Instead we fire exactly once (ref guard) and always let it finish; the punch
+  // is idempotent and setStage/onClockedIn after an unmount are harmless no-ops.
+  useEffect(() => {
+    if (stage !== "clockIn" || autoClockFired.current) return;
+    autoClockFired.current = true;
+    void (async () => {
+      const res = await apiClockIn();
+      if (res.ok) {
+        setBusy(false);
+        onClockedIn();
+        setStage("drawer");
+        return;
+      }
+      // A 409 (already on the clock) is success for this gate — confirm via status.
+      const status = await getClockStatus();
+      if (status.ok && status.timecard) {
+        setBusy(false);
+        onClockedIn();
+        setStage("drawer");
+        return;
+      }
+      setBusy(false);
+      setError(res.error ?? "Could not clock you in.");
+    })();
+  }, [stage, onClockedIn]);
+
   const doClockIn = useCallback(async () => {
     setBusy(true);
     setError(null);
@@ -294,7 +342,11 @@ export function ActivationWizard({
                 {initials(operatorName)}
               </span>
               <h3 className="mt-3.5 text-[1.2rem] font-extrabold tracking-tightest">{operatorName}</h3>
-              <p className="mt-1 text-[12.5px] text-ink-soft">Confirm you’re on duty to start logging your hours.</p>
+              <p className="mt-1 text-[12.5px] text-ink-soft">
+                {error
+                  ? "We couldn’t start your clock automatically — tap to clock in."
+                  : "Putting you on the labor clock…"}
+              </p>
 
               {error && (
                 <p className="mt-4 text-[13px] font-semibold text-rose-600 bg-rose-50 rounded-[10px] px-3.5 py-2.5">
@@ -483,8 +535,8 @@ function stageCopy(stage: Stage, operatorName: string): { title: string; subtitl
       };
     case "clockIn":
       return {
-        title: "Clock in for duty",
-        subtitle: "Log your labor hours before you open the cash drawer.",
+        title: "Clocking you in",
+        subtitle: "Starting your labor clock automatically so your hours are logged.",
       };
     case "drawer":
       return {

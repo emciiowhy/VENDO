@@ -178,6 +178,118 @@ export async function getDashboardPulse(tenantId: string): Promise<DashboardPuls
   };
 }
 
+// ── Ranged sales totals (owner overview strip) ──────────────────────────────
+
+/** The windows the owner overview can total sales over. */
+export const SALES_RANGES = ["today", "7d", "30d", "month", "all"] as const;
+export type SalesRange = (typeof SALES_RANGES)[number];
+
+export interface SalesTotals {
+  range: SalesRange;
+  /** Inclusive window start (YYYY-MM-DD, Manila). */
+  from: string;
+  /** Window end = today (YYYY-MM-DD, Manila). */
+  to: string;
+  /** Total sales over the window (centavos); voids/returns net automatically. */
+  grossCents: number;
+  /** Count of forward sales (contra void/return rows excluded). */
+  txns: number;
+  /** Average order value = gross / txns (centavos), 0 when no sales. */
+  aovCents: number;
+  /** Store expenses over the window (centavos); null when not entitled to Finance. */
+  expensesCents: number | null;
+  /** Sales − expenses (centavos); null when expenses aren't available. */
+  netCents: number | null;
+}
+
+/** Subtract `n` calendar days from a YYYY-MM-DD string (PH has no DST). */
+function subtractDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Total sales over a range for the owner overview. One cheap aggregate over
+ * `sales`, scoped to the Tenant and the Manila calendar window. `grossCents`
+ * sums `total_cents` across all rows so contra void/return rows net out (they
+ * already net in the Pulse); `txns` counts only forward `kind = 'sale'` rows.
+ *
+ * When `includeExpenses` is set (the caller gates this on the Finance feature),
+ * store expenses over the same window are summed from the `expenses` ledger and
+ * `netCents = gross − expenses`; otherwise both are null so the UI hides them.
+ */
+export async function getSalesTotals(
+  tenantId: string,
+  range: SalesRange,
+  includeExpenses = false,
+): Promise<SalesTotals> {
+  const day = `(s.created_at AT TIME ZONE $2)::date`;
+  const today = `(now() AT TIME ZONE $2)::date`;
+  // `range` is a validated enum (never user text), safe to interpolate.
+  const windowClause =
+    range === "today"
+      ? `${day} = ${today}`
+      : range === "7d"
+        ? `${day} > ${today} - 7`
+        : range === "30d"
+          ? `${day} > ${today} - 30`
+          : range === "month"
+            ? `${day} >= date_trunc('month', ${today})::date`
+            : `TRUE`;
+
+  const { rows } = await query<{ gross: string; txns: number; first_day: string | null; today: string }>(
+    `SELECT coalesce(sum(s.total_cents), 0)::bigint          AS gross,
+            count(*) FILTER (WHERE s.kind = 'sale')::int     AS txns,
+            to_char(min(${day}), 'YYYY-MM-DD')               AS first_day,
+            to_char(${today}, 'YYYY-MM-DD')                  AS today
+       FROM sales s
+      WHERE s.tenant_id = $1 AND (${windowClause})`,
+    [tenantId, MNL],
+  );
+  const r = rows[0];
+  const to = r.today;
+  const grossCents = Number(r.gross);
+  const txns = r.txns;
+  const from =
+    range === "today"
+      ? to
+      : range === "7d"
+        ? subtractDays(to, 6)
+        : range === "30d"
+          ? subtractDays(to, 29)
+          : range === "month"
+            ? `${to.slice(0, 7)}-01`
+            : (r.first_day ?? to);
+
+  let expensesCents: number | null = null;
+  let netCents: number | null = null;
+  if (includeExpenses) {
+    // Expenses are dated by `incurred_on` (a plain DATE). "all" has no lower
+    // bound so expenses predating the first sale still count toward net.
+    const exp = await query<{ expenses: string }>(
+      `SELECT coalesce(sum(amount_cents), 0)::bigint AS expenses
+         FROM expenses
+        WHERE tenant_id = $1 AND incurred_on <= $2::date
+          AND ($3::date IS NULL OR incurred_on >= $3::date)`,
+      [tenantId, to, range === "all" ? null : from],
+    );
+    expensesCents = Number(exp.rows[0].expenses);
+    netCents = grossCents - expensesCents;
+  }
+
+  return {
+    range,
+    from,
+    to,
+    grossCents,
+    txns,
+    aovCents: txns > 0 ? Math.round(grossCents / txns) : 0,
+    expensesCents,
+    netCents,
+  };
+}
+
 // ── Low-stock alert engine ──────────────────────────────────────────────────
 
 export interface StockAlert {
@@ -368,10 +480,16 @@ export interface ComplianceRow {
   paymentRef: string | null;
   /** VAT-inclusive official sale total (centavos). */
   grossCents: number;
-  /** Net of VAT — the taxable base (centavos). */
+  /** Net of VAT — the taxable base of the whole ticket (centavos). */
   netCents: number;
-  /** 12% output VAT extracted from the inclusive total (centavos). */
+  /** 12% output VAT extracted from the VATable portion (centavos). */
   vatCents: number;
+  /** VATable sales, net of VAT (centavos). */
+  vatableSalesCents: number;
+  /** VAT-exempt sales (centavos). */
+  vatExemptCents: number;
+  /** Zero-rated sales (centavos). */
+  zeroRatedCents: number;
   /** Customer discount applied (centavos). */
   discountCents: number;
 }
@@ -386,6 +504,9 @@ export interface ComplianceLedger {
     grossCents: number;
     netCents: number;
     vatCents: number;
+    vatableSalesCents: number;
+    vatExemptCents: number;
+    zeroRatedCents: number;
     discountCents: number;
     count: number;
   };
@@ -399,6 +520,9 @@ interface SaleLedgerRow {
   total_cents: number;
   subtotal_cents: number;
   vat_cents: number;
+  vatable_sales_cents: number;
+  vat_exempt_cents: number;
+  zero_rated_cents: number;
   discount_cents: number;
 }
 
@@ -419,7 +543,8 @@ export async function getComplianceLedger(
 ): Promise<ComplianceLedger> {
   const { rows } = await query<SaleLedgerRow>(
     `SELECT reference, created_at AS at, payment_method, payment_ref,
-            total_cents, subtotal_cents, vat_cents, discount_cents
+            total_cents, subtotal_cents, vat_cents,
+            vatable_sales_cents, vat_exempt_cents, zero_rated_cents, discount_cents
        FROM sales
       WHERE tenant_id = $1
         AND (created_at AT TIME ZONE $4) >= $2::timestamp
@@ -436,6 +561,9 @@ export async function getComplianceLedger(
     grossCents: r.total_cents,
     netCents: r.subtotal_cents,
     vatCents: r.vat_cents,
+    vatableSalesCents: r.vatable_sales_cents,
+    vatExemptCents: r.vat_exempt_cents,
+    zeroRatedCents: r.zero_rated_cents,
     discountCents: r.discount_cents,
   }));
 
@@ -444,11 +572,23 @@ export async function getComplianceLedger(
       acc.grossCents += r.grossCents;
       acc.netCents += r.netCents;
       acc.vatCents += r.vatCents;
+      acc.vatableSalesCents += r.vatableSalesCents;
+      acc.vatExemptCents += r.vatExemptCents;
+      acc.zeroRatedCents += r.zeroRatedCents;
       acc.discountCents += r.discountCents;
       acc.count += 1;
       return acc;
     },
-    { grossCents: 0, netCents: 0, vatCents: 0, discountCents: 0, count: 0 },
+    {
+      grossCents: 0,
+      netCents: 0,
+      vatCents: 0,
+      vatableSalesCents: 0,
+      vatExemptCents: 0,
+      zeroRatedCents: 0,
+      discountCents: 0,
+      count: 0,
+    },
   );
 
   return { periodStart, periodEnd, rows: out, totals };

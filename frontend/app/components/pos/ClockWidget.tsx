@@ -25,7 +25,21 @@ import {
  * state is owned by the parent so the terminal can suspend the global barcode
  * wedge while the sheet is up (a stray scan can't ring a hidden cart).
  */
-export function ClockWidget({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+export function ClockWidget({
+  open,
+  onOpenChange,
+  clockOutViaEndShift = false,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  /**
+   * When true (cashiers), clocking out is folded into "End shift" — the sheet
+   * shows a hint pointing there instead of a standalone Clock-out button, so the
+   * labor clock and the cash drawer always close together. Owners/managers, who
+   * ring up without a personal drawer, keep the manual control.
+   */
+  clockOutViaEndShift?: boolean;
+}) {
   const { theme } = useTheme();
   const [status, setStatus] = useState<ClockStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -93,7 +107,13 @@ export function ClockWidget({ open, onOpenChange }: { open: boolean; onOpenChang
 
   const elapsedSeconds =
     active && nowMs !== null ? Math.max(0, Math.floor((nowMs - Date.parse(active.clockIn)) / 1000)) : null;
-  const elapsedMinutes = elapsedSeconds !== null ? elapsedSeconds / 60 : active?.durationMinutes ?? 0;
+  // Live elapsed string for the collapsed header pill. Uses seconds (H:MM:SS) so
+  // it visibly ticks every second — the old minute-only format read as frozen for
+  // the first minute after clocking in. Falls back to the server's minute count
+  // for the single frame before the first client tick seeds `nowMs` (so the first
+  // render still matches the server — no hydration mismatch).
+  const pillElapsed =
+    elapsedSeconds !== null ? formatClock(elapsedSeconds) : formatMinutes(active?.durationMinutes ?? 0);
 
   const doClockIn = useCallback(async () => {
     setBusy(true);
@@ -142,7 +162,7 @@ export function ClockWidget({ open, onOpenChange }: { open: boolean; onOpenChang
           <Icon name="clock" className="w-[18px] h-[18px]" strokeWidth={1.7} />
         )}
         <span className="hidden lg:inline tabular-nums">
-          {!loaded ? "Clock" : active ? `On the clock · ${formatMinutes(elapsedMinutes)}` : "Clock in"}
+          {!loaded ? "Clock" : active ? `On the clock · ${pillElapsed}` : "Clock in"}
         </span>
       </button>
 
@@ -226,7 +246,15 @@ export function ClockWidget({ open, onOpenChange }: { open: boolean; onOpenChang
                 </p>
               )}
 
-              {active ? (
+              {active && clockOutViaEndShift ? (
+                <div className="rounded-[10px] bg-paper hairline px-4 py-3 text-[12.5px] text-ink-soft flex items-start gap-2">
+                  <Icon name="clock" className="w-[15px] h-[15px] mt-0.5 shrink-0 text-brand-600" strokeWidth={1.8} />
+                  <span>
+                    You’ll be clocked out automatically when you <span className="font-semibold text-ink">End shift</span> —
+                    your hours and cash drawer close together.
+                  </span>
+                </div>
+              ) : active ? (
                 <button
                   type="button"
                   onClick={() => void doClockOut()}

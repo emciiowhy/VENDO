@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createApp } from "../app.js";
-import { orderSchema } from "./pos.schema.js";
+import { computeVatBreakdown, orderSchema } from "./pos.schema.js";
 
 const app = createApp();
 
@@ -93,5 +93,73 @@ describe("VAT is 12% inclusive (vat = total × 12/112)", () => {
     const vatCents = Math.round((totalCents * 12) / 112);
     expect(vatCents).toBe(1607);
     expect(totalCents - vatCents).toBe(13393);
+  });
+});
+
+describe("computeVatBreakdown — per-class VAT summary", () => {
+  it("books a wholly VATable cart exactly like the old single-rate path", () => {
+    const b = computeVatBreakdown([{ vatClass: "VATABLE", grossCents: 15000 }]);
+    expect(b.netCents).toBe(15000);
+    expect(b.vatCents).toBe(1607);
+    expect(b.vatableSalesCents).toBe(13393);
+    expect(b.vatExemptCents).toBe(0);
+    expect(b.zeroRatedCents).toBe(0);
+    expect(b.subtotalCents).toBe(13393);
+  });
+
+  it("charges no VAT on exempt or zero-rated lines", () => {
+    const b = computeVatBreakdown([
+      { vatClass: "EXEMPT", grossCents: 8000 },
+      { vatClass: "ZERO_RATED", grossCents: 5000 },
+    ]);
+    expect(b.vatCents).toBe(0);
+    expect(b.vatExemptCents).toBe(8000);
+    expect(b.zeroRatedCents).toBe(5000);
+    expect(b.vatableSalesCents).toBe(0);
+    expect(b.netCents).toBe(13000);
+  });
+
+  it("splits a mixed cart, VAT only on the VATable portion", () => {
+    const b = computeVatBreakdown([
+      { vatClass: "VATABLE", grossCents: 15000 },
+      { vatClass: "EXEMPT", grossCents: 10000 },
+      { vatClass: "ZERO_RATED", grossCents: 5000 },
+    ]);
+    expect(b.netCents).toBe(30000);
+    expect(b.vatCents).toBe(1607); // from the ₱150 VATable share only
+    expect(b.vatableSalesCents).toBe(13393);
+    expect(b.vatExemptCents).toBe(10000);
+    expect(b.zeroRatedCents).toBe(5000);
+    // The parts always reconstitute the net.
+    expect(b.vatableSalesCents + b.vatCents + b.vatExemptCents + b.zeroRatedCents).toBe(b.netCents);
+  });
+
+  it("allocates a cart discount across classes in proportion to gross", () => {
+    // ₱300 gross (half VATable, half exempt), ₱30 discount → ₱270 net.
+    // Each class sheds ₱15: VATable 150→135, exempt 150→135.
+    const b = computeVatBreakdown(
+      [
+        { vatClass: "VATABLE", grossCents: 15000 },
+        { vatClass: "EXEMPT", grossCents: 15000 },
+      ],
+      3000,
+    );
+    expect(b.netCents).toBe(27000);
+    expect(b.vatExemptCents).toBe(13500);
+    expect(b.vatCents).toBe(Math.round((13500 * 12) / 112)); // 1446
+    expect(b.vatableSalesCents + b.vatCents).toBe(13500);
+    expect(b.vatableSalesCents + b.vatCents + b.vatExemptCents).toBe(b.netCents);
+  });
+
+  it("never leaks a centavo: parts reconstitute the net under a full discount", () => {
+    const b = computeVatBreakdown(
+      [
+        { vatClass: "VATABLE", grossCents: 9999 },
+        { vatClass: "EXEMPT", grossCents: 1 },
+      ],
+      10000,
+    );
+    expect(b.netCents).toBe(0);
+    expect(b.vatableSalesCents + b.vatCents + b.vatExemptCents + b.zeroRatedCents).toBe(0);
   });
 });

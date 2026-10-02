@@ -11,6 +11,7 @@ import {
   type Product,
   type ProductFields,
 } from "@/lib/inventory";
+import { VAT_CLASS_LABELS, type VatClass } from "@/lib/pos";
 
 const FIELD_INPUT = "field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14.5px] text-ink";
 
@@ -37,6 +38,7 @@ export function ProductFormModal({
   const [price, setPrice] = useState(product ? String(product.price) : "");
   const [stock, setStock] = useState(product ? String(product.stock) : "0");
   const [threshold, setThreshold] = useState(product ? String(product.lowStockThreshold) : "0");
+  const [vatClass, setVatClass] = useState<VatClass>(product?.vatClass ?? "VATABLE");
   const [isActive, setIsActive] = useState(product?.isActive ?? true);
 
   const [file, setFile] = useState<File | null>(null);
@@ -59,6 +61,7 @@ export function ProductFormModal({
       price,
       stock,
       lowStockThreshold: threshold,
+      vatClass,
       isActive,
     };
 
@@ -137,6 +140,23 @@ export function ProductFormModal({
               </select>
             </Field>
           </div>
+
+          <Field label="VAT classification" error={fieldErrors.vatClass}>
+            <select
+              value={vatClass}
+              onChange={(e) => setVatClass(e.target.value as VatClass)}
+              className={FIELD_INPUT}
+            >
+              {(Object.keys(VAT_CLASS_LABELS) as VatClass[]).map((k) => (
+                <option key={k} value={k}>
+                  {VAT_CLASS_LABELS[k]}
+                </option>
+              ))}
+            </select>
+            <span className="block mt-1 text-[12px] text-ink-faint">
+              Prices are VAT-inclusive. Only VATable items add 12% output VAT on the receipt.
+            </span>
+          </Field>
 
           <div className="grid sm:grid-cols-3 gap-4">
             <Field label="Price" error={fieldErrors.price}>

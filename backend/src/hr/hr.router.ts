@@ -3,12 +3,15 @@ import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { requireFeature } from "../auth/tier.middleware.js";
 import {
+  adoptCashierSchema,
   attendanceUpsertSchema,
   employeeCreateSchema,
   employeeUpdateSchema,
   payrollRunSchema,
+  tillAccessSchema,
 } from "./hr.schema.js";
 import {
+  adoptCashier,
   createEmployee,
   createPayrollRun,
   deleteEmployee,
@@ -18,10 +21,14 @@ import {
   getHrSummary,
   getPayrollRun,
   getPerformance,
+  grantTillAccess,
   listEmployees,
   listPayrollRuns,
+  listUnlinkedCashiers,
   updateEmployee,
   upsertAttendance,
+  type AdoptResult,
+  type GrantTillResult,
 } from "./hr.repository.js";
 import { DEFAULT_HOURLY_RATE_CENTS, getLaborAnalytics } from "./timecard.repository.js";
 import { buildPayrollExport } from "./payroll.export.repository.js";
@@ -245,6 +252,74 @@ hrRouter.delete("/employees/:id", async (req, res) => {
   } catch (err) {
     console.error("[hr] delete employee failed:", err);
     res.status(500).json({ ok: false, error: "Could not delete the employee." });
+  }
+});
+
+// ── Till access (Employee ↔ Cashier bridge) ───────────────────────────────────
+
+/** Active cashier logins with no linked employee — the "link existing" options. */
+hrRouter.get("/cashiers/unlinked", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    res.json({ ok: true, cashiers: await listUnlinkedCashiers(tenantId) });
+  } catch (err) {
+    console.error("[hr] list unlinked cashiers failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load cashiers." });
+  }
+});
+
+/** Maps a grant failure code to an HTTP status + user-facing message. */
+const GRANT_ERRORS: Record<Exclude<GrantTillResult, { ok: true }>["code"], [number, string]> = {
+  not_found: [404, "Employee not found."],
+  inactive: [409, "This employee is separated — reactivate them before granting till access."],
+  already_linked: [409, "This employee already has till access."],
+  cashier_not_found: [404, "That cashier login no longer exists."],
+  cashier_disabled: [409, "That cashier login is disabled — re-enable it first."],
+  cashier_taken: [409, "That cashier is already linked to another employee."],
+};
+
+hrRouter.post("/employees/:id/till-access", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ ok: false, error: "Employee not found." });
+  const parsed = tillAccessSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const result = await grantTillAccess(tenantId, req.params.id, parsed.data);
+    if (result.ok) return res.json({ ok: true, cashier: result.cashier });
+    const [status, error] = GRANT_ERRORS[result.code];
+    res.status(status).json({ ok: false, error });
+  } catch (err) {
+    console.error("[hr] grant till access failed:", err);
+    res.status(500).json({ ok: false, error: "Could not grant till access." });
+  }
+});
+
+/** Maps an adopt failure code to an HTTP status + user-facing message. */
+const ADOPT_ERRORS: Record<Exclude<AdoptResult, { ok: true }>["code"], [number, string]> = {
+  cashier_not_found: [404, "That cashier login no longer exists."],
+  cashier_disabled: [409, "That cashier login is disabled — re-enable it first."],
+  already_adopted: [409, "That cashier is already linked to an employee."],
+  employee_not_found: [404, "Employee not found."],
+  employee_inactive: [409, "That employee is separated — reactivate them first."],
+  employee_linked: [409, "That employee already has till access."],
+};
+
+hrRouter.post("/cashiers/:id/adopt", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ ok: false, error: "Cashier not found." });
+  const parsed = adoptCashierSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const result = await adoptCashier(tenantId, req.params.id, parsed.data);
+    if (result.ok) return res.json({ ok: true, employee: result.employee });
+    const [status, error] = ADOPT_ERRORS[result.code];
+    res.status(status).json({ ok: false, error });
+  } catch (err) {
+    console.error("[hr] adopt cashier failed:", err);
+    res.status(500).json({ ok: false, error: "Could not adopt the cashier." });
   }
 });
 

@@ -276,6 +276,15 @@ export async function seedDemoWorkspace(
     itemParams,
   );
 
+  // Every seeded product is VATable, so the whole net is the taxable base. Stamp
+  // the per-class breakdown on the seeded sales (and their lines default VATABLE)
+  // so demo receipts show a correct VAT SUMMARY rather than ₱0 VATable sales.
+  await client.query(
+    `UPDATE sales SET vatable_sales_cents = subtotal_cents
+      WHERE tenant_id = $1 AND kind = 'sale'`,
+    [tenantId],
+  );
+
   // Seed the per-tenant invoice serial counter at the highest serial used (1 live
   // + the historical batch) so the next real receipt continues the gap-free
   // sequence at SI-000002… +1.

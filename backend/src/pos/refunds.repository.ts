@@ -1,6 +1,7 @@
 import { pool, query } from "../db.js";
 import { moveStock } from "../inventory/stockLedger.js";
 import { computeRefund } from "./refunds.schema.js";
+import type { VatClass } from "./pos.schema.js";
 import type {
   Reversal,
   SaleDetail,
@@ -49,6 +50,9 @@ export async function getSaleDetail(tenantId: string, saleId: string): Promise<S
     status: SaleDetail["status"];
     subtotal_cents: number;
     vat_cents: number;
+    vatable_sales_cents: number;
+    vat_exempt_cents: number;
+    zero_rated_cents: number;
     discount_cents: number;
     discount_label: string | null;
     total_cents: number;
@@ -60,7 +64,8 @@ export async function getSaleDetail(tenantId: string, saleId: string): Promise<S
     customer_name: string | null;
     created_at: Date;
   }>(
-    `SELECT s.id, s.reference, s.status, s.subtotal_cents, s.vat_cents, s.discount_cents,
+    `SELECT s.id, s.reference, s.status, s.subtotal_cents, s.vat_cents,
+            s.vatable_sales_cents, s.vat_exempt_cents, s.zero_rated_cents, s.discount_cents,
             s.discount_label, s.total_cents, s.payment_method, s.payment_ref,
             s.tendered_cents, s.change_cents,
             u.name AS cashier_name, c.name AS customer_name, s.created_at
@@ -80,14 +85,15 @@ export async function getSaleDetail(tenantId: string, saleId: string): Promise<S
     name: string;
     unit_price_cents: number;
     qty: number;
+    vat_class: SaleLineDetail["vatClass"];
     returned_qty: string;
   }>(
-    `SELECT oi.id AS sale_item_id, oi.product_id, oi.name, oi.unit_price_cents, oi.qty,
+    `SELECT oi.id AS sale_item_id, oi.product_id, oi.name, oi.unit_price_cents, oi.qty, oi.vat_class,
             COALESCE(-SUM(ri.qty), 0) AS returned_qty
        FROM sale_items oi
        LEFT JOIN sale_items ri ON ri.reverses_sale_item_id = oi.id
       WHERE oi.sale_id = $1
-      GROUP BY oi.id, oi.product_id, oi.name, oi.unit_price_cents, oi.qty
+      GROUP BY oi.id, oi.product_id, oi.name, oi.unit_price_cents, oi.qty, oi.vat_class
       ORDER BY oi.name ASC`,
     [saleId],
   );
@@ -102,6 +108,7 @@ export async function getSaleDetail(tenantId: string, saleId: string): Promise<S
       qty: r.qty,
       returnedQty,
       returnableQty: r.qty - returnedQty,
+      vatClass: r.vat_class,
     };
   });
 
@@ -111,6 +118,9 @@ export async function getSaleDetail(tenantId: string, saleId: string): Promise<S
     status: h.status,
     subtotalCents: h.subtotal_cents,
     vatCents: h.vat_cents,
+    vatableSalesCents: h.vatable_sales_cents,
+    vatExemptCents: h.vat_exempt_cents,
+    zeroRatedCents: h.zero_rated_cents,
     discountCents: h.discount_cents,
     discountLabel: h.discount_label,
     grossCents: h.total_cents + h.discount_cents,
@@ -152,6 +162,7 @@ interface OrigItem {
   unitPriceCents: number;
   qty: number;
   returnedQty: number;
+  vatClass: VatClass;
 }
 
 /**
@@ -215,14 +226,15 @@ export async function reverseSale(
       name: string;
       unit_price_cents: number;
       qty: number;
+      vat_class: VatClass;
       returned_qty: string;
     }>(
-      `SELECT oi.id, oi.product_id, oi.name, oi.unit_price_cents, oi.qty,
+      `SELECT oi.id, oi.product_id, oi.name, oi.unit_price_cents, oi.qty, oi.vat_class,
               COALESCE(-SUM(ri.qty), 0) AS returned_qty
          FROM sale_items oi
          LEFT JOIN sale_items ri ON ri.reverses_sale_item_id = oi.id
         WHERE oi.sale_id = $1
-        GROUP BY oi.id, oi.product_id, oi.name, oi.unit_price_cents, oi.qty`,
+        GROUP BY oi.id, oi.product_id, oi.name, oi.unit_price_cents, oi.qty, oi.vat_class`,
       [saleId],
     );
     const items: OrigItem[] = itemRes.rows.map((r) => ({
@@ -232,6 +244,7 @@ export async function reverseSale(
       unitPriceCents: r.unit_price_cents,
       qty: r.qty,
       returnedQty: Number(r.returned_qty),
+      vatClass: r.vat_class,
     }));
     const byId = new Map(items.map((it) => [it.id, it]));
 
@@ -270,15 +283,22 @@ export async function reverseSale(
       return { ok: false, code: "NOTHING_TO_RETURN" };
     }
 
-    // Refund maths — mirror checkout. Discount is reversed pro-rata by gross.
+    // Refund maths — mirror checkout. Discount is reversed pro-rata by gross,
+    // then the net is split by VAT class (VAT only on the VATable portion).
     const returnedGross = toReverse.reduce((sum, l) => sum + l.item.unitPriceCents * l.qty, 0);
     const {
       discountShareCents: discountShare,
       refundNetCents: refundNet,
       refundVatCents: refundVat,
       refundSubtotalCents: refundSub,
+      refundVatableSalesCents: refundVatable,
+      refundVatExemptCents: refundExempt,
+      refundZeroRatedCents: refundZero,
     } = computeRefund({
-      returnedGrossCents: returnedGross,
+      returnedLines: toReverse.map((l) => ({
+        vatClass: l.item.vatClass,
+        grossCents: l.item.unitPriceCents * l.qty,
+      })),
       originalTotalCents: sale.total_cents,
       originalDiscountCents: sale.discount_cents,
     });
@@ -299,8 +319,9 @@ export async function reverseSale(
     const contraRes = await client.query<{ id: string; created_at: Date }>(
       `INSERT INTO sales
          (tenant_id, cashier_user_id, reference, subtotal_cents, vat_cents, total_cents,
-          payment_method, discount_cents, shift_id, customer_id, kind, reverses_sale_id, reversal_reason)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          payment_method, discount_cents, shift_id, customer_id, kind, reverses_sale_id, reversal_reason,
+          vatable_sales_cents, vat_exempt_cents, zero_rated_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING id, created_at`,
       [
         tenantId,
@@ -316,6 +337,9 @@ export async function reverseSale(
         mode.kind,
         saleId,
         reason,
+        -refundVatable,
+        -refundExempt,
+        -refundZero,
       ],
     );
     const contraId = contraRes.rows[0].id;
@@ -323,8 +347,8 @@ export async function reverseSale(
     for (const l of toReverse) {
       await client.query(
         `INSERT INTO sale_items
-           (sale_id, product_id, name, unit_price_cents, qty, line_total_cents, reverses_sale_item_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           (sale_id, product_id, name, unit_price_cents, qty, line_total_cents, reverses_sale_item_id, vat_class)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           contraId,
           l.item.productId,
@@ -333,6 +357,7 @@ export async function reverseSale(
           -l.qty,
           -(l.item.unitPriceCents * l.qty),
           l.item.id,
+          l.item.vatClass,
         ],
       );
 
@@ -408,6 +433,9 @@ export async function reverseSale(
         kind: mode.kind,
         subtotalCents: -refundSub,
         vatCents: -refundVat,
+        vatableSalesCents: -refundVatable,
+        vatExemptCents: -refundExempt,
+        zeroRatedCents: -refundZero,
         discountCents: -discountShare,
         totalCents: -refundNet,
         paymentMethod: sale.payment_method,

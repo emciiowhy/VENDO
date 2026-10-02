@@ -2,6 +2,7 @@ import { pool, query } from "../db.js";
 import { moveStock } from "../inventory/stockLedger.js";
 import { getPaymentQrMap } from "../merchant/paymentQr.repository.js";
 import { notifyLowStock, type LowStockHit } from "../notifications/notifications.repository.js";
+import { computeVatBreakdown } from "./pos.schema.js";
 import type {
   Catalog,
   CashierProfile,
@@ -10,11 +11,8 @@ import type {
   OrderInput,
   PaymentMethod,
   Sale,
+  VatClass,
 } from "./pos.schema.js";
-
-/** VAT is 12% and PRICE-INCLUSIVE in PH retail, so vat = total × 12/112. */
-const VAT_NUM = 12;
-const VAT_DEN = 112;
 
 // ── Catalog ──────────────────────────────────────────────────────────────
 
@@ -28,6 +26,7 @@ interface CatalogRow {
   stock: number;
   low_stock_threshold: number;
   image_url: string | null;
+  vat_class: VatClass;
 }
 
 /**
@@ -65,7 +64,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
 
   const prods = await query<CatalogRow>(
     `SELECT p.id, p.category_id, c.name AS category_name, p.name, p.sku,
-            p.price_cents, p.stock, p.low_stock_threshold, p.image_url
+            p.price_cents, p.stock, p.low_stock_threshold, p.image_url, p.vat_class
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
       WHERE p.tenant_id = $1 AND p.is_active = TRUE
@@ -85,6 +84,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
     stock: r.stock,
     lowStockThreshold: r.low_stock_threshold,
     imageUrl: r.image_url,
+    vatClass: r.vat_class,
   }));
 
   const s = store.rows[0];
@@ -165,6 +165,7 @@ export async function createOrder(
       qty: number;
       lineTotal: number;
       threshold: number;
+      vatClass: VatClass;
     }[] = [];
     let totalCents = 0;
 
@@ -175,8 +176,9 @@ export async function createOrder(
         price_cents: number;
         stock: number;
         low_stock_threshold: number;
+        vat_class: VatClass;
       }>(
-        `SELECT id, name, price_cents, stock, low_stock_threshold
+        `SELECT id, name, price_cents, stock, low_stock_threshold, vat_class
            FROM products
           WHERE id = $1 AND tenant_id = $2 AND is_active = TRUE
           FOR UPDATE`,
@@ -203,6 +205,7 @@ export async function createOrder(
         qty,
         lineTotal,
         threshold: row.low_stock_threshold,
+        vatClass: row.vat_class,
       });
     }
 
@@ -282,8 +285,14 @@ export async function createOrder(
     // the post-commit notification.
     const lowStockHits: LowStockHit[] = [];
 
-    const vatCents = Math.round((netCents * VAT_NUM) / VAT_DEN);
-    const subtotalCents = netCents - vatCents;
+    // Split the net across VAT classes (discount allocated pro-rata by gross),
+    // then extract 12% output VAT from the VATable portion only. Exempt and
+    // zero-rated lines contribute to the net but carry no VAT.
+    const { vatCents, subtotalCents, vatableSalesCents, vatExemptCents, zeroRatedCents } =
+      computeVatBreakdown(
+        resolved.map((it) => ({ vatClass: it.vatClass, grossCents: it.lineTotal })),
+        discountCents,
+      );
     // Points earned accrue on what was actually paid (net of every discount,
     // redemption included) — 1 point per ₱100.
     const pointsEarned = customerId ? Math.floor(netCents / 10_000) : 0;
@@ -317,8 +326,9 @@ export async function createOrder(
       `INSERT INTO sales
          (tenant_id, cashier_user_id, reference, subtotal_cents, vat_cents, total_cents,
           payment_method, tendered_cents, change_cents, payment_ref, discount_cents, discount_label,
-          shift_id, customer_id, points_earned, points_redeemed)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          shift_id, customer_id, points_earned, points_redeemed,
+          vatable_sales_cents, vat_exempt_cents, zero_rated_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING id, created_at`,
       [
         tenantId,
@@ -337,15 +347,18 @@ export async function createOrder(
         customerId,
         pointsEarned,
         pointsRedeemed,
+        vatableSalesCents,
+        vatExemptCents,
+        zeroRatedCents,
       ],
     );
     const saleId = saleRes.rows[0].id;
 
     for (const it of resolved) {
       await client.query(
-        `INSERT INTO sale_items (sale_id, product_id, name, unit_price_cents, qty, line_total_cents)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [saleId, it.id, it.name, it.unit, it.qty, it.lineTotal],
+        `INSERT INTO sale_items (sale_id, product_id, name, unit_price_cents, qty, line_total_cents, vat_class)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [saleId, it.id, it.name, it.unit, it.qty, it.lineTotal, it.vatClass],
       );
     }
 
@@ -396,6 +409,9 @@ export async function createOrder(
         reference,
         subtotalCents,
         vatCents,
+        vatableSalesCents,
+        vatExemptCents,
+        zeroRatedCents,
         grossCents,
         discountCents,
         discountLabel,

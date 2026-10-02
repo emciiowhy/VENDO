@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { env } from "../env.js";
 import { hashPassword, randomState, sign, unsign, verifyPassword } from "./auth.crypto.js";
+import { credentialsLimiter } from "./rateLimit.js";
 import {
   buildConsentUrl,
   googleConfigured,
@@ -233,7 +234,7 @@ const MIN_PASSWORD_LENGTH = 8;
  * within it. Not-found, no-password and wrong-password all collapse into one
  * generic message so the form can't be used to probe which emails exist.
  */
-authRouter.post("/password-login", async (req, res) => {
+authRouter.post("/password-login", credentialsLimiter, async (req, res) => {
   const body = req.body as { storeId?: unknown; email?: unknown; password?: unknown };
   const storeId = String(body?.storeId ?? "").trim().toLowerCase();
   const email = String(body?.email ?? "").trim();
@@ -279,7 +280,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * seeded demo workspace, then issues the owner's session cookie so there's zero
  * friction into the dashboard. Field-level errors come back in `errors`.
  */
-authRouter.post("/signup", async (req, res) => {
+authRouter.post("/signup", credentialsLimiter, async (req, res) => {
   const body = req.body as Record<string, unknown>;
   const businessName = String(body?.businessName ?? "").trim();
   const ownerName = String(body?.ownerName ?? "").trim();
@@ -492,7 +493,7 @@ authRouter.post("/store", async (req, res) => {
  * An active session's Tenant always wins, so a typed Store ID can never be used
  * to reach across into another Tenant's cashiers.
  */
-authRouter.post("/pin", async (req, res) => {
+authRouter.post("/pin", credentialsLimiter, async (req, res) => {
   const active = sessionFromRequest(req);
   const body = req.body as { pin?: unknown; storeId?: unknown; userId?: unknown };
 
@@ -565,7 +566,7 @@ authRouter.post("/cashiers", async (req, res) => {
  * POST /auth/pin/forgot — a cashier who forgot their PIN raises a reset request
  * for the owner to action. Body: `{ cashierId, storeId? }`. Idempotent.
  */
-authRouter.post("/pin/forgot", async (req, res) => {
+authRouter.post("/pin/forgot", credentialsLimiter, async (req, res) => {
   const body = req.body as { cashierId?: unknown };
   const cashierId =
     typeof body?.cashierId === "string" && /^[0-9a-f-]{36}$/i.test(body.cashierId)

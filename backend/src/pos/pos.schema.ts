@@ -12,6 +12,72 @@ import { formatPeso } from "../money.js";
 export const PAYMENT_METHODS = ["Cash", "GCash", "Maya", "QRPH"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+/**
+ * BIR VAT classification carried by every product (and snapshotted onto each
+ * sale line). PH retail prices are VAT-INCLUSIVE, so only VATable lines yield
+ * output VAT (portion × 12/112); exempt and zero-rated lines carry none.
+ */
+export const VAT_CLASSES = ["VATABLE", "EXEMPT", "ZERO_RATED"] as const;
+export type VatClass = (typeof VAT_CLASSES)[number];
+
+/** VAT is 12% and PRICE-INCLUSIVE in PH retail, so vat = inclusive × 12/112. */
+const VAT_NUM = 12;
+const VAT_DEN = 112;
+
+/** The per-class money breakdown of a sale (all integer centavos). */
+export interface VatBreakdown {
+  /** Output VAT extracted from the VATable portion. */
+  vatCents: number;
+  /** Net-of-VAT taxable base (the VATable portion minus its VAT). */
+  vatableSalesCents: number;
+  /** VAT-exempt sales (inclusive = net; no VAT). */
+  vatExemptCents: number;
+  /** Zero-rated sales (0% VAT). */
+  zeroRatedCents: number;
+  /** Total net of VAT = vatableSales + exempt + zeroRated. */
+  subtotalCents: number;
+  /** What was actually charged (gross − discount), VAT-inclusive. */
+  netCents: number;
+}
+
+/**
+ * Pure VAT breakdown (centavos), extracted so checkout and refunds share one
+ * tested implementation. Each line carries its VAT class and VAT-inclusive
+ * gross; a cart-level `discountCents` is allocated across the three classes in
+ * proportion to their gross (so a discount shrinks each class's taxable base
+ * fairly). The VATable portion is taken as the residual of the net after the
+ * exempt/zero parts, which keeps the three inclusive parts summing to the net
+ * EXACTLY — no centavo can leak. VAT is then split out of the VATable portion.
+ */
+export function computeVatBreakdown(
+  lines: { vatClass: VatClass; grossCents: number }[],
+  discountCents = 0,
+): VatBreakdown {
+  const grossOf = (k: VatClass) =>
+    lines.reduce((sum, l) => (l.vatClass === k ? sum + l.grossCents : sum), 0);
+  const vatableGross = grossOf("VATABLE");
+  const exemptGross = grossOf("EXEMPT");
+  const zeroGross = grossOf("ZERO_RATED");
+  const totalGross = vatableGross + exemptGross + zeroGross;
+
+  const disc = Math.min(Math.max(0, Math.round(discountCents)), totalGross);
+  const netCents = totalGross - disc;
+
+  // Exempt/zero each shed their proportional share of the discount (clamped to
+  // their own gross). VATable absorbs the rest as the residual of the net, so
+  // vatableNetIncl + exempt + zero === netCents by construction.
+  const share = (gross: number) =>
+    totalGross > 0 ? Math.min(gross, Math.round((disc * gross) / totalGross)) : 0;
+  const vatExemptCents = exemptGross - share(exemptGross);
+  const zeroRatedCents = zeroGross - share(zeroGross);
+  const vatableNetIncl = Math.max(0, netCents - vatExemptCents - zeroRatedCents);
+
+  const vatCents = Math.round((vatableNetIncl * VAT_NUM) / VAT_DEN);
+  const vatableSalesCents = vatableNetIncl - vatCents;
+  const subtotalCents = vatableSalesCents + vatExemptCents + zeroRatedCents;
+  return { vatCents, vatableSalesCents, vatExemptCents, zeroRatedCents, subtotalCents, netCents };
+}
+
 export const orderSchema = z.object({
   items: z
     .array(
@@ -67,6 +133,7 @@ export interface CatalogProduct {
   stock: number;
   lowStockThreshold: number;
   imageUrl: string | null;
+  vatClass: VatClass;
 }
 
 export interface CatalogCategory {
@@ -112,6 +179,12 @@ export interface Sale {
   reference: string;
   subtotalCents: number;
   vatCents: number;
+  /** Net-of-VAT taxable base (the VATable portion minus its VAT). */
+  vatableSalesCents: number;
+  /** VAT-exempt sales on this ticket (centavos). */
+  vatExemptCents: number;
+  /** Zero-rated sales on this ticket (centavos). */
+  zeroRatedCents: number;
   /** Gross of items before any discount. */
   grossCents: number;
   discountCents: number;

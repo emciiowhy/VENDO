@@ -104,6 +104,9 @@ export interface ComplianceRow {
   grossCents: number;
   netCents: number;
   vatCents: number;
+  vatableSalesCents: number;
+  vatExemptCents: number;
+  zeroRatedCents: number;
   discountCents: number;
 }
 
@@ -115,6 +118,9 @@ export interface ComplianceLedger {
     grossCents: number;
     netCents: number;
     vatCents: number;
+    vatableSalesCents: number;
+    vatExemptCents: number;
+    zeroRatedCents: number;
     discountCents: number;
     count: number;
   };
@@ -136,6 +142,44 @@ export async function getDashboardPulse(): Promise<Result<{ pulse: DashboardPuls
   try {
     return await readJson(
       await fetch(`${V1}/merchant/analytics/dashboard`, { credentials: "include" }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+// ── Ranged sales totals (owner overview strip) ──────────────────────────────
+
+export const SALES_RANGES = ["today", "7d", "30d", "month", "all"] as const;
+export type SalesRange = (typeof SALES_RANGES)[number];
+
+/** Human labels for each range, for the selector chips. */
+export const SALES_RANGE_LABELS: Record<SalesRange, string> = {
+  today: "Today",
+  "7d": "7 days",
+  "30d": "30 days",
+  month: "This month",
+  all: "All-time",
+};
+
+export interface SalesTotals {
+  range: SalesRange;
+  from: string;
+  to: string;
+  grossCents: number;
+  txns: number;
+  aovCents: number;
+  /** Store expenses over the window; null when not entitled to Finance. */
+  expensesCents: number | null;
+  /** Sales − expenses; null when expenses aren't available. */
+  netCents: number | null;
+}
+
+/** Total sales / transactions / AOV over the given window. */
+export async function getSalesTotals(range: SalesRange): Promise<Result<{ totals: SalesTotals }>> {
+  try {
+    return await readJson(
+      await fetch(`${V1}/merchant/analytics/totals?range=${range}`, { credentials: "include" }),
     );
   } catch {
     return NETWORK_ERR;
