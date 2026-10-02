@@ -2,16 +2,16 @@
 
 | Piece    | Host      | Address                          |
 | -------- | --------- | -------------------------------- |
-| Frontend | Vercel    | `https://yourdomain.com` (+ `www`) |
-| Backend  | Render    | `https://api.yourdomain.com`     |
+| Frontend | Vercel    | `https://vendopos.shop` (+ `www`) |
+| Backend  | Render    | `https://api.vendopos.shop`     |
 | Database | NeonDB    | (already running)                |
 | Domain   | Hostinger | DNS records point at Vercel and Render |
 
-Replace `yourdomain.com` everywhere below (and in `render.yaml`) with your real domain.
+Domain: **vendopos.shop** (registered at Hostinger) — already filled in below and in `render.yaml`.
 
 > **Why the custom domain is required:** the session cookie is `SameSite=Lax`. The browser
-> only sends it to the API when the frontend and API share a site, e.g. `yourdomain.com` and
-> `api.yourdomain.com`. On the default `*.vercel.app` + `*.onrender.com` addresses, login
+> only sends it to the API when the frontend and API share a site, e.g. `vendopos.shop` and
+> `api.vendopos.shop`. On the default `*.vercel.app` + `*.onrender.com` addresses, login
 > appears to succeed but every later request is rejected with 401.
 
 ## 0. Before you start
@@ -19,7 +19,7 @@ Replace `yourdomain.com` everywhere below (and in `render.yaml`) with your real 
 1. **Rotate the Neon password.** An earlier `backend/.env.example` contained the real
    connection string, so it is in git history. Neon console → your project → **Roles** →
    `neondb_owner` → **Reset password**. Copy the new **pooled** connection string.
-2. In `render.yaml`, replace `yourdomain.com` with your domain, commit, and push.
+2. Merge this branch into `main` (or deploy this branch directly).
 
 ## 1. Backend on Render
 
@@ -33,7 +33,7 @@ Replace `yourdomain.com` everywhere below (and in `render.yaml`) with your real 
 3. Click **Apply**. The build installs, compiles, runs the idempotent migration, then starts.
 4. Check `https://vendopos-api.onrender.com/health` returns `{"ok":true,…}` (your service URL
    is shown at the top of the service page).
-5. Service → **Settings → Custom Domains → Add** `api.yourdomain.com`. Render shows a
+5. Service → **Settings → Custom Domains → Add** `api.vendopos.shop`. Render shows a
    CNAME target — keep it for step 3.
 
 The plan is **Starter** with a 1 GB disk for uploaded images. On the Free plan the server
@@ -44,9 +44,9 @@ on every deploy; to use Free anyway, change `plan: free` and delete the `disk:` 
 
 1. vercel.com → **Add New → Project** → import `emciiowhy/VENDO`.
 2. **Root Directory:** `frontend` (Framework preset: Next.js — build settings stay default).
-3. **Environment Variables:** `NEXT_PUBLIC_API_URL` = `https://api.yourdomain.com`.
+3. **Environment Variables:** `NEXT_PUBLIC_API_URL` = `https://api.vendopos.shop`.
 4. **Deploy.**
-5. Project → **Settings → Domains** → add `yourdomain.com` and `www.yourdomain.com`
+5. Project → **Settings → Domains** → add `vendopos.shop` and `www.vendopos.shop`
    (set `www` to redirect to the apex). Vercel shows the DNS records to create.
 
 ## 3. Domain DNS on Hostinger
@@ -71,8 +71,8 @@ If you send e-mail with Resend from your domain, also add the DNS records Resend
 Google Cloud Console → **APIs & Services → Credentials → Create OAuth client ID → Web
 application**:
 
-- Authorized JavaScript origins: `https://yourdomain.com`
-- Authorized redirect URIs: `https://api.yourdomain.com/auth/google/callback`
+- Authorized JavaScript origins: `https://vendopos.shop`
+- Authorized redirect URIs: `https://api.vendopos.shop/auth/google/callback`
 
 Put the client ID/secret into Render's environment, then **Manual Deploy → Deploy latest commit**.
 On the OAuth consent screen, publish the app (or add your accounts as test users).
@@ -85,11 +85,11 @@ Neon → **SQL Editor**:
 INSERT INTO users (email, name, role) VALUES ('you@gmail.com', 'Your Name', 'SUPER_ADMIN');
 ```
 
-Sign in at `https://yourdomain.com/login` with that Google account → you land on `/admin`.
+Sign in at `https://vendopos.shop/login` with that Google account → you land on `/admin`.
 
 ## 6. Smoke test
 
-- `https://api.yourdomain.com/health` → `ok: true`
+- `https://api.vendopos.shop/health` → `ok: true`
 - Submit the demo form on the homepage → it appears in `/admin/leads`
 - Approve the lead → sign in as the owner → add a product with an image → ring a sale on `/pos`
 - Reload the page — you stay signed in (confirms the cookie domain is right)
@@ -98,7 +98,7 @@ Sign in at `https://yourdomain.com/login` with that Google account → you land 
 
 | Symptom | Fix |
 | ------- | --- |
-| Signed in, but next page says signed out / 401 | `COOKIE_DOMAIN` must be `.yourdomain.com`, and the site must be opened on the custom domain, not `*.vercel.app` |
+| Signed in, but next page says signed out / 401 | `COOKIE_DOMAIN` must be `.vendopos.shop`, and the site must be opened on the custom domain, not `*.vercel.app` |
 | "Could not reach the server" / CORS error | `CORS_ORIGIN` must list the exact origin in the browser bar (`https://`, with or without `www`) |
 | Google says `redirect_uri_mismatch` | `GOOGLE_REDIRECT_URI` and the Google console entry must match exactly |
 | Product images vanish after a deploy | Uploads disk missing (Free plan) — see §1 |
