@@ -2,6 +2,8 @@ import { Router } from "express";
 import { enterpriseIntakeSchema, leadSchema } from "./leads.schema.js";
 import { insertLead, listLeads } from "./leads.repository.js";
 import { sendEnterpriseLeadAlertEmail } from "../notifications/enterpriseLeadEmail.js";
+import { leadLimiter } from "../auth/rateLimit.js";
+import { requireRole } from "../auth/auth.middleware.js";
 
 export const leadsRouter = Router();
 
@@ -22,7 +24,7 @@ function fieldErrorsOf(error: { issues: { path: (string | number)[]; message: st
  * stored record. Invalid payloads return 400 with field-level errors and do
  * NOT record a Lead.
  */
-leadsRouter.post("/", async (req, res) => {
+leadsRouter.post("/", leadLimiter, async (req, res) => {
   const parsed = leadSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -53,7 +55,7 @@ leadsRouter.post("/", async (req, res) => {
  * best-effort and never blocks the submission — `mailDelivered` reports whether
  * it actually went out (false on a key-less log transport or a provider reject).
  */
-leadsRouter.post("/enterprise", async (req, res) => {
+leadsRouter.post("/enterprise", leadLimiter, async (req, res) => {
   const parsed = enterpriseIntakeSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -106,10 +108,12 @@ leadsRouter.post("/enterprise", async (req, res) => {
 });
 
 /**
- * GET /api/leads — recent Leads, most recent first.
- * Placeholder read for a future Super Admin pipeline view (no auth yet — see README).
+ * GET /api/leads — recent Leads, most recent first. Guarded to SUPER_ADMIN: this
+ * returns prospect PII (name, email, phone), so it must never be world-readable.
+ * The primary pipeline view is /api/v1/admin/leads; this legacy read is kept only
+ * for compatibility, now behind the same platform-admin gate.
  */
-leadsRouter.get("/", async (_req, res) => {
+leadsRouter.get("/", requireRole("SUPER_ADMIN"), async (_req, res) => {
   try {
     const leads = await listLeads();
     return res.json({ ok: true, leads });
