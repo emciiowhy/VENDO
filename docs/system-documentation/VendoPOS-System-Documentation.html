@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VendoPOS — Complete System Documentation</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  :root { --ink:#0f172a; --muted:#475569; --line:#e2e8f0; --brand:#0f766e; --brand-soft:#ecfdf5; --warn:#b45309; --warn-soft:#fffbeb; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; color: var(--ink); font-size: 9.6pt; line-height: 1.5; margin: 0; background:#fff; }
+  h1, h2, h3, h4 { line-height: 1.25; margin: 0; }
+  h2 { font-size: 17pt; color: var(--brand); border-bottom: 2px solid var(--brand); padding-bottom: 4px; margin: 0 0 10px; page-break-after: avoid; }
+  h3 { font-size: 12pt; margin: 16px 0 6px; page-break-after: avoid; }
+  h4 { font-size: 10pt; margin: 12px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; page-break-after: avoid; }
+  p { margin: 0 0 8px; }
+  ul, ol { margin: 0 0 8px; padding-left: 18px; }
+  li { margin-bottom: 2px; }
+  code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.4pt; background: #f1f5f9; padding: 0 3px; border-radius: 3px; }
+  pre { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; white-space: pre-wrap; page-break-inside: avoid; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 12px; font-size: 8.6pt; page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  th { background: #f1f5f9; text-align: left; font-weight: bold; padding: 5px 6px; border-bottom: 1px solid #cbd5e1; }
+  td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td code, th code { font-size: 7.8pt; }
+  .section { page-break-before: always; }
+  .note { background: var(--brand-soft); border-left: 3px solid var(--brand); padding: 7px 10px; margin: 6px 0 10px; border-radius: 0 4px 4px 0; page-break-inside: avoid; }
+  .warn { background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 7px 10px; margin: 6px 0 10px; border-radius: 0 4px 4px 0; page-break-inside: avoid; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
+  .card li { margin-bottom: 0; }
+  .card { font-size: 8.8pt; line-height: 1.4; }
+  .card { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; page-break-inside: avoid; }
+  .card h4 { margin-top: 0; color: var(--brand); }
+  .tag { display:inline-block; font-size:7.4pt; padding:0 5px; border-radius:3px; background:#e2e8f0; color:#334155; font-weight:bold; }
+  .t-s { background:#dbeafe; color:#1e40af; } .t-b { background:#dcfce7; color:#166534; } .t-e { background:#f3e8ff; color:#6b21a8; }
+  .muted { color: var(--muted); }
+  /* Cover */
+  .cover { height: 255mm; display: flex; flex-direction: column; justify-content: space-between; padding: 10mm 4mm; }
+  .cover .brand { font-size: 11pt; letter-spacing: .3em; color: var(--brand); font-weight: bold; }
+  .cover h1 { font-size: 34pt; margin-top: 50mm; }
+  .cover .sub { font-size: 14pt; color: var(--muted); margin-top: 8px; }
+  .cover .bar { height: 6px; width: 70mm; background: var(--brand); margin: 18px 0; border-radius: 3px; }
+  .cover table { width: auto; font-size: 9.5pt; }
+  .cover td { border: 0; padding: 2px 14px 2px 0; }
+  /* TOC */
+  .toc ol { padding-left: 28px; columns: 2; column-gap: 24px; }
+  .toc li { margin-bottom: 4px; font-size: 10pt; break-inside: avoid; }
+  .flow { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<div class="cover">
+  <div>
+    <div class="brand">VENDOPOS</div>
+    <h1>Complete System Documentation</h1>
+    <div class="sub">Multi-tenant Cloud POS + ERP platform built for the Philippines</div>
+    <div class="bar"></div>
+    <p style="max-width:140mm;font-size:10.5pt">Architecture, modules, data model, API reference, security, compliance (BIR / VAT), subscription tiers, hardware integration, deployment and operations — documented directly from the working source code.</p>
+  </div>
+  <table>
+    <tr><td class="muted">Product</td><td><b>VendoPOS</b> — Point of Sale + Enterprise Resource Planning</td></tr>
+    <tr><td class="muted">Market</td><td>Philippine retail, food &amp; beverage, and small manufacturing</td></tr>
+    <tr><td class="muted">Stack</td><td>Next.js 16 · React 19 · Tailwind CSS v4 · Express · TypeScript · PostgreSQL (NeonDB)</td></tr>
+    <tr><td class="muted">Repository</td><td>emciiowhy/VENDO</td></tr>
+    <tr><td class="muted">Document date</td><td>2 October 2026</td></tr>
+    <tr><td class="muted">Version</td><td>1.0 — reflects backend <code>vendopos-backend 0.1.0</code></td></tr>
+  </table>
+</div>
+
+<!-- ============================ TOC ============================ -->
+<div class="section toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>Executive Summary</li>
+    <li>Domain Language &amp; Actors</li>
+    <li>System Architecture</li>
+    <li>Technology Stack</li>
+    <li>Subscription Plans &amp; Feature Gating</li>
+    <li>Tenant Lifecycle &amp; Trials</li>
+    <li>Authentication, Roles &amp; Sessions</li>
+    <li>Point of Sale (POS) Terminal</li>
+    <li>Checkout Engine, VAT &amp; Invoicing</li>
+    <li>Voids, Returns &amp; POS Audit Log</li>
+    <li>Cashier Shifts (X-Read / Z-Read)</li>
+    <li>Inventory &amp; Stock Ledger</li>
+    <li>Procurement &amp; Supply Chain</li>
+    <li>Manufacturing (Bill of Materials)</li>
+    <li>Finance &amp; Accounting</li>
+    <li>Human Resources &amp; Payroll</li>
+    <li>Customer Relationship Management</li>
+    <li>Merchant Dashboard, Analytics &amp; Forecasting</li>
+    <li>BIR Compliance</li>
+    <li>Account, Store Settings &amp; Theme Studio</li>
+    <li>Notifications &amp; Real-Time Streams</li>
+    <li>Super Admin Platform Console</li>
+    <li>Marketing Website &amp; Lead Capture</li>
+    <li>Hardware Integration</li>
+    <li>Database Schema Reference</li>
+    <li>Complete API Reference</li>
+    <li>Frontend Route Map</li>
+    <li>Security Model</li>
+    <li>Installation &amp; Configuration</li>
+    <li>Testing &amp; Quality Assurance</li>
+    <li>Staging Validation Runbook</li>
+    <li>Capability Assessment &amp; Roadmap</li>
+  </ol>
+</div>
+
+<!-- ============================ 1 ============================ -->
+<div class="section">
+  <h2>1. Executive Summary</h2>
+  <p><b>VendoPOS</b> is a multi-tenant Software-as-a-Service platform that combines a cloud <b>Point of Sale</b> with a full <b>Enterprise Resource Planning</b> back office. One platform operator (the Super Admin) sells subscriptions to many independent businesses (Merchants). Every Merchant runs on its own isolated <b>Tenant</b>: its products, sales, staff, customers and finances are fenced off from every other store.</p>
+  <p>The platform is designed from the ground up for the Philippine market: prices are in Philippine peso (₱), VAT is the 12% price-inclusive BIR model, invoices carry gap-free BIR-style serial numbers, receipts carry machine-accreditation fields (PTU, MIN, serial), e-wallet rails <b>GCash, Maya and QR Ph</b> are first-class payment methods, and payroll applies Philippine overtime and night-differential norms in Manila time.</p>
+
+  <h3>What the system does</h3>
+  <div class="grid2">
+    <div class="card"><h4>Front of house</h4><ul>
+      <li>Touch POS terminal with cart, discounts, loyalty redemption and split tender channels</li>
+      <li>Barcode scan-to-cart (keyboard-wedge scanners)</li>
+      <li>Scan-to-pay QR for GCash / Maya / QR Ph</li>
+      <li>Customer-facing second display</li>
+      <li>HTML and ESC/POS thermal receipts (USB &amp; Bluetooth)</li>
+      <li>Shared-terminal cashier PIN switching, shift X-Read / Z-Read</li>
+    </ul></div>
+    <div class="card"><h4>Back office (ERP)</h4><ul>
+      <li>Inventory with an immutable stock-movement ledger</li>
+      <li>Procurement: suppliers, purchase orders, receiving, reorder suggestions</li>
+      <li>Manufacturing: recipes / bill of materials and production runs</li>
+      <li>Finance: expenses, P&amp;L, Balance Sheet, Cash Flow</li>
+      <li>HR: employees, attendance, timecards, payroll runs &amp; CSV export</li>
+      <li>CRM: customers and loyalty points</li>
+    </ul></div>
+    <div class="card"><h4>Compliance &amp; control</h4><ul>
+      <li>Serialized invoices per tenant (<code>SI-000123</code>), locked under concurrency</li>
+      <li>Monthly BIR sales ledger (JSON + CSV)</li>
+      <li>Voids/returns as contra-entries; POS audit log of sensitive actions</li>
+      <li>Cash-drawer variance flags to the centavo</li>
+    </ul></div>
+    <div class="card"><h4>Platform operations</h4><ul>
+      <li>Lead pipeline and atomic lead → tenant provisioning</li>
+      <li>Self-serve sign-up with a 14-day trial</li>
+      <li>MRR / ARPA billing analytics, subscriber register</li>
+      <li>Live system-health stream (SSE), cross-tenant compliance register</li>
+      <li>Support impersonation of a merchant owner</li>
+    </ul></div>
+  </div>
+
+  <h3>Key engineering principles</h3>
+  <ul>
+    <li><b>Money is integer centavos end-to-end.</b> No floating-point peso arithmetic is persisted; VAT is computed once at checkout and frozen.</li>
+    <li><b>Tenant scope comes from the session, never the request body.</b> Every query is threaded with the tenant id taken from the signed session cookie.</li>
+    <li><b>ACID by default.</b> Checkout, voids/returns, receiving, production, payroll and provisioning are each single all-or-nothing transactions.</li>
+    <li><b>Server is the source of truth for prices.</b> The terminal only sends product ids and quantities; the server re-derives every price.</li>
+    <li><b>Pure, IO-free calculation cores</b> (payroll, financial reports, reorder, forecast, theme) are unit-tested in isolation.</li>
+    <li><b>Manila time</b> (UTC+8) defines "today", monthly buckets and payroll days so figures line up with the local retail day.</li>
+  </ul>
+</div>
+
+<!-- ============================ 2 ============================ -->
+<div class="section">
+  <h2>2. Domain Language &amp; Actors</h2>
+  <p>VendoPOS maintains a strict ubiquitous language (see <code>CONTEXT.md</code>). The same words are used in code, UI and documentation.</p>
+  <table>
+    <tr><th style="width:22%">Term</th><th>Meaning</th><th style="width:22%">Avoid</th></tr>
+    <tr><td><b>Super Admin</b></td><td>The owner-operator of VendoPOS itself. Sees everything across every Tenant, manages subscriptions, sits above all Tenants. Has no tenant id.</td><td>Platform admin, root, developer</td></tr>
+    <tr><td><b>Merchant</b></td><td>A business that subscribes to VendoPOS to run its own point of sale and operations — the tenant viewed from the business side.</td><td>Customer, client, account</td></tr>
+    <tr><td><b>Tenant</b></td><td>The isolated data-and-configuration boundary that belongs to one Merchant — the same thing named from the architecture side.</td><td>—</td></tr>
+    <tr><td><b>Customer</b></td><td>A shopper buying goods or services from a Merchant at the till.</td><td>Using "customer" for the subscribing business</td></tr>
+    <tr><td><b>Lead</b></td><td>A visitor who submitted the "Request a Demo" form but is not yet a Tenant. Converted by the Super Admin.</td><td>Sign-up, registrant</td></tr>
+  </table>
+
+  <h3>User roles</h3>
+  <table>
+    <tr><th style="width:20%">Role</th><th>Scope</th><th>Sign-in method</th><th>Landing page</th></tr>
+    <tr><td><code>SUPER_ADMIN</code></td><td>Platform-wide; no tenant (enforced by DB check)</td><td>Google OAuth</td><td><code>/admin</code></td></tr>
+    <tr><td><code>MERCHANT_OWNER</code></td><td>One tenant; full control incl. staff, PINs, deactivation</td><td>Google OAuth or Store ID + password</td><td><code>/dashboard</code></td></tr>
+    <tr><td><code>MANAGER</code></td><td>One tenant; back office except owner-only actions</td><td>Google OAuth or Store ID + password</td><td><code>/dashboard</code></td></tr>
+    <tr><td><code>CASHIER</code></td><td>One tenant; POS terminal, shifts, timecard, CRM lookup</td><td>Store ID + 4-digit PIN</td><td><code>/pos</code></td></tr>
+  </table>
+
+  <h3>ERP modules — one idea each</h3>
+  <table>
+    <tr><th style="width:26%">Module</th><th>Owns</th></tr>
+    <tr><td>Point of Sale</td><td>Ringing up a Customer and taking payment.</td></tr>
+    <tr><td>Inventory</td><td>What stock a tenant <i>has</i> and where it sits.</td></tr>
+    <tr><td>Procurement &amp; Supply Chain</td><td>How goods <i>arrive</i>: suppliers, purchase orders, receiving.</td></tr>
+    <tr><td>Manufacturing</td><td>How goods are <i>produced</i>: recipes / bill of materials.</td></tr>
+    <tr><td>Finance &amp; Accounting</td><td>Money in and out: sales reports, expenses, tax, P&amp;L, statements.</td></tr>
+    <tr><td>Human Resources</td><td>Employees, shifts, attendance and payroll.</td></tr>
+    <tr><td>CRM</td><td>Tracking Customers and loyalty over time.</td></tr>
+  </table>
+</div>
+
+<!-- ============================ 3 ============================ -->
+<div class="section">
+  <h2>3. System Architecture</h2>
+  <pre class="flow">
+   Browser (Merchant back office · POS terminal · Customer display · Super Admin · Marketing site)
+                 │  HTTPS, credentialed fetch (HTTP-only session cookie)
+                 ▼
+   ┌───────────────────────────────┐        ┌──────────────────────────────────┐
+   │  Frontend — Next.js 16        │        │  Hardware (browser APIs)          │
+   │  App Router, React 19,        │◀──────▶│  WebUSB / Web Bluetooth printers  │
+   │  Tailwind v4, Recharts        │        │  Keyboard-wedge barcode scanners  │
+   │  BroadcastChannel → 2nd screen│        └──────────────────────────────────┘
+   └──────────────┬────────────────┘
+                  │  REST (JSON / multipart / CSV)  +  Server-Sent Events
+                  ▼
+   ┌──────────────────────────────────────────────────────────────────────────┐
+   │  Backend — Express + TypeScript                                          │
+   │  helmet · cors(credentials) · cookie-parser · morgan · zod · multer      │
+   │  auth (JWT cookie) → enforceTrialStatus → role guard → tier guard → route│
+   │  modules: auth · leads · public · products · pos · shifts · merchant ·   │
+   │  inventory · staff · finance · procurement · manufacturing · hr · ess ·  │
+   │  timecard · crm · account · notifications · admin · billing · health     │
+   └──────────────┬───────────────────────────────┬───────────────────────────┘
+                  │ pg pool                        │ Resend (transactional e-mail)
+                  ▼                                ▼
+   ┌───────────────────────────────┐    ┌───────────────────────────┐
+   │  PostgreSQL — NeonDB          │    │  /uploads (local disk)    │
+   │  serverless, ap-southeast-1   │    │  product images, logos,   │
+   │  idempotent migrate.ts        │    │  avatars, payment QRs     │
+   └───────────────────────────────┘    └───────────────────────────┘</pre>
+
+  <h3>Request pipeline</h3>
+  <ol>
+    <li><b>helmet</b> sets security headers; <b>CORS</b> allows the configured origins with <code>credentials: true</code> and the verbs GET, POST, PUT, PATCH, DELETE, OPTIONS.</li>
+    <li>JSON bodies are capped at <b>100 kB</b>; cookies are parsed for the session JWT.</li>
+    <li>Public seams mount first: <code>/health</code>, <code>/uploads</code>, <code>/auth</code>, <code>/api/v1/public</code>, <code>/api/leads</code>.</li>
+    <li><b>Trial checkpoint</b> (<code>enforceTrialStatus</code>) fences a lapsed-trial store out of every authenticated merchant module with <code>402</code> and a recovery marker. It is a no-op for anonymous and Super Admin requests.</li>
+    <li>Each module router applies <code>requireRole(...)</code> and, where premium, <code>requireFeature(...)</code>.</li>
+    <li>Unknown routes return <code>404 {"ok":false,"error":"Not found"}</code>.</li>
+  </ol>
+
+  <h3>Backend module layout</h3>
+  <p>Each module follows a <b>router → schema (zod) → repository (SQL)</b> pattern, with pure helpers alongside and a vitest file per module.</p>
+  <table>
+    <tr><th>Folder</th><th>Responsibility</th></tr>
+    <tr><td><code>auth/</code></td><td>Google OAuth, password &amp; PIN login, JWT, sessions, impersonation, sign-up, role and tier middleware, demo seed</td></tr>
+    <tr><td><code>leads/</code>, <code>public/</code></td><td>Demo / enterprise lead capture, public tenant directory</td></tr>
+    <tr><td><code>products/</code>, <code>inventory/</code></td><td>Catalog, categories, image upload, stock ledger, movements, ledger drift</td></tr>
+    <tr><td><code>pos/</code></td><td>Catalog feed, checkout, sales, voids/returns, shifts, POS audit log</td></tr>
+    <tr><td><code>merchant/</code></td><td>Dashboard analytics, forecast, compliance export, SSE events, payment QRs, theme config</td></tr>
+    <tr><td><code>staff/</code></td><td>Cashier roster, PIN administration, remote shift close</td></tr>
+    <tr><td><code>finance/</code>, <code>procurement/</code>, <code>manufacturing/</code>, <code>hr/</code>, <code>crm/</code></td><td>ERP pillars</td></tr>
+    <tr><td><code>account/</code>, <code>notifications/</code></td><td>Store/profile settings, sessions, exports; in-app notifications and e-mails</td></tr>
+    <tr><td><code>admin/</code>, <code>billing/</code>, <code>health/</code></td><td>Super Admin leads, tenants, compliance, MRR, trial engine, health stream</td></tr>
+  </table>
+</div>
+
+<!-- ============================ 4 ============================ -->
+<div class="section">
+  <h2>4. Technology Stack</h2>
+  <table>
+    <tr><th style="width:22%">Layer</th><th>Technology</th><th>Notes</th></tr>
+    <tr><td>Frontend framework</td><td>Next.js 16.2 (App Router), React 19.2</td><td><code>frontend/</code>, runs on port 3000</td></tr>
+    <tr><td>Styling</td><td>Tailwind CSS v4, design tokens</td><td>Light / dark themes; tenant theme tokens injected as scoped styles (ADR 0001: redesign within the token system)</td></tr>
+    <tr><td>Charts</td><td>Recharts 3</td><td>MRR line, plan donut, fee bars, finance and labor charts</td></tr>
+    <tr><td>Backend</td><td>Express 4, TypeScript 5, ES modules</td><td><code>backend/</code>, runs on port 4000; <code>tsx</code> for dev</td></tr>
+    <tr><td>Validation</td><td>zod</td><td>Every write payload is schema-validated; <code>400 {errors}</code> on failure</td></tr>
+    <tr><td>Database</td><td>PostgreSQL via NeonDB (serverless), <code>pg</code> driver</td><td>Idempotent schema in <code>src/migrate.ts</code></td></tr>
+    <tr><td>Auth</td><td>Google OAuth 2.0, <code>jsonwebtoken</code>, Node <code>crypto.scrypt</code></td><td>HTTP-only cookie <code>vendopos_session</code>, 7-day max age</td></tr>
+    <tr><td>Uploads</td><td>multer</td><td>Images ≤ 2 MB, served from <code>/uploads</code></td></tr>
+    <tr><td>E-mail</td><td>Resend</td><td>Optional — without <code>RESEND_API_KEY</code> messages are logged</td></tr>
+    <tr><td>Security headers / logs</td><td>helmet, morgan</td><td></td></tr>
+    <tr><td>Testing</td><td>vitest, supertest; Playwright (screenshots)</td><td>~288 backend test cases</td></tr>
+  </table>
+</div>
+
+<!-- ============================ 5 ============================ -->
+<div class="section">
+  <h2>5. Subscription Plans &amp; Feature Gating</h2>
+  <p>Two vocabularies are kept in lockstep: the lowercase billing <b>plan</b> (<code>starter / business / enterprise</code>) drives price, MRR and product capacity; the uppercase <b>tier</b> (<code>STARTER &lt; BUSINESS &lt; ENTERPRISE</code>) drives feature gating. A tenant's tier is always projected from its plan (<code>tierFromPlan</code>), so they can never drift.</p>
+
+  <h3>Plan catalogue (backend <code>billing/plans.ts</code>)</h3>
+  <table>
+    <tr><th>Plan</th><th>Billing price / month</th><th>Product capacity</th><th>Target</th></tr>
+    <tr><td><span class="tag t-s">Starter</span></td><td>₱499.00 (49,900 centavos)</td><td>30 products</td><td>Single-location coffee shops, small retailers</td></tr>
+    <tr><td><span class="tag t-b">Business</span></td><td>₱1,499.00 (149,900 centavos)</td><td>300 products</td><td>Growing multi-staff retailers and restaurants</td></tr>
+    <tr><td><span class="tag t-e">Enterprise</span></td><td>₱7,999.00 (799,900 centavos) for MRR; "Contact us" publicly</td><td>Unlimited</td><td>Full ERP, manufacturing, HR, multi-location</td></tr>
+  </table>
+  <div class="warn"><b>Pricing note.</b> The public marketing pricing page currently advertises <b>₱599</b> (Starter) and <b>₱1,999</b> (Business), while the backend MRR engine uses ₱499 and ₱1,499. Both are marked as indicative placeholders pending finalisation — align <code>billing/plans.ts</code> with <code>Pricing.tsx</code> once prices are final.</div>
+  <p>Exceeding capacity on <code>POST /api/inventory/products</code> returns <code>403 {"code":"plan_limit_exceeded"}</code>. The platform also models a <b>0.5%</b> transaction-fee rate on merchant GMV for fee-revenue charts.</p>
+
+  <h3>Feature matrix (backend <code>lib/tiers.ts</code>, mirrored in <code>frontend/lib/tiers.ts</code>)</h3>
+  <table>
+    <tr><th>Feature key</th><th>Capability</th><th>Minimum tier</th></tr>
+    <tr><td><code>pos_terminal</code></td><td>Core POS terminal</td><td><span class="tag t-s">Starter</span></td></tr>
+    <tr><td><code>inventory_basic</code></td><td>Catalogue &amp; inventory management</td><td><span class="tag t-s">Starter</span></td></tr>
+    <tr><td><code>bir_receipts</code></td><td>BIR-compliant receipts and serial invoicing</td><td><span class="tag t-s">Starter</span></td></tr>
+    <tr><td><code>digital_payments_qrph</code></td><td>QR Ph / e-wallet payments</td><td><span class="tag t-s">Starter</span></td></tr>
+    <tr><td><code>offline_mode</code></td><td>Offline-capable register (declared; see roadmap)</td><td><span class="tag t-s">Starter</span></td></tr>
+    <tr><td><code>procurement_supply_chain</code></td><td>Suppliers and purchase orders</td><td><span class="tag t-b">Business</span></td></tr>
+    <tr><td><code>customer_relationship_crm</code></td><td>Customers and loyalty</td><td><span class="tag t-b">Business</span></td></tr>
+    <tr><td><code>finance_accounting</code></td><td>Expenses, P&amp;L, statements</td><td><span class="tag t-b">Business</span></td></tr>
+    <tr><td><code>multi_staff_roles</code></td><td>Managers and multiple staff roles</td><td><span class="tag t-b">Business</span></td></tr>
+    <tr><td><code>custom_branding</code></td><td>Theme Studio custom themes</td><td><span class="tag t-b">Business</span></td></tr>
+    <tr><td><code>manufacturing_bom</code></td><td>Recipes / bill of materials</td><td><span class="tag t-e">Enterprise</span></td></tr>
+    <tr><td><code>human_resources_payroll</code></td><td>HR roster, attendance, payroll, ESS</td><td><span class="tag t-e">Enterprise</span></td></tr>
+    <tr><td><code>multi_location</code></td><td>Multiple store locations (declared; see roadmap)</td><td><span class="tag t-e">Enterprise</span></td></tr>
+    <tr><td><code>priority_support</code></td><td>Priority support SLA</td><td><span class="tag t-e">Enterprise</span></td></tr>
+    <tr><td><code>predictive_inventory</code></td><td>Predictive reorder forecasting</td><td><span class="tag t-e">Enterprise</span></td></tr>
+  </table>
+  <p>The API guard <code>requireFeature(feature)</code> rejects lower tiers; the frontend <code>&lt;FeatureGate&gt;</code> and the merchant navigation hide or upsell exactly what the API forbids.</p>
+</div>
+
+<!-- ============================ 6 ============================ -->
+<div class="section">
+  <h2>6. Tenant Lifecycle &amp; Trials</h2>
+  <p>Each tenant row carries <code>status ∈ {trial, active, trial_expired, suspended}</code> plus <code>trial_starts_at</code> / <code>trial_ends_at</code>.</p>
+  <h3>Two onboarding paths</h3>
+  <div class="grid2">
+    <div class="card"><h4>Path A — self-serve sign-up</h4>
+      <p><code>POST /auth/signup</code> from the pricing page creates a fresh, isolated tenant on the chosen plan, opened on a <b>14-day trial</b>, with the owner account and an onboarding e-mail.</p></div>
+    <div class="card"><h4>Path B — sales-led (Lead)</h4>
+      <p>The demo form writes a Lead (<code>PENDING_DEMO</code>). The Super Admin approves it, which <b>atomically</b> inserts the tenant, inserts the owner as <code>MERCHANT_OWNER</code> and flips the lead to <code>APPROVED</code>. Slug or owner-email collisions roll back with <code>409</code>.</p></div>
+  </div>
+  <h3>Lazy trial expiry (no cron)</h3>
+  <ol>
+    <li>On any request after <code>trial_ends_at</code>, <code>evaluateTenantStatus</code> runs a single guarded <code>UPDATE … WHERE status='trial' AND trial_ends_at &lt;= now()</code>.</li>
+    <li>Only the request that wins the flip sends the <b>trial-expired recovery e-mail</b> — so it is sent exactly once, even under concurrency.</li>
+    <li>The trial middleware then returns <code>402</code> for merchant modules; <code>/auth/me</code> reports the lapsed state so the workspace swaps to the <b>Trial Recovery</b> view.</li>
+    <li>Sign-in, <code>/auth/me</code> and the marketing site stay reachable so the owner can upgrade and recover.</li>
+  </ol>
+  <p>Lifecycle is resolved live from the database, never from the JWT, so an upgrade or lapse takes effect on the very next request. The Super Admin can change a tenant's plan or status via <code>PATCH /api/v1/admin/tenants/:id</code>.</p>
+</div>
+
+<!-- ============================ 7 ============================ -->
+<div class="section">
+  <h2>7. Authentication, Roles &amp; Sessions</h2>
+  <h3>Sign-in methods</h3>
+  <table>
+    <tr><th style="width:24%">Method</th><th>Flow</th></tr>
+    <tr><td>Google OAuth</td><td><code>GET /auth/google</code> mints a CSRF <code>state</code> and redirects to Google. <code>/auth/google/callback</code> verifies state, exchanges the code, looks up the e-mail in <code>users</code>, signs the JWT, sets the cookie and redirects to the role's dashboard. Unknown e-mails get <code>?error=not_provisioned</code>.</td></tr>
+    <tr><td>Owner / manager password</td><td><code>POST /auth/password-login</code> with Store ID + e-mail + password. Owners set or change a password via <code>/auth/password</code>; status via <code>/auth/password/status</code>. A first-login onboarding card prompts owners to set one.</td></tr>
+    <tr><td>Cashier PIN</td><td><code>POST /auth/store</code> resolves the Store ID (tenant slug); <code>POST /auth/pin</code> verifies a 4-digit PIN <b>within that tenant</b> (optionally pinned to a selected <code>userId</code>) and swaps the cookie. On a warm terminal the active session's tenant always wins, so a typed Store ID can never reach across tenants.</td></tr>
+  </table>
+  <h3>Forgot-PIN workflow</h3>
+  <p>Cashiers never set their own PIN. <code>POST /auth/cashiers</code> lists a store's cashier names; <code>POST /auth/pin/forgot</code> raises one pending reset request per cashier (partial unique index, idempotent). The owner resolves it in <b>Cashiers</b> by setting a new PIN (resolves the request in the same transaction) or rejecting it.</p>
+  <h3>Sessions &amp; security</h3>
+  <ul>
+    <li>JWT in an HTTP-only cookie (<code>vendopos_session</code>), 7-day lifetime, optional <code>COOKIE_DOMAIN</code> for split subdomains.</li>
+    <li>Each sign-in creates a row in <code>sessions</code> (revocable device sessions) and <code>login_events</code> (login audit). Users can revoke a single session or all others.</li>
+    <li>PINs hashed as <code>scrypt$salt$hash</code>; passwords as <code>pw1$salt$hash</code> (scrypt, per-user salt); verification is constant-time (<code>timingSafeEqual</code>).</li>
+    <li><code>GET /auth/me</code> returns <code>{userId, tenantId, role, email, name, tenantName, …}</code> with the tenant name, tier, status and theme looked up live.</li>
+    <li><b>Impersonation:</b> <code>POST /auth/impersonate</code> (Super Admin) mints an owner session for support, shown with an <b>Impersonation Banner</b>; <code>/auth/impersonate/stop</code> returns to <code>/admin/tenants</code>.</li>
+    <li><code>POST /auth/logout</code> clears the cookie. All sign-out and terminal-lock actions go through a confirm dialog.</li>
+  </ul>
+</div>
+
+<!-- ============================ 8 ============================ -->
+<div class="section">
+  <h2>8. Point of Sale (POS) Terminal</h2>
+  <p>Route <code>/pos</code>. Available to <code>CASHIER</code>, <code>MANAGER</code> and <code>MERCHANT_OWNER</code>. On a fresh device an <b>Activation Wizard</b> binds the terminal to a store.</p>
+  <h3>Terminal features</h3>
+  <ul>
+    <li><b>Live catalog</b> (<code>GET /api/v1/pos/catalog</code>): store name, categories and active products with price, stock, low-stock threshold and image; category filter and search.</li>
+    <li><b>Search or scan barcode:</b> an Enter-terminated burst resolves to an exact SKU (then a sole-result fallback), drops it in the cart and clears for the next scan; transient "not found / out of stock" feedback. A global keyboard-wedge hook distinguishes scanner bursts from human typing by inter-key timing.</li>
+    <li><b>Cart</b>: quantity edits, line voids (logged), cart-level discount (percent 0–100 or fixed amount) with label.</li>
+    <li><b>Customer attach &amp; loyalty</b>: search CRM customers, show balance, redeem points.</li>
+    <li><b>Payment</b>: Cash (tendered and change), GCash, Maya, QR Ph (reference code). E-wallet rails show the merchant's uploaded <b>scan-to-pay QR</b> on the pad and the customer display.</li>
+    <li><b>Receipts</b>: printable HTML receipt and direct ESC/POS thermal printing; reprint from sales history.</li>
+    <li><b>Sales history &amp; returns</b> modal: list sales, view details, void or return lines.</li>
+    <li><b>Shift controls</b>: open shift with float, X-Read, close (Z-Read), open-drawer (logged).</li>
+    <li><b>Cashier switch</b>: PIN pad with profile selector for shared terminals; terminal lock.</li>
+    <li><b>Clock widget</b>: staff clock-in / clock-out (timecards).</li>
+    <li><b>Theming</b>: the tenant theme and announcement bar apply to the terminal.</li>
+  </ul>
+  <h3>Customer-Facing Display</h3>
+  <p>Route <code>/pos/customer-display</code>: a clean, high-contrast second screen mirroring the live cart, discounts and totals. Sync is purely client-side over a same-origin <code>BroadcastChannel</code> (no server round-trip), so it is isolated to the active terminal browser. Selecting an e-wallet rail animates a QR presentation sheet open on the customer screen.</p>
+</div>
+
+<!-- ============================ 9 ============================ -->
+<div class="section">
+  <h2>9. Checkout Engine, VAT &amp; Invoicing</h2>
+  <p><code>POST /api/v1/pos/orders</code> is a single ACID transaction.</p>
+  <h3>Request</h3>
+  <pre>{
+  "items": [{ "productId": "uuid", "qty": 2 }],
+  "paymentMethod": "Cash" | "GCash" | "Maya" | "QRPH",
+  "tenderedCents": 50000,            // cash only
+  "referenceCode": "GC-123…",        // e-wallet reference
+  "discount": { "type": "percent" | "fixed", "value": 10, "label": "Senior" },
+  "customerId": "uuid",              // optional CRM link
+  "redeemPoints": 50                 // optional loyalty redemption
+}</pre>
+  <h3>Steps inside the transaction</h3>
+  <ol>
+    <li>Lock each product row <code>SELECT … FOR UPDATE</code>; re-derive prices from the DB (client prices are ignored).</li>
+    <li>Abort with <code>400</code> (+ <code>productId</code>, <code>available</code>) if any line lacks stock.</li>
+    <li>Apply the cart discount server-side (percent 0–100 or fixed centavos).</li>
+    <li>Redeem loyalty: <b>1 point = ₱1</b>, clamped to the live balance and to what remains payable.</li>
+    <li>Compute VAT on the <b>net</b>: <code>vat = round(net × 12 / 112)</code>, <code>subtotal = net − vat</code> (12% price-inclusive).</li>
+    <li>Earn loyalty on what was actually paid: <b>1 point per ₱100</b> of net.</li>
+    <li>Lock the per-tenant <code>invoice_counters</code> row and assign a <b>gap-free, chronological</b> reference <code>SI-000123</code> (unique index backstop).</li>
+    <li>Decrement stock through the stock ledger (<code>reason='sale'</code>), stamp the open <code>shift_id</code>, write the <code>sales</code> header and <code>sale_items</code> snapshots.</li>
+    <li>After commit, raise low-stock notifications and push SSE <code>low-stock</code> events for any product that crossed its threshold.</li>
+  </ol>
+  <h3>Sale record</h3>
+  <table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td><code>reference</code></td><td>BIR-style serial, unique per tenant</td></tr>
+    <tr><td><code>subtotal_cents / vat_cents / total_cents</code></td><td>Net-of-VAT, output VAT, gross (VAT-inclusive)</td></tr>
+    <tr><td><code>discount_cents / discount_label</code></td><td>Total discount (incl. points) and its description</td></tr>
+    <tr><td><code>payment_method / payment_ref</code></td><td>Settlement channel and e-wallet reference</td></tr>
+    <tr><td><code>tendered / change</code></td><td>Cash handling</td></tr>
+    <tr><td><code>shift_id / customer_id</code></td><td>Links to drawer shift and CRM customer</td></tr>
+    <tr><td><code>points_earned / points_redeemed</code></td><td>Loyalty movements</td></tr>
+    <tr><td><code>status / kind / reverses_sale_id</code></td><td>Lifecycle and contra-entry linkage (section 10)</td></tr>
+  </table>
+</div>
+
+<!-- ============================ 10 ============================ -->
+<div class="section">
+  <h2>10. Voids, Returns &amp; POS Audit Log</h2>
+  <h3>Contra-entry model</h3>
+  <p>A void or return never edits or deletes the original sale. It writes a <b>new</b> <code>sales</code> row with <code>kind='void'</code> or <code>kind='return'</code>, negative quantities in <code>sale_items</code> (linked by <code>reverses_sale_item_id</code>) and a link <code>reverses_sale_id</code>. Every revenue total therefore nets automatically. The original's <code>status</code> moves to <code>voided</code>, <code>partially_returned</code> or <code>returned</code>. Reversal documents carry their own serial from <code>reversal_counters</code>.</p>
+  <ul>
+    <li><code>GET /api/v1/pos/sales/:id</code> shows per-line <b>returnable quantity</b> (sold − already returned).</li>
+    <li><code>POST /api/v1/pos/sales/:id/void</code> reverses the whole sale; <code>POST …/returns</code> reverses chosen lines and quantities, with a reason.</li>
+    <li>Stock is restored through the ledger (<code>sale_void</code> / <code>return</code>); loyalty points earned are clawed back and redeemed points restored proportionally.</li>
+  </ul>
+  <h3>POS audit log</h3>
+  <p>Sensitive till actions are recorded in <code>pos_audit_logs</code> via <code>POST /api/v1/pos/audit</code>: <code>void_item</code> (line removed before payment), <code>cancel_transaction</code> (cart abandoned) and <code>open_drawer</code> (no-sale drawer open). Each row snapshots the cashier name, item, quantity, peso value and detail. Owners review it in <b>Audit log</b> (<code>/dashboard/audit</code>).</p>
+</div>
+
+<!-- ============================ 11 ============================ -->
+<div class="section">
+  <h2>11. Cashier Shifts (X-Read / Z-Read)</h2>
+  <p>The drawer ledger is keyed to the operator: <b>one open shift per cashier per tenant</b> (partial unique index). Sales are stamped with their <code>shift_id</code>, so tallies derive from real transactions.</p>
+  <table>
+    <tr><th style="width:34%">Endpoint</th><th>Behaviour</th></tr>
+    <tr><td><code>POST /api/v1/pos/shifts/open</code></td><td>Opens a shift with the opening cash float (<code>openingCents</code>; a per-cashier default float can be configured). <code>409</code> if one is already open.</td></tr>
+    <tr><td><code>GET /api/v1/pos/shifts/active</code></td><td><b>X-Read</b>: live tallies — cash, e-wallet and card revenue, transaction count, and expected drawer cash = opening float + cash sales.</td></tr>
+    <tr><td><code>POST /api/v1/pos/shifts/close</code></td><td><b>Z-Read</b>: locks the shift, snapshots per-channel rollups, computes <b>variance to the centavo</b> (counted − expected; + overage / − shortage), freezes an immutable audit snapshot. Body <code>{countedCents, note?}</code>.</td></tr>
+    <tr><td><code>POST /api/v1/staff/cashiers/:id/close-shift</code></td><td>Owner force-closes a cashier's forgotten shift.</td></tr>
+  </table>
+  <p>An un-reconciled variance raises a <b>security flag</b>: a notification to the owner (if <code>notify_variance</code> is on) and an <code>alert</code> event on the Super Admin health stream. HR's <b>Shift Discrepancy Matrix</b> lists reconciliations (<code>/api/v1/hr/shift-reconciliations</code>).</p>
+</div>
+
+<!-- ============================ 12 ============================ -->
+<div class="section">
+  <h2>12. Inventory &amp; Stock Ledger</h2>
+  <h3>Catalog</h3>
+  <ul>
+    <li><b>Products</b>: name, SKU (unique per tenant), price (pesos in, stored as centavos), stock, low-stock threshold, category, active flag, optional image (≤ 2 MB, <code>image/*</code>). Derived <code>lowStock</code> flag.</li>
+    <li><b>Categories</b>: nested via self-referential <code>parent_id</code>; unique name per tenant. Deleting a category makes its products uncategorised.</li>
+    <li>UI: <b>Inventory Matrix</b>, product form with image picker, category manager.</li>
+  </ul>
+  <h3>Immutable stock-movement ledger</h3>
+  <p>Every on-hand change goes through <code>moveStock()</code> and writes a signed, explainable row in <code>stock_movements</code> with <code>balance_after</code> (never negative), the <b>reason</b> and a reference to the source document.</p>
+  <table>
+    <tr><th>Reason</th><th>Source</th><th>Sign</th></tr>
+    <tr><td><code>sale</code></td><td>Checkout</td><td>−</td></tr>
+    <tr><td><code>sale_void</code>, <code>return</code></td><td>Void / return</td><td>+</td></tr>
+    <tr><td><code>po_receive</code></td><td>Purchase order received</td><td>+</td></tr>
+    <tr><td><code>produce_consume</code> / <code>produce_output</code></td><td>Production run</td><td>− / +</td></tr>
+    <tr><td><code>adjust</code>, <code>count</code></td><td>Manual edit / stock count</td><td>±</td></tr>
+  </table>
+  <ul>
+    <li><code>GET /api/v1/inventory/products/:id/movements</code> — one product's history.</li>
+    <li><code>GET /api/v1/inventory/movements</code> — tenant-wide movement feed.</li>
+    <li><code>GET /api/v1/inventory/ledger-drift</code> — integrity check: products whose cached <code>stock</code> disagrees with the ledger's latest balance.</li>
+    <li><code>GET /api/v1/inventory/alerts</code> — low-stock engine: active products at or below threshold, most urgent first.</li>
+  </ul>
+</div>
+
+<!-- ============================ 13 ============================ -->
+<div class="section">
+  <h2>13. Procurement &amp; Supply Chain <span class="tag t-b">Business</span></h2>
+  <ul>
+    <li><b>Suppliers</b>: name, contact person, e-mail, phone, address, note, active flag — CRUD at <code>/api/v1/procurement/suppliers</code>.</li>
+    <li><b>Purchase orders</b>: per-tenant serial reference (<code>po_counters</code>), supplier, line items (product, qty, unit cost), total, status <code>draft → ordered → received</code> or <code>cancelled</code>.</li>
+    <li><b>Receiving</b> (<code>POST /purchase-orders/:id/receive</code>) restocks every line in one transaction via the ledger (<code>po_receive</code>) and records the unit cost used for inventory valuation.</li>
+    <li><b>Reorder suggestions</b> (<code>GET /reorder-suggestions</code>): low-stock or depleted active products, a suggested quantity (pure <code>suggestReorderQty</code>) and the last known purchase cost (single-scan <code>DISTINCT ON</code> query, indexed).</li>
+    <li><b>Reorder modal</b>: tick items, adjust quantities and create one draft PO in a click.</li>
+    <li>Summary KPIs at <code>/summary</code>; PO detail drawer in the UI.</li>
+  </ul>
+</div>
+
+<!-- ============================ 14 ============================ -->
+<div class="section" style="page-break-before:auto;margin-top:18px">
+  <h2>14. Manufacturing (Bill of Materials) <span class="tag t-e">Enterprise</span></h2>
+  <ul>
+    <li><b>Recipes</b>: an output product, output quantity per batch and components (raw-material products and quantity consumed per batch).</li>
+    <li><b>Produce</b> (<code>POST /recipes/:id/produce</code> with <code>batches</code>): in one transaction, checks component availability, consumes components (<code>produce_consume</code>), adds output (<code>produce_output</code>), and writes a serialized <code>production_runs</code> record with its item breakdown.</li>
+    <li>Production history at <code>/runs</code>; summary KPIs at <code>/summary</code>.</li>
+    <li>Typical use: a café turning beans, milk and syrup into finished drinks or packaged goods.</li>
+  </ul>
+</div>
+
+<!-- ============================ 15 ============================ -->
+<div class="section">
+  <h2>15. Finance &amp; Accounting <span class="tag t-b">Business</span></h2>
+  <h3>Expenses</h3>
+  <p>CRUD at <code>/api/v1/finance/expenses</code>: date incurred, category, payee, amount (centavos), payment method (<code>Cash, GCash, Maya, Bank Transfer, Card, Other</code>), note.</p>
+  <h3>Profit &amp; Loss</h3>
+  <p><code>GET /finance/summary</code> — revenue (net of voids/returns), output VAT, discounts, expenses by category, net profit and trend charts.</p>
+  <h3>Balance Sheet — <code>GET /finance/balance-sheet</code></h3>
+  <table>
+    <tr><th>Line</th><th>Derivation</th></tr>
+    <tr><td>Cash &amp; equivalents</td><td>Σ sales collected − Σ expenses − Σ goods received (a derived proxy, not a bank balance)</td></tr>
+    <tr><td>Inventory</td><td>stock × latest purchase unit cost</td></tr>
+    <tr><td>Output VAT payable</td><td>Cumulative VAT on sales</td></tr>
+    <tr><td>Accounts payable</td><td>Open purchase orders</td></tr>
+    <tr><td>Owner's equity</td><td>Assets − Liabilities (residual) → <b>Assets ≡ Liabilities + Equity</b> by construction</td></tr>
+  </table>
+  <h3>Cash Flow — <code>GET /finance/cash-flow?month=YYYY-MM</code></h3>
+  <p>Direct method for one Manila month: opening cash (cumulative strictly before the month), inflows (sales collections), outflows (expenses + inventory received), net change, closing cash. Invariants: <code>Opening + Net = Closing</code> and <code>Inflows − Outflows = Net</code>.</p>
+  <div class="note">Reports only sum pre-rounded integer centavos and never multiply by a tax rate, so they cannot introduce rounding drift. Builders live in the pure, unit-tested <code>finance.reports.ts</code>.</div>
+</div>
+
+<!-- ============================ 16 ============================ -->
+<div class="section">
+  <h2>16. Human Resources &amp; Payroll <span class="tag t-e">Enterprise</span></h2>
+  <h3>Employees</h3>
+  <p>Name, position, employment type (<code>Full-time, Part-time, Contract</code>), pay type (<code>Monthly, Daily, Hourly</code>), pay rate, hire / separation dates, PTO balance, bank details, address, emergency contact, optional link to a cashier login. Profile page at <code>/dashboard/hr/employees/[id]</code>.</p>
+  <h3>Attendance &amp; timecards</h3>
+  <ul>
+    <li><b>Attendance</b> (<code>PUT /hr/attendance</code>): one row per employee per day — <code>Present, Absent, Leave, Half-day</code> with hours. Calendar view.</li>
+    <li><b>Timecards</b> (<code>/api/v1/merchant/shifts/clock-in|clock-out|status|me</code>): real punches from the POS clock widget; one active timecard per user.</li>
+    <li><b>Employee Self-Service</b> (<code>/me</code>, <code>/api/v1/ess/me</code>): staff view their own clock records.</li>
+  </ul>
+  <h3>Payroll runs</h3>
+  <p><code>POST /hr/payroll</code> computes gross for a period in one transaction with a per-tenant serial: Monthly → flat rate; Daily → rate × (Present days + ½ Half-days); Hourly → rate × hours logged. Statutory deductions (SSS, PhilHealth, Pag-IBIG, withholding tax) are out of scope for v1.</p>
+  <h3>Automated payroll exporter</h3>
+  <p><code>GET /hr/payroll/export[/preview]</code> turns timecards into accounting-ready CSV using a pure processor in Manila time:</p>
+  <table>
+    <tr><th>Component</th><th>Rule</th></tr>
+    <tr><td>Regular hours</td><td>Up to 8 worked hours per Manila day</td></tr>
+    <tr><td>Overtime</td><td>Hours beyond 8 per day at <b>125%</b></td></tr>
+    <tr><td>Night differential</td><td>Hours between 22:00 and 06:00 at <b>+10%</b> (toggleable)</td></tr>
+    <tr><td>Monthly-to-hourly</td><td>Monthly rate ÷ 176 hours (22 days × 8 h)</td></tr>
+  </table>
+  <h3>Analytics</h3>
+  <p>HR overview, <b>Performance Matrix</b> (sales per cashier), <b>Labor Analytics</b> (labor cost vs. revenue) and <b>Shift Discrepancy Matrix</b>.</p>
+</div>
+
+<!-- ============================ 17 ============================ -->
+<div class="section" style="page-break-before:auto;margin-top:18px">
+  <h2>17. Customer Relationship Management <span class="tag t-b">Business</span></h2>
+  <ul>
+    <li>Customers: name, phone, e-mail, address, tags, note, active flag and loyalty points balance; CRUD at <code>/api/v1/crm/customers</code>.</li>
+    <li><code>/customers/search</code> powers the POS attach-customer lookup (cashiers have access).</li>
+    <li>Customer detail drawer: purchase history, lifetime spend, points earned and redeemed.</li>
+    <li>Loyalty rules: <b>earn 1 point per ₱100</b> of net paid; <b>redeem 1 point = ₱1</b>; returns reverse points.</li>
+    <li>Summary KPIs (<code>/summary</code>): customer count, active members, outstanding points.</li>
+  </ul>
+</div>
+
+<!-- ============================ 18 ============================ -->
+<div class="section">
+  <h2>18. Merchant Dashboard, Analytics &amp; Forecasting</h2>
+  <ul>
+    <li><b>Live Pulse</b> (<code>GET /api/v1/merchant/analytics/dashboard</code>): today's gross, transaction count, AOV, units sold, net / VAT / discount totals, hourly revenue velocity, payment-channel mix and best sellers — all real SQL aggregates, "today" in Manila time.</li>
+    <li><b>Owner Summary</b> (<code>/analytics/summary</code>, page <code>/dashboard/summary</code>): period rollups.</li>
+    <li><b>Predictive inventory</b> <span class="tag t-e">Enterprise</span>: a pure forecast engine computes per-product sales velocity over a window, projects days of cover and flags at-risk items with suggested order quantities.</li>
+    <li>Low-stock panel live-merged from the SSE stream; trial recovery, compliance tray and tier badge components.</li>
+  </ul>
+  <h3>Merchant navigation</h3>
+  <table>
+    <tr><th>Group</th><th>Items</th></tr>
+    <tr><td>Operations</td><td>Dashboard, Summary, Point of Sale, Inventory, Checkout QR, Compliance</td></tr>
+    <tr><td>ERP (tier-gated)</td><td>Finance, Procurement, Manufacturing, HR, CRM</td></tr>
+    <tr><td>Administration</td><td>Cashiers, Audit log, My record, Account</td></tr>
+  </table>
+</div>
+
+<!-- ============================ 19 ============================ -->
+<div class="section" style="page-break-before:auto;margin-top:18px">
+  <h2>19. BIR Compliance</h2>
+  <ul>
+    <li><b>Serialized invoices</b>: immutable, gap-free, chronological <code>SI-</code> numbers per tenant, assigned under a row lock (no <code>count(*)+1</code> collisions between simultaneous tills).</li>
+    <li><b>12% VAT</b> price-inclusive, computed on the net after discounts and frozen on the sale.</li>
+    <li><b>Receipt fields</b>: registered name, business style, address, TIN, VAT label (e.g. "VAT REG TIN"), invoice prefix, header and footer text, logo toggle, and machine-accreditation footer — <b>PTU No.</b>, <b>MIN</b> and machine <b>serial</b>.</li>
+    <li><b>Monthly sales ledger</b>: <code>GET /api/v1/merchant/compliance/export?month=YYYY-MM</code> — invoices with gross, net taxable, output VAT, discounts and e-wallet references; JSON for the on-screen audit tray or <code>&amp;format=csv</code> for tax preparation.</li>
+    <li><b>Platform compliance register</b> for the Super Admin: cross-tenant summary and consolidated CSV.</li>
+    <li>Shift X-Read / Z-Read with centavo variance.</li>
+  </ul>
+</div>
+
+<!-- ============================ 20 ============================ -->
+<div class="section">
+  <h2>20. Account, Store Settings &amp; Theme Studio</h2>
+  <p>Page <code>/dashboard/account</code>, API <code>/api/v1/account/*</code> (owner / manager).</p>
+  <table>
+    <tr><th style="width:26%">Card</th><th>Function</th></tr>
+    <tr><td>Store profile</td><td>Name, address, phone, e-mail, business hours, TIN, business style, logo upload</td></tr>
+    <tr><td>Receipt settings</td><td>Header/footer, VAT label, invoice prefix, show logo, PTU / MIN / serial</td></tr>
+    <tr><td>Theme Studio <span class="tag t-b">Business</span></td><td>Pick a preset vibe (<code>minimalist_apparel</code>, <code>espresso_lounge</code>, <code>fast_track</code>) and customise primary colour, surface, paper, ink, font (sans / mono / serif), product aspect ratio (1:1 or 4:5) and hero media. Stored as validated JSONB design tokens — never raw CSS — and applied to the back office, POS and customer display.</td></tr>
+    <tr><td>Profile</td><td>Name, phone, avatar</td></tr>
+    <tr><td>Preferences</td><td>Theme (light / dark / system); low-stock, variance and daily-summary notifications</td></tr>
+    <tr><td>Security</td><td>Password, active sessions (revoke one / all others), login activity</td></tr>
+    <tr><td>Data export</td><td>CSV of <code>sales</code>, <code>inventory</code> or <code>customers</code></td></tr>
+    <tr><td>Danger zone</td><td>Owner-only store deactivation</td></tr>
+  </table>
+  <h3>Checkout QR (payments)</h3>
+  <p><code>/dashboard/payments</code>: upload or remove the store's static QR for <b>GCash</b>, <b>Maya</b> and <b>QR Ph</b> (<code>/api/v1/merchant/payment-qrs/:method</code>), shown at checkout.</p>
+  <h3>Cashiers (owner only)</h3>
+  <p><code>/dashboard/staff</code>: create, edit, disable cashiers, set PINs, set default float, resolve forgot-PIN requests, force-close shifts.</p>
+</div>
+
+<!-- ============================ 21 ============================ -->
+<div class="section" style="page-break-before:auto;margin-top:18px">
+  <h2>21. Notifications &amp; Real-Time Streams</h2>
+  <ul>
+    <li><b>In-app notifications</b> (<code>notifications</code> table): severity <code>info / success / warning / danger</code>, unread de-duplication index. Bell with unread count; mark one or all read.</li>
+    <li><b>Producers</b>: low stock after a sale, shift variance, PIN reset requests, trial events, and more — respecting each user's preferences.</li>
+    <li><b>Merchant SSE</b> <code>/api/v1/merchant/events/stream</code>: <code>low-stock</code> events (3-second tick) turned into warning toasts.</li>
+    <li><b>Admin SSE</b> <code>/api/v1/admin/health/stream</code>: <code>metrics</code>, <code>activity</code>, <code>alert</code> events.</li>
+    <li><b>E-mail</b> (Resend): onboarding, trial-expired recovery and enterprise-lead alerts.</li>
+  </ul>
+</div>
+
+<!-- ============================ 22 ============================ -->
+<div class="section">
+  <h2>22. Super Admin Platform Console</h2>
+  <table>
+    <tr><th style="width:22%">Page</th><th>Function</th></tr>
+    <tr><td><code>/admin</code></td><td>Metrics bento overview, platform shortcuts</td></tr>
+    <tr><td><code>/admin/leads</code></td><td>Leads Matrix: pipeline <code>PENDING_DEMO / APPROVED / REJECTED</code>; approve (atomic provisioning with store name, slug, plan, owner) or reject</td></tr>
+    <tr><td><code>/admin/tenants</code></td><td>Tenants Directory: all stores, plan, status, owner; change plan/status; impersonate owner</td></tr>
+    <tr><td><code>/admin/billing</code></td><td>MRR engine: MRR, active subscribers, ARPA, annual run rate, per-tier breakdown, six-month fee trend and cumulative MRR growth; Subscribers drawer</td></tr>
+    <tr><td><code>/admin/health</code></td><td>Health Matrix: NeonDB pool occupancy, query round-trip latency, cross-tenant activity ticker, shift-variance alerts</td></tr>
+    <tr><td><code>/admin/compliance</code></td><td>Cross-tenant BIR compliance register and consolidated CSV</td></tr>
+  </table>
+</div>
+
+<!-- ============================ 23 ============================ -->
+<div class="section" style="page-break-before:auto;margin-top:18px">
+  <h2>23. Marketing Website &amp; Lead Capture</h2>
+  <p>Public pages: home (hero, problem, core tools, how it works, comparison vs. Square and Lightspeed, testimonials, pricing, FAQ, why-PH, sticky CTA), <code>/products/[slug]</code>, <code>/industry/[slug]</code>, <code>/hardware/[slug]</code>, <code>/enterprise</code> (concierge), <code>/company/[slug]</code>, <code>/about</code>, <code>/careers</code>, <code>/blog/[slug]</code>, <code>/resources</code>, <code>/security</code>, <code>/contact</code>, <code>/terms</code>, <code>/privacy</code>, and stateless previews <code>/preview/merchant</code> and <code>/preview/pos</code>.</p>
+  <ul>
+    <li><code>POST /api/leads</code> — demo request <code>{name, businessName, email, phone, businessType, message?}</code>; upsert on e-mail; <code>400 {errors}</code> on invalid input.</li>
+    <li><code>POST /api/leads/enterprise</code> — enterprise concierge request; e-mails the sales alert.</li>
+    <li><code>GET /api/v1/public/tenants</code> — public directory of stores (trust strip).</li>
+  </ul>
+</div>
+
+<!-- ============================ 24 ============================ -->
+<div class="section">
+  <h2>24. Hardware Integration</h2>
+  <table>
+    <tr><th style="width:24%">Device</th><th>Integration</th></tr>
+    <tr><td>Barcode / QR scanner</td><td>Any keyboard-wedge (USB/Bluetooth HID) scanner. <code>useBarcodeScanner</code> captures rapid Enter-terminated bursts at window level and distinguishes them from human typing by inter-key timing.</td></tr>
+    <tr><td>Thermal receipt printer</td><td>Pure ESC/POS serialiser (<code>lib/escpos.ts</code>) + transports (<code>lib/thermalPrinter.ts</code>): <b>WebUSB</b> for desk printers, <b>Web Bluetooth</b> for mobile printers. Money printed as "PHP 1,234.56" (ASCII-safe). Falls back to the HTML receipt on unsupported browsers.</td></tr>
+    <tr><td>Customer display</td><td>Second monitor or tablet on <code>/pos/customer-display</code>, synced over <code>BroadcastChannel</code>.</td></tr>
+    <tr><td>Cash drawer</td><td>Drawer-open events logged in the POS audit log.</td></tr>
+  </table>
+  <div class="note">WebUSB and Web Bluetooth require a Chromium-based browser (Chrome, Edge) over HTTPS or localhost.</div>
+</div>
+
+<!-- ============================ 25 ============================ -->
+<div class="section">
+  <h2>25. Database Schema Reference</h2>
+  <p>PostgreSQL (NeonDB). All primary keys are UUIDs (<code>gen_random_uuid()</code>); every tenant-owned table carries <code>tenant_id … ON DELETE CASCADE</code>. The schema is applied by the idempotent <code>npm run migrate</code>.</p>
+  <table>
+    <tr><th style="width:22%">Table</th><th>Purpose &amp; key columns / constraints</th></tr>
+    <tr><td><code>tenants</code></td><td>name, slug, plan (starter/business/enterprise), tier, status (trial/active/trial_expired/suspended), trial dates, store profile, TIN, business style, logo, theme_color, theme_config JSONB, receipt fields (header, footer, VAT label, prefix, PTU, MIN, serial)</td></tr>
+    <tr><td><code>users</code></td><td>tenant_id, email (unique, case-insensitive), name, role, status, PIN hash, password hash, default float, phone, avatar, theme, notification prefs. Check: SUPER_ADMIN ⇔ no tenant</td></tr>
+    <tr><td><code>sessions</code>, <code>login_events</code></td><td>Revocable device sessions; login audit trail</td></tr>
+    <tr><td><code>leads</code></td><td>Demo requests; status PENDING_DEMO/APPROVED/REJECTED; unique email</td></tr>
+    <tr><td><code>categories</code>, <code>products</code></td><td>Nested categories; products with SKU (unique per tenant), price_cents, stock ≥ 0, low_stock_threshold, image_url, active</td></tr>
+    <tr><td><code>stock_movements</code></td><td>Immutable ledger: qty_delta, balance_after ≥ 0, reason, ref_table/ref_id, note, created_by</td></tr>
+    <tr><td><code>sales</code>, <code>sale_items</code></td><td>Sale headers and line snapshots; status, kind (sale/void/return), reverses links, shift, customer, points; qty ≠ 0</td></tr>
+    <tr><td><code>invoice_counters</code>, <code>reversal_counters</code></td><td>Per-tenant locked serial counters</td></tr>
+    <tr><td><code>cashier_shifts</code></td><td>Opening/expected/counted cash, variance, channel rollups, audit snapshot; one open per user</td></tr>
+    <tr><td><code>timecards</code></td><td>Clock-in/out punches; ACTIVE ⇔ no clock_out; one active per user</td></tr>
+    <tr><td><code>cashier_pin_requests</code></td><td>Forgot-PIN requests; one pending per cashier</td></tr>
+    <tr><td><code>pos_audit_logs</code></td><td>void_item / cancel_transaction / open_drawer events</td></tr>
+    <tr><td><code>tenant_payment_qrs</code></td><td>Static QR per method (GCash, Maya, QRPH)</td></tr>
+    <tr><td><code>expenses</code></td><td>Category, amount, date, payment method</td></tr>
+    <tr><td><code>suppliers</code>, <code>purchase_orders</code>, <code>purchase_order_items</code>, <code>po_counters</code></td><td>Procurement; PO status draft/ordered/received/cancelled; unit costs</td></tr>
+    <tr><td><code>recipes</code>, <code>recipe_components</code>, <code>production_runs</code>, <code>production_run_items</code>, <code>production_counters</code></td><td>Manufacturing / BOM</td></tr>
+    <tr><td><code>employees</code>, <code>attendance</code>, <code>payroll_runs</code>, <code>payroll_items</code>, <code>payroll_counters</code></td><td>HR and payroll; attendance unique per employee per day</td></tr>
+    <tr><td><code>customers</code></td><td>CRM with loyalty_points ≥ 0</td></tr>
+    <tr><td><code>notifications</code></td><td>Per-user notifications with severity and unread de-dupe</td></tr>
+  </table>
+  <h3>Notable indexes</h3>
+  <p><code>sales (tenant_id, created_at DESC)</code>, <code>sales (tenant_id, lower(reference))</code> unique, <code>sales_status_idx</code>, <code>stock_movements</code> by tenant / product / ref, <code>purchase_order_items_product_idx</code> (reorder and balance-sheet cost lookup), partial unique indexes for one open shift, one active timecard and one pending PIN request.</p>
+</div>
+
+<!-- ============================ 26 ============================ -->
+<div class="section">
+  <h2>26. Complete API Reference</h2>
+  <p class="muted">Roles: SA = SUPER_ADMIN, OW = MERCHANT_OWNER, MG = MANAGER, CA = CASHIER. Tier tags show the minimum plan.</p>
+
+  <h4>Public &amp; authentication</h4>
+  <table>
+    <tr><th style="width:44%">Endpoint</th><th>Access</th><th>Purpose</th></tr>
+    <tr><td><code>GET /health</code></td><td>public</td><td>Liveness</td></tr>
+    <tr><td><code>GET /uploads/*</code></td><td>public</td><td>Uploaded media</td></tr>
+    <tr><td><code>POST /api/leads</code> · <code>POST /api/leads/enterprise</code> · <code>GET /api/leads</code></td><td>public</td><td>Lead capture / list</td></tr>
+    <tr><td><code>GET /api/v1/public/tenants</code></td><td>public</td><td>Public store directory</td></tr>
+    <tr><td><code>GET /auth/google</code> · <code>GET /auth/google/callback</code></td><td>public</td><td>Google OAuth</td></tr>
+    <tr><td><code>GET /auth/me</code> · <code>POST /auth/logout</code></td><td>any session</td><td>Current session / sign out</td></tr>
+    <tr><td><code>POST /auth/password-login</code> · <code>POST /auth/signup</code></td><td>public</td><td>Password login; self-serve sign-up</td></tr>
+    <tr><td><code>GET /auth/password/status</code> · <code>POST /auth/password</code></td><td>OW, MG</td><td>Password management</td></tr>
+    <tr><td><code>POST /auth/impersonate</code> · <code>POST /auth/impersonate/stop</code></td><td>SA</td><td>Support impersonation</td></tr>
+    <tr><td><code>POST /auth/store</code> · <code>/auth/pin</code> · <code>/auth/cashiers</code> · <code>/auth/pin/forgot</code></td><td>public</td><td>Store resolve, PIN login, cashier list, forgot-PIN</td></tr>
+  </table>
+
+  <h4>POS — <code>/api/v1/pos</code> (CA, OW, MG)</h4>
+  <table>
+    <tr><th style="width:44%">Endpoint</th><th>Purpose</th></tr>
+    <tr><td><code>GET /catalog</code> · <code>GET /cashiers</code></td><td>Register feed; cashier names</td></tr>
+    <tr><td><code>POST /orders</code></td><td>ACID checkout</td></tr>
+    <tr><td><code>GET /sales</code> · <code>GET /sales/:id</code></td><td>Sales history / detail with returnable qty</td></tr>
+    <tr><td><code>POST /sales/:id/void</code> · <code>POST /sales/:id/returns</code></td><td>Contra-entry void / return</td></tr>
+    <tr><td><code>POST /audit</code> · <code>GET /audit</code></td><td>POS audit log</td></tr>
+    <tr><td><code>GET /shifts/active</code> · <code>POST /shifts/open</code> · <code>POST /shifts/close</code></td><td>X-Read, open, Z-Read</td></tr>
+  </table>
+
+  <h4>Inventory — <code>/api/inventory</code> and <code>/api/v1/inventory</code> (OW, MG)</h4>
+  <table>
+    <tr><th style="width:44%">Endpoint</th><th>Purpose</th></tr>
+    <tr><td><code>GET|POST /products</code> · <code>PATCH|DELETE /products/:id</code></td><td>Products (multipart image; <code>removeImage=true</code>)</td></tr>
+    <tr><td><code>GET|POST /categories</code> · <code>PATCH|DELETE /categories/:id</code></td><td>Categories</td></tr>
+    <tr><td><code>GET /v1/inventory/alerts</code></td><td>Low-stock alerts</td></tr>
+    <tr><td><code>GET /v1/inventory/products/:id/movements</code> · <code>/movements</code> · <code>/ledger-drift</code></td><td>Stock ledger</td></tr>
+  </table>
+
+  <h4>Merchant — <code>/api/v1/merchant</code> (OW, MG unless noted)</h4>
+  <table>
+    <tr><th style="width:44%">Endpoint</th><th>Purpose</th></tr>
+    <tr><td><code>GET /analytics/dashboard</code> · <code>/analytics/summary</code></td><td>Live Pulse; owner summary</td></tr>
+    <tr><td><code>GET /analytics/forecast</code> <span class="tag t-e">Ent</span></td><td>Predictive inventory</td></tr>
+    <tr><td><code>GET /compliance/export?month=&amp;format=csv</code></td><td>BIR sales ledger</td></tr>
+    <tr><td><code>GET /inventory/alerts</code> · <code>GET /events/stream</code></td><td>Alerts; SSE</td></tr>
+    <tr><td><code>GET /payment-qrs</code> · <code>POST|DELETE /payment-qrs/:method</code></td><td>Checkout QRs</td></tr>
+    <tr><td><code>GET /shifts/status</code> · <code>POST /shifts/clock-in|clock-out</code> · <code>GET /shifts/me</code> (CA, MG, OW)</td><td>Timecards</td></tr>
+  </table>
+
+  <h4>Staff — <code>/api/v1/staff</code> (OW only)</h4>
+  <table>
+    <tr><th style="width:44%">Endpoint</th><th>Purpose</th></tr>
+    <tr><td><code>GET|POST /cashiers</code> · <code>PATCH|DELETE /cashiers/:id</code></td><td>Cashier roster</td></tr>
+    <tr><td><code>POST /cashiers/:id/pin</code> · <code>POST /cashiers/:id/close-shift</code></td><td>Set PIN; force-close shift</td></tr>
+    <tr><td><code>POST /pin-requests/:id/reject</code></td><td>Dismiss forgot-PIN request</td></tr>
+  </table>
+
+  <h4>Finance — <code>/api/v1/finance</code> (OW, MG) <span class="tag t-b">Business</span></h4>
+  <table><tr><td style="width:44%"><code>GET /summary</code> · <code>/balance-sheet</code> · <code>/cash-flow?month=</code></td><td>P&amp;L and statements</td></tr>
+  <tr><td><code>GET|POST /expenses</code> · <code>PATCH|DELETE /expenses/:id</code></td><td>Expenses</td></tr></table>
+
+  <h4>Procurement — <code>/api/v1/procurement</code> (OW, MG) <span class="tag t-b">Business</span></h4>
+  <table><tr><td style="width:44%"><code>GET /summary</code> · <code>/reorder-suggestions</code></td><td>KPIs; reorder</td></tr>
+  <tr><td><code>GET|POST /suppliers</code> · <code>PATCH|DELETE /suppliers/:id</code></td><td>Suppliers</td></tr>
+  <tr><td><code>GET|POST /purchase-orders</code> · <code>GET|DELETE /purchase-orders/:id</code></td><td>Purchase orders</td></tr>
+  <tr><td><code>POST /purchase-orders/:id/receive</code> · <code>PATCH /purchase-orders/:id/status</code></td><td>Receive; status change</td></tr></table>
+
+  <h4>Manufacturing — <code>/api/v1/manufacturing</code> (OW, MG) <span class="tag t-e">Enterprise</span></h4>
+  <table><tr><td style="width:44%"><code>GET /summary</code> · <code>GET /runs</code></td><td>KPIs; production history</td></tr>
+  <tr><td><code>GET|POST /recipes</code> · <code>GET|PATCH|DELETE /recipes/:id</code></td><td>Recipes / BOM</td></tr>
+  <tr><td><code>POST /recipes/:id/produce</code></td><td>Production run</td></tr></table>
+
+  <h4>HR — <code>/api/v1/hr</code> (OW, MG) <span class="tag t-e">Enterprise</span></h4>
+  <table><tr><td style="width:44%"><code>GET /summary</code> · <code>/overview</code> · <code>/performance</code> · <code>/labor-analytics</code> · <code>/shift-reconciliations</code></td><td>Analytics</td></tr>
+  <tr><td><code>GET|POST /employees</code> · <code>GET|PATCH|DELETE /employees/:id</code></td><td>Employees</td></tr>
+  <tr><td><code>GET|PUT /attendance</code></td><td>Attendance</td></tr>
+  <tr><td><code>GET|POST /payroll</code> · <code>GET /payroll/:id</code> · <code>GET /payroll/export[/preview]</code></td><td>Payroll runs and CSV export</td></tr>
+  <tr><td><code>GET /api/v1/ess/me</code> (any staff)</td><td>Employee self-service</td></tr></table>
+
+  <h4>CRM — <code>/api/v1/crm</code> (OW, MG, CA) <span class="tag t-b">Business</span></h4>
+  <table><tr><td style="width:44%"><code>GET /summary</code> · <code>GET /customers</code> · <code>GET /customers/search</code></td><td>KPIs, list, POS lookup</td></tr>
+  <tr><td><code>GET|PATCH|DELETE /customers/:id</code> · <code>POST /customers</code></td><td>Customer CRUD</td></tr></table>
+
+  <h4>Account — <code>/api/v1/account</code> (OW, MG)</h4>
+  <table><tr><td style="width:44%"><code>GET|PATCH /store</code> · <code>POST|DELETE /store/logo</code></td><td>Store profile</td></tr>
+  <tr><td><code>PATCH /theme</code> · <code>GET|PUT /theme-config</code> <span class="tag t-b">Business</span></td><td>Theme Studio</td></tr>
+  <tr><td><code>GET|PATCH /receipt</code></td><td>Receipt settings</td></tr>
+  <tr><td><code>GET|PATCH /profile</code> · <code>POST|DELETE /profile/avatar</code> · <code>GET|PATCH /preferences</code></td><td>Profile &amp; preferences</td></tr>
+  <tr><td><code>GET /sessions</code> · <code>DELETE /sessions/:id</code> · <code>POST /sessions/revoke-others</code> · <code>GET /login-events</code></td><td>Sessions &amp; login audit</td></tr>
+  <tr><td><code>GET /export/:dataset</code> · <code>POST /deactivate</code> (OW)</td><td>CSV export; deactivate store</td></tr></table>
+
+  <h4>Notifications — <code>/api/v1/notifications</code> (signed-in)</h4>
+  <table><tr><td style="width:44%"><code>GET /</code> · <code>GET /unread-count</code> · <code>POST /:id/read</code> · <code>POST /read-all</code></td><td>Notification bell</td></tr></table>
+
+  <h4>Super Admin — <code>/api/v1/admin</code> (SA)</h4>
+  <table><tr><td style="width:44%"><code>GET /leads</code> · <code>POST /leads/:id/approve</code> · <code>POST /leads/:id/reject</code></td><td>Lead pipeline &amp; provisioning</td></tr>
+  <tr><td><code>GET /tenants</code> · <code>PATCH /tenants/:id</code></td><td>Tenant directory</td></tr>
+  <tr><td><code>GET /analytics/billing</code> · <code>GET /analytics/subscribers</code></td><td>MRR engine</td></tr>
+  <tr><td><code>GET /health/metrics</code> · <code>GET /health/stream</code></td><td>System health</td></tr>
+  <tr><td><code>GET /compliance/summary</code> · <code>GET /compliance/export</code></td><td>Compliance register</td></tr></table>
+
+  <h4>Standard responses</h4>
+  <p><code>200/201 {ok:true,…}</code> · <code>400 {ok:false,errors}</code> validation · <code>401</code> no session · <code>402</code> trial expired · <code>403</code> wrong role, tier (feature locked) or <code>plan_limit_exceeded</code> · <code>404</code> not found / other tenant · <code>409</code> conflict (duplicate, open shift, slug collision).</p>
+</div>
+
+<!-- ============================ 27 ============================ -->
+<div class="section">
+  <h2>27. Frontend Route Map</h2>
+  <table>
+    <tr><th style="width:34%">Route</th><th>Audience</th><th>Purpose</th></tr>
+    <tr><td><code>/</code> and marketing pages</td><td>Public</td><td>Landing, products, industries, hardware, enterprise, company, blog, legal</td></tr>
+    <tr><td><code>/login</code></td><td>All staff</td><td>Google, owner password, Store ID → PIN</td></tr>
+    <tr><td><code>/auth/signup</code></td><td>Prospects</td><td>Self-serve 14-day trial sign-up</td></tr>
+    <tr><td><code>/pos</code></td><td>CA, MG, OW</td><td>POS terminal</td></tr>
+    <tr><td><code>/pos/customer-display</code></td><td>Customer</td><td>Second screen</td></tr>
+    <tr><td><code>/dashboard</code></td><td>OW, MG</td><td>Merchant home (Live Pulse)</td></tr>
+    <tr><td><code>/dashboard/summary</code>, <code>/inventory</code>, <code>/payments</code>, <code>/compliance</code></td><td>OW, MG</td><td>Core operations</td></tr>
+    <tr><td><code>/dashboard/finance</code>, <code>/procurement</code>, <code>/manufacturing</code>, <code>/hr</code>, <code>/hr/employees/[id]</code>, <code>/crm</code></td><td>OW, MG (tier-gated)</td><td>ERP modules</td></tr>
+    <tr><td><code>/dashboard/staff</code>, <code>/audit</code>, <code>/account</code></td><td>OW (staff), OW/MG</td><td>Administration</td></tr>
+    <tr><td><code>/me</code></td><td>Any staff</td><td>Employee self-service clock records</td></tr>
+    <tr><td><code>/admin</code>, <code>/admin/leads</code>, <code>/tenants</code>, <code>/billing</code>, <code>/health</code>, <code>/compliance</code></td><td>SA</td><td>Platform console</td></tr>
+    <tr><td><code>/preview/merchant</code>, <code>/preview/pos</code></td><td>Public</td><td>Stateless product previews</td></tr>
+  </table>
+</div>
+
+<!-- ============================ 28 ============================ -->
+<div class="section" style="page-break-before:auto;margin-top:18px">
+  <h2>28. Security Model</h2>
+  <ul>
+    <li><b>Tenant isolation</b>: tenant id comes only from the signed session and is threaded into every query; cross-tenant ids resolve as not found.</li>
+    <li><b>Defence in depth</b>: role guard → tier guard → trial checkpoint → zod validation → parameterised SQL (no string-built queries) → DB check constraints.</li>
+    <li><b>Credentials</b>: scrypt-hashed PINs and passwords with per-secret salts; constant-time comparison; PIN hashes never leave the DB.</li>
+    <li><b>Sessions</b>: HTTP-only cookie, CSRF <code>state</code> on OAuth, revocable sessions, login audit, 7-day expiry.</li>
+    <li><b>Transport</b>: helmet headers, explicit CORS allow-list with credentials, 100 kB JSON cap, 2 MB image cap with MIME filter.</li>
+    <li><b>Integrity</b>: immutable stock ledger, contra-entry reversals, locked serial counters, frozen Z-Read snapshots, POS audit log.</li>
+    <li><b>Infrastructure</b>: managed NeonDB (encryption at rest, backups) and HTTPS hosting.</li>
+  </ul>
+</div>
+
+<!-- ============================ 29 ============================ -->
+<div class="section">
+  <h2>29. Installation &amp; Configuration</h2>
+  <h3>Prerequisites</h3>
+  <p>Node.js 20+ (built with v22) and a NeonDB project (<code>console.neon.tech</code>).</p>
+  <h3>Backend</h3>
+  <pre>cd backend
+npm install
+cp .env.example .env        # paste the Neon DATABASE_URL
+npm run migrate             # idempotent schema
+npm run dev                 # http://localhost:4000
+# optional
+npm run seed:owner-passwords
+npm run validate:reports    # staging report harness
+npm test                    # vitest</pre>
+  <h3>Frontend</h3>
+  <pre>cd frontend
+npm install
+cp .env.example .env.local  # NEXT_PUBLIC_API_URL=http://localhost:4000
+npm run dev                 # http://localhost:3000
+npm run build &amp;&amp; npm start  # production</pre>
+  <h3>Environment variables — backend</h3>
+  <table>
+    <tr><th style="width:30%">Variable</th><th>Purpose</th></tr>
+    <tr><td><code>DATABASE_URL</code></td><td>Neon connection string (required)</td></tr>
+    <tr><td><code>PORT</code></td><td>API port (default 4000)</td></tr>
+    <tr><td><code>CORS_ORIGIN</code></td><td>Comma-separated allowed origins</td></tr>
+    <tr><td><code>FRONTEND_URL</code></td><td>Post-login redirect base</td></tr>
+    <tr><td><code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code></td><td>OAuth web client (blank = Google sign-in disabled)</td></tr>
+    <tr><td><code>GOOGLE_REDIRECT_URI</code></td><td>e.g. <code>http://localhost:4000/auth/google/callback</code></td></tr>
+    <tr><td><code>JWT_SECRET</code></td><td>Long random string; signs sessions</td></tr>
+    <tr><td><code>SESSION_COOKIE_NAME</code> / <code>COOKIE_DOMAIN</code></td><td>Cookie name (default <code>vendopos_session</code>) and optional shared domain</td></tr>
+    <tr><td><code>PUBLIC_BASE_URL</code></td><td>Origin used to build upload URLs</td></tr>
+    <tr><td><code>RESEND_API_KEY</code> / <code>EMAIL_FROM</code></td><td>Transactional e-mail (optional)</td></tr>
+  </table>
+  <h3>Environment variables — frontend</h3>
+  <table><tr><td style="width:30%"><code>NEXT_PUBLIC_API_URL</code></td><td>Base URL of the Express API</td></tr></table>
+  <h3>Bootstrapping the first Super Admin</h3>
+  <pre>INSERT INTO users (email, name, role) VALUES ('you@gmail.com', 'You', 'SUPER_ADMIN');</pre>
+  <p>Then sign in with Google using that e-mail. Merchants are created through Lead approval or self-serve sign-up.</p>
+</div>
+
+<!-- ============================ 30 ============================ -->
+<div class="section" style="page-break-before:auto;margin-top:18px">
+  <h2>30. Testing &amp; Quality Assurance</h2>
+  <ul>
+    <li><b>Backend</b>: vitest + supertest, ~288 test cases across every module (auth, tier middleware, trial, checkout, refunds, shifts, audit, stock ledger, finance reports, reorder, forecast, payroll processor, timecards, HR, CRM, manufacturing, procurement, admin, billing, health, payment QRs, theme config, e-mails). Validation seams are tested without a database.</li>
+    <li><b>Pure cores</b>: <code>finance.reports</code>, <code>procurement.reorder</code>, <code>forecast</code>, <code>payroll.processor</code>, <code>theme.config</code>, <code>tiers</code> are IO-free and fully unit-tested.</li>
+    <li><b>Static checks</b>: <code>tsc --noEmit</code> (backend and frontend), ESLint, <code>next build</code> prerenders all routes.</li>
+    <li><b>Visual</b>: Playwright screenshot scripts (<code>frontend/__shots</code>) for light/dark modals, POS and customer display.</li>
+  </ul>
+</div>
+
+<!-- ============================ 31 ============================ -->
+<div class="section">
+  <h2>31. Staging Validation Runbook</h2>
+  <p><code>backend/src/validateReports.ts</code> (<code>npm run validate:reports</code>) exercises the real HTTP runtime against a deployed environment, sweeps every active tenant via Super Admin impersonation, asserts accounting invariants and times every call. It is <b>read-only</b> and always exits 0 (report only).</p>
+  <h3>Run</h3>
+  <pre>BASE_URL=https://staging.vendopos.example \
+ADMIN_SESSION_COOKIE=&lt;vendopos_session value&gt; \
+SLOW_MS=200 CASHFLOW_MONTHS=12 \
+npm run validate:reports</pre>
+  <p>Copy the cookie value from DevTools → Application/Storage → Cookies (it is HTTP-only, so <code>document.cookie</code> will not show it).</p>
+  <table>
+    <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+    <tr><td><code>BASE_URL</code></td><td>http://localhost:4000</td><td>API origin</td></tr>
+    <tr><td><code>ADMIN_SESSION_COOKIE</code></td><td>required</td><td>Super Admin session value</td></tr>
+    <tr><td><code>SLOW_MS</code></td><td>500</td><td>Flag slow calls (⚠)</td></tr>
+    <tr><td><code>CASHFLOW_MONTHS</code></td><td>3</td><td>Months of cash flow per tenant</td></tr>
+  </table>
+  <h3>Result codes</h3>
+  <p><b>✓ ok</b> — invariants hold; <b>✗ FAIL</b> — invariant broke or non-200 (investigate before production); <b>– skip</b> — no active owner to impersonate; <b>⚠</b> — slowest call above threshold (confirm <code>npm run migrate</code> created <code>purchase_order_items_product_idx</code>).</p>
+  <h3>Invariants checked</h3>
+  <ul>
+    <li>Balance Sheet: <code>Assets ≡ Liabilities + Equity</code> — a failure is a code/data defect, not a bookkeeping quirk.</li>
+    <li>Cash Flow: <code>Opening + Net ≡ Closing</code> and <code>Inflows − Outflows ≡ Net</code> for every month checked, including months before the tenant existed (all zero).</li>
+  </ul>
+</div>
+
+<!-- ============================ 32 ============================ -->
+<div class="section">
+  <h2>32. Capability Assessment &amp; Roadmap</h2>
+  <p>Benchmarked against the <i>Comprehensive Guide to Cloud ERP &amp; Integrated POS Software</i> (gap analysis 2026-06-13):</p>
+  <div class="note"><b>Verdict:</b> over-qualified for single-location Philippine SMBs; qualified-with-gaps for multi-branch chains and batch/expiry-regulated verticals (pharmacy, grocery, food).</div>
+  <h3>Delivered</h3>
+  <ul>
+    <li>All five ERP pillars wired to the POS: Finance, Procurement, Manufacturing, HR, CRM.</li>
+    <li>Balance Sheet and Cash Flow (A1), barcode scan-to-cart (A3), low-stock → draft PO reorder (A4).</li>
+    <li>Immutable stock ledger, contra-entry voids/returns, gap-free BIR invoicing, Z-Read variance flags.</li>
+    <li>Billing/MRR, trials, health telemetry, notifications, revocable sessions, login audit, Theme Studio, thermal printing, customer display.</li>
+  </ul>
+  <h3>Open items</h3>
+  <table>
+    <tr><th style="width:8%">#</th><th style="width:34%">Item</th><th>Status / notes</th></tr>
+    <tr><td>A2</td><td>Batch / lot tracking + expiry (FIFO)</td><td>Deferred — proposed <code>product_batches</code> table, receiving stamps batch + expiry, near-expiry alerts</td></tr>
+    <tr><td>B1</td><td>Sales commissions in payroll</td><td>Needs decision — opt-in separate payroll line</td></tr>
+    <tr><td>B2</td><td>Multi-location / inter-branch transfers</td><td>Invasive (<code>location_id</code> across stock and sales); separate effort. Feature key <code>multi_location</code> is declared</td></tr>
+    <tr><td>—</td><td>Offline register mode</td><td>Feature key <code>offline_mode</code> is declared and marketed; no offline queue/sync is implemented yet</td></tr>
+    <tr><td>—</td><td>Statutory payroll deductions</td><td>SSS, PhilHealth, Pag-IBIG, withholding tax not yet computed</td></tr>
+    <tr><td>—</td><td>Subscription payment collection</td><td>MRR is reported; card / e-wallet charging is not yet wired</td></tr>
+    <tr><td>—</td><td>Cloud object storage</td><td>Uploads use local disk; swap the storage provider for S3 / Supabase / Cloudinary in production</td></tr>
+    <tr><td>—</td><td>Price alignment</td><td>Marketing (₱599 / ₱1,999) vs. billing engine (₱499 / ₱1,499)</td></tr>
+    <tr><td>C</td><td>Biometric attendance, controlled-substance register, weight pricing, promotions engine, wholesale tiers</td><td>Vertical-specific; not core</td></tr>
+  </table>
+  <p class="muted" style="margin-top:20px">— End of document —</p>
+</div>
+
+</body>
+</html>
