@@ -1,13 +1,7 @@
 import { Icon } from "./Icon";
+import { HeroPosDemo } from "./HeroPosDemo";
 
 const benefits = ["BIR-ready receipts", "GCash · Maya · QRPH", "Works offline", "Peso-first"];
-
-const products = [
-  { name: "Kapeng Barako", price: "₱120" },
-  { name: "Milk Tea", price: "₱140" },
-  { name: "Ensaymada", price: "₱85" },
-  { name: "Ube Cake", price: "₱160" },
-];
 
 export function Hero() {
   return (
@@ -58,74 +52,9 @@ export function Hero() {
             </ul>
           </div>
 
-          {/* Right: minimal mini-dashboard */}
+          {/* Right: live point-of-sale demo */}
           <div className="reveal">
-            <div className="lift rounded-xl2 bg-white hairline shadow-soft overflow-hidden">
-              <div className="flex items-center gap-2 px-5 h-11 hairline-b bg-paper">
-                <span className="w-2.5 h-2.5 rounded-full bg-ink/15" />
-                <span className="w-2.5 h-2.5 rounded-full bg-ink/15" />
-                <span className="w-2.5 h-2.5 rounded-full bg-ink/15" />
-                <span className="ml-auto text-[12px] font-semibold text-ink-faint tracking-wide">
-                  VendoPOS · Point of Sale
-                </span>
-              </div>
-              <div className="grid grid-cols-[1.35fr_1fr]">
-                {/* product list */}
-                <div className="p-4 grid grid-cols-2 gap-2.5 content-start hairline-r">
-                  {products.map((p) => (
-                    <div key={p.name} className="hairline rounded-lg p-3">
-                      <div className="w-7 h-7 rounded-md bg-brand-50 hairline mb-2.5 grid place-items-center">
-                        <Icon name="box" className="w-4 h-4 text-brand-600" strokeWidth={1.6} />
-                      </div>
-                      <div className="text-[12.5px] font-bold text-ink">{p.name}</div>
-                      <div className="text-[12px] text-ink-faint">{p.price}</div>
-                    </div>
-                  ))}
-                </div>
-                {/* cart */}
-                <div className="p-4 bg-paper flex flex-col">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-ink-faint mb-2">
-                    Current order
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-[12.5px] py-2 hairline-b">
-                      <span className="text-ink-soft">Kapeng Barako ×2</span>
-                      <span className="font-semibold">₱240</span>
-                    </div>
-                    <div className="flex justify-between text-[12.5px] py-2 hairline-b">
-                      <span className="text-ink-soft">Ensaymada ×1</span>
-                      <span className="font-semibold">₱85</span>
-                    </div>
-                    <div className="flex justify-between text-[12.5px] py-2 hairline-b">
-                      <span className="text-ink-soft">Milk Tea ×1</span>
-                      <span className="font-semibold">₱140</span>
-                    </div>
-                  </div>
-                  <div className="mt-auto pt-3">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-[12px] font-semibold text-ink-soft uppercase tracking-wide">
-                        Total
-                      </span>
-                      <span className="text-[1.4rem] font-extrabold tracking-tight">₱465</span>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-1.5">
-                      <span className="text-[11px] font-bold text-accent-600 bg-accent-50 rounded-md py-1.5 text-center">
-                        GCash
-                      </span>
-                      <span className="text-[11px] font-bold text-accent-600 bg-accent-50 rounded-md py-1.5 text-center">
-                        Maya
-                      </span>
-                      <span className="text-[11px] font-bold text-accent-600 bg-accent-50 rounded-md py-1.5 text-center">
-                        QRPH
-                      </span>
-                      <span className="text-[11px] font-bold text-ink-soft bg-white hairline rounded-md py-1.5 text-center">
-                        Cash
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <HeroPosDemo />
           </div>
         </div>
       </div>
