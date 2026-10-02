@@ -491,6 +491,57 @@ export async function deleteEmployee(id: string): Promise<Result<Record<string, 
   }
 }
 
+// ── Till access (Employee ↔ Cashier bridge, ADR 0002) ─────────────────────────
+
+/** A cashier login linked to an employee, returned after granting till access. */
+export interface TillCashier {
+  id: string;
+  name: string;
+  status: string;
+  hasPin: boolean;
+  defaultFloatCents: number;
+}
+
+/** An active cashier login with no linked employee — a candidate to link. */
+export interface UnlinkedCashier {
+  id: string;
+  name: string;
+  hasPin: boolean;
+}
+
+/** Grant input: provision a new cashier login, or link an existing unlinked one. */
+export type TillAccessInput =
+  | { mode: "create"; pin?: string; defaultFloatCents: number }
+  | { mode: "link"; cashierUserId: string };
+
+/** Active cashier logins with no linked employee — the "link existing" choices. */
+export async function listUnlinkedCashiers(): Promise<Result<{ cashiers: UnlinkedCashier[] }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/cashiers/unlinked`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Grant an employee till access (create a cashier login or link an existing one). */
+export async function grantTillAccess(
+  employeeId: string,
+  input: TillAccessInput,
+): Promise<Result<{ cashier: TillCashier }>> {
+  try {
+    return await readJson(
+      await fetch(`${BASE}/employees/${employeeId}/till-access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(input),
+      }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
 export async function saveAttendance(input: {
   employeeId: string;
   workDate: string;

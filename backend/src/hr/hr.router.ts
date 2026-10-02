@@ -7,6 +7,7 @@ import {
   employeeCreateSchema,
   employeeUpdateSchema,
   payrollRunSchema,
+  tillAccessSchema,
 } from "./hr.schema.js";
 import {
   createEmployee,
@@ -18,10 +19,13 @@ import {
   getHrSummary,
   getPayrollRun,
   getPerformance,
+  grantTillAccess,
   listEmployees,
   listPayrollRuns,
+  listUnlinkedCashiers,
   updateEmployee,
   upsertAttendance,
+  type GrantTillResult,
 } from "./hr.repository.js";
 import { DEFAULT_HOURLY_RATE_CENTS, getLaborAnalytics } from "./timecard.repository.js";
 import { buildPayrollExport } from "./payroll.export.repository.js";
@@ -245,6 +249,47 @@ hrRouter.delete("/employees/:id", async (req, res) => {
   } catch (err) {
     console.error("[hr] delete employee failed:", err);
     res.status(500).json({ ok: false, error: "Could not delete the employee." });
+  }
+});
+
+// ── Till access (Employee ↔ Cashier bridge) ───────────────────────────────────
+
+/** Active cashier logins with no linked employee — the "link existing" options. */
+hrRouter.get("/cashiers/unlinked", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    res.json({ ok: true, cashiers: await listUnlinkedCashiers(tenantId) });
+  } catch (err) {
+    console.error("[hr] list unlinked cashiers failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load cashiers." });
+  }
+});
+
+/** Maps a grant failure code to an HTTP status + user-facing message. */
+const GRANT_ERRORS: Record<Exclude<GrantTillResult, { ok: true }>["code"], [number, string]> = {
+  not_found: [404, "Employee not found."],
+  inactive: [409, "This employee is separated — reactivate them before granting till access."],
+  already_linked: [409, "This employee already has till access."],
+  cashier_not_found: [404, "That cashier login no longer exists."],
+  cashier_disabled: [409, "That cashier login is disabled — re-enable it first."],
+  cashier_taken: [409, "That cashier is already linked to another employee."],
+};
+
+hrRouter.post("/employees/:id/till-access", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ ok: false, error: "Employee not found." });
+  const parsed = tillAccessSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const result = await grantTillAccess(tenantId, req.params.id, parsed.data);
+    if (result.ok) return res.json({ ok: true, cashier: result.cashier });
+    const [status, error] = GRANT_ERRORS[result.code];
+    res.status(status).json({ ok: false, error });
+  } catch (err) {
+    console.error("[hr] grant till access failed:", err);
+    res.status(500).json({ ok: false, error: "Could not grant till access." });
   }
 });
 

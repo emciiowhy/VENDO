@@ -52,6 +52,25 @@ Employees, shifts, and payroll for a Tenant's own staff.
 **Customer Relationship Management (CRM)**:
 Tracking Customers and loyalty over time.
 
+### People & Staffing
+
+The Tenant's own workers. Two distinct records exist for the same real person and must not be conflated — they live in different tables and are unlocked by different Plans.
+
+**Employee**:
+A person on the Tenant's payroll — the full HR record (position, pay, attendance, PTO). Lives in the `employees` table. HR is an Enterprise-only Module, so Employees exist only on Enterprise Tenants.
+_Avoid_: using "Employee" to mean a till login — that is a Cashier.
+
+**Cashier**:
+A till login — a `users` row with `role = 'CASHIER'` and a 4-digit PIN that opens shifts and rings up sales. Managed in the owner's Cashiers console; unlocked by `multi_staff_roles` (Business+). A Cashier may exist with no Employee record (Business Tenants have no HR).
+_Avoid_: Staff member, user.
+
+**Till access**:
+The capability that links an Employee to a Cashier login (`employees.user_id → users.id`), so one real person is both on payroll and able to work the till. The link already drives auto-attendance and the performance report. Only meaningful on Enterprise, where both records coexist.
+
+**Duty roster**:
+Who is on the clock right now — derived live from open `cashier_shifts`. Surfaced in the cashier sign-in picker ("Who's on duty right now?"), the POS activation wizard, and the HR overview. Always data-driven; the only hardcoded roster is the marketing illustration.
+_Avoid_: calling this a schedule — it reflects who *is* on the till, not who is *rostered to be*.
+
 ### Plans
 
 The subscription tiers a Tenant can be on. Tiers differ by which Modules are unlocked. All prices in Philippine peso (₱); landing-page figures are indicative placeholders pending finalisation.
