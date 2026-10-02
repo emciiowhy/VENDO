@@ -88,7 +88,7 @@ authRouter.get("/google", (req, res) => {
   res.cookie(STATE_COOKIE, sign(state), {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: "lax",
+    sameSite: env.session.sameSite,
     path: "/",
     maxAge: STATE_MAX_AGE_MS,
   });

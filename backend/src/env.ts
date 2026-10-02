@@ -126,6 +126,25 @@ export const env = {
     cookieName: optional("SESSION_COOKIE_NAME", "vendopos_session"),
     // Set to e.g. ".vendopos.com" when frontend and API sit on split subdomains.
     cookieDomain: optional("COOKIE_DOMAIN") || undefined,
+    /**
+     * Cookie SameSite policy. When the frontend and API live on DIFFERENT origins
+     * (e.g. Vercel `vendopos.shop` → Render `api.vendopos.shop`), the post-login
+     * credentialed `fetch` to the API is cross-origin and a `Lax` cookie is not
+     * reliably sent — so the user appears logged out the instant the workspace
+     * loads. `None` (which the browser requires to be paired with Secure, true in
+     * prod) sends the cookie on those cross-origin calls; CSRF is still contained
+     * by the strict CORS allowlist. Defaults to `none` in production and `lax`
+     * locally (same-origin dev over http, where `None` without Secure is rejected).
+     * Override with COOKIE_SAMESITE if the frontend and API are same-origin.
+     */
+    sameSite: resolveSameSite(),
     maxAgeMs: 1000 * 60 * 60 * 24 * 7, // 7 days
   },
 };
+
+/** The validated SameSite value for auth cookies (see session.sameSite above). */
+function resolveSameSite(): "lax" | "strict" | "none" {
+  const raw = optional("COOKIE_SAMESITE").toLowerCase();
+  if (raw === "lax" || raw === "strict" || raw === "none") return raw;
+  return isProd ? "none" : "lax";
+}

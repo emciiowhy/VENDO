@@ -24,7 +24,7 @@ export function setSessionCookie(res: Response, token: string): void {
   res.cookie(env.session.cookieName, token, {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: "lax",
+    sameSite: env.session.sameSite,
     domain: env.session.cookieDomain,
     path: "/",
     maxAge: env.session.maxAgeMs,
@@ -35,7 +35,7 @@ export function clearSessionCookie(res: Response): void {
   res.clearCookie(env.session.cookieName, {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: "lax",
+    sameSite: env.session.sameSite,
     domain: env.session.cookieDomain,
     path: "/",
   });
