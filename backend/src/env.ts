@@ -29,6 +29,14 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000")
 const isProd = (process.env.NODE_ENV ?? "development") === "production";
 
 /**
+ * Where the browser lives. Resolved once here (not just inside `env`) so the
+ * cookie SameSite policy can key off whether we're deployed behind HTTPS —
+ * independent of NODE_ENV, which a host may not report as exactly "production".
+ */
+const frontendUrl = optional("FRONTEND_URL", corsOrigins[0] ?? "http://localhost:3000");
+const servedOverHttps = /^https:/i.test(frontendUrl);
+
+/**
  * The JWT/session-signing secret. In PRODUCTION it is mandatory and must be long
  * enough to resist offline guessing — a short or missing secret would let anyone
  * forge a session cookie (full account takeover), so we fail fast at boot rather
@@ -59,7 +67,7 @@ export const env = {
    * Where the browser lives. After the Google OAuth dance the backend redirects
    * here (to a role-specific dashboard route). Defaults to the first CORS origin.
    */
-  frontendUrl: optional("FRONTEND_URL", corsOrigins[0] ?? "http://localhost:3000"),
+  frontendUrl,
 
   /**
    * Public origin of this API, used to build absolute URLs for uploaded media
@@ -146,5 +154,8 @@ export const env = {
 function resolveSameSite(): "lax" | "strict" | "none" {
   const raw = optional("COOKIE_SAMESITE").toLowerCase();
   if (raw === "lax" || raw === "strict" || raw === "none") return raw;
-  return isProd ? "none" : "lax";
+  // Deployed behind HTTPS (split frontend/API) → None so the cross-origin auth
+  // cookie is sent; plain http (local dev) → Lax (None needs Secure, unavailable
+  // on http). Keyed off the frontend URL scheme, not NODE_ENV, to avoid misdetection.
+  return servedOverHttps ? "none" : "lax";
 }
