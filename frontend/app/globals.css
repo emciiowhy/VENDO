@@ -728,6 +728,14 @@ details[open] .faq-plus {
     opacity 0.45s ease,
     transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* Hide the scrollbar on the testimonial carousel while keeping it scroll/swipe-able. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .vp-hero-float {
     animation: none;
