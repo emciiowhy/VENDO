@@ -29,14 +29,14 @@ const CHANNELS: {
     icon: "building",
     title: "Enterprise Sales",
     blurb: "Multi-branch rollouts, migrations, and volume pricing.",
-    email: "sales@vendopos.app",
+    email: "sales@vendopos.shop",
     responseTime: "Under 2 hours",
   },
   {
     icon: "activity",
     title: "Platform Support",
     blurb: "Live merchants who need a hand at the counter, fast.",
-    email: "support@vendopos.app",
+    email: "support@vendopos.shop",
     responseTime: "Under 30 minutes",
   },
 ];

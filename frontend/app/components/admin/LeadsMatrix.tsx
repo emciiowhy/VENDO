@@ -549,7 +549,7 @@ function ProvisionDrawer({
                 spellCheck={false}
               />
               <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[12.5px] font-medium text-ink-faint pointer-events-none">
-                .vendopos.app
+                .vendopos.shop
               </span>
             </div>
           </Field>

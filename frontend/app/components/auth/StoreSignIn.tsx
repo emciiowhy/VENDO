@@ -29,7 +29,7 @@ type Cashier = { id: string; name: string };
  *   • Owner / manager → email + password (scoped to the store they just typed),
  *     or Google as a fallback. Their email maps to their tenant either way.
  */
-const SUFFIX = ".vendopos.app";
+const SUFFIX = ".vendopos.shop";
 const STORE_KEY = "vendopos_last_store";
 
 export function StoreSignIn() {

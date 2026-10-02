@@ -66,7 +66,7 @@ const ROLES: {
   },
 ];
 
-const CAREERS_EMAIL = "careers@vendopos.app";
+const CAREERS_EMAIL = "careers@vendopos.shop";
 
 export default function CareersPage() {
   return (

@@ -76,7 +76,7 @@ export default function SignupPage() {
             <p className="font-extrabold text-[15px] tracking-tight">Need a hand?</p>
             <p className="mt-1 text-[13px] text-white/80 leading-relaxed">
               We&apos;re here 7 days a week at{" "}
-              <span className="font-semibold text-white">support@vendopos.app</span> — or book a
+              <span className="font-semibold text-white">support@vendopos.shop</span> — or book a
               guided walkthrough anytime.
             </p>
           </div>
