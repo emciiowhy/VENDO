@@ -202,6 +202,40 @@ export async function updateEmployee(
   if (sets.length === 0) return getEmployee(tenantId, id);
   sets.push("updated_at = now()");
 
+  // When employment status toggles, cascade to the linked cashier login in one
+  // transaction (ADR 0002): separation disables the till login so a departed
+  // worker can't sign in; reactivation (rehire) re-enables it. The reverse
+  // direction — deleting a cashier unlinking the employee — is handled by the
+  // employees.user_id ON DELETE SET NULL foreign key, so it needs no code here.
+  if (input.isActive !== undefined) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const { rows } = await client.query<EmployeeRow>(
+        `UPDATE employees SET ${sets.join(", ")} WHERE id = $1 AND tenant_id = $2 RETURNING ${EMP_COLUMNS}`,
+        [id, tenantId, ...vals],
+      );
+      const row = rows[0];
+      if (!row) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      if (row.user_id) {
+        await client.query(
+          `UPDATE users SET status = $3 WHERE id = $1 AND tenant_id = $2 AND role = 'CASHIER'`,
+          [row.user_id, tenantId, input.isActive ? "active" : "disabled"],
+        );
+      }
+      await client.query("COMMIT");
+      return toEmployee(row);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   const { rows } = await query<EmployeeRow>(
     `UPDATE employees SET ${sets.join(", ")} WHERE id = $1 AND tenant_id = $2 RETURNING ${EMP_COLUMNS}`,
     [id, tenantId, ...vals],
