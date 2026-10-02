@@ -204,9 +204,12 @@ details[open] .faq-plus {
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }
+/* The logo belt is decorative social proof and keeps scrolling even under
+   reduced-motion (it's a gentle, non-flashing horizontal drift) — but we slow it
+   down there so it's calmer for motion-sensitive visitors. */
 @media (prefers-reduced-motion: reduce) {
   .animate-marquee-infinite {
-    animation: none;
+    animation-duration: 60s;
   }
 }
 
