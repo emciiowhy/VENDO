@@ -196,6 +196,10 @@ export interface SalesTotals {
   txns: number;
   /** Average order value = gross / txns (centavos), 0 when no sales. */
   aovCents: number;
+  /** Store expenses over the window (centavos); null when not entitled to Finance. */
+  expensesCents: number | null;
+  /** Sales − expenses (centavos); null when expenses aren't available. */
+  netCents: number | null;
 }
 
 /** Subtract `n` calendar days from a YYYY-MM-DD string (PH has no DST). */
@@ -210,8 +214,16 @@ function subtractDays(iso: string, n: number): string {
  * `sales`, scoped to the Tenant and the Manila calendar window. `grossCents`
  * sums `total_cents` across all rows so contra void/return rows net out (they
  * already net in the Pulse); `txns` counts only forward `kind = 'sale'` rows.
+ *
+ * When `includeExpenses` is set (the caller gates this on the Finance feature),
+ * store expenses over the same window are summed from the `expenses` ledger and
+ * `netCents = gross − expenses`; otherwise both are null so the UI hides them.
  */
-export async function getSalesTotals(tenantId: string, range: SalesRange): Promise<SalesTotals> {
+export async function getSalesTotals(
+  tenantId: string,
+  range: SalesRange,
+  includeExpenses = false,
+): Promise<SalesTotals> {
   const day = `(s.created_at AT TIME ZONE $2)::date`;
   const today = `(now() AT TIME ZONE $2)::date`;
   // `range` is a validated enum (never user text), safe to interpolate.
@@ -250,6 +262,22 @@ export async function getSalesTotals(tenantId: string, range: SalesRange): Promi
             ? `${to.slice(0, 7)}-01`
             : (r.first_day ?? to);
 
+  let expensesCents: number | null = null;
+  let netCents: number | null = null;
+  if (includeExpenses) {
+    // Expenses are dated by `incurred_on` (a plain DATE). "all" has no lower
+    // bound so expenses predating the first sale still count toward net.
+    const exp = await query<{ expenses: string }>(
+      `SELECT coalesce(sum(amount_cents), 0)::bigint AS expenses
+         FROM expenses
+        WHERE tenant_id = $1 AND incurred_on <= $2::date
+          AND ($3::date IS NULL OR incurred_on >= $3::date)`,
+      [tenantId, to, range === "all" ? null : from],
+    );
+    expensesCents = Number(exp.rows[0].expenses);
+    netCents = grossCents - expensesCents;
+  }
+
   return {
     range,
     from,
@@ -257,6 +285,8 @@ export async function getSalesTotals(tenantId: string, range: SalesRange): Promi
     grossCents,
     txns,
     aovCents: txns > 0 ? Math.round(grossCents / txns) : 0,
+    expensesCents,
+    netCents,
   };
 }
 
