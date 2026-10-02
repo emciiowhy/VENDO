@@ -143,7 +143,7 @@ export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean
               </ul>
               {plan.signupPlan ? (
                 <Link
-                  href={`/auth/signup?plan=${plan.signupPlan}`}
+                  href={`/signup?plan=${plan.signupPlan}`}
                   className={
                     "press mt-7 inline-flex justify-center items-center gap-2 font-semibold py-3 rounded-[11px] " +
                     (plan.featured
