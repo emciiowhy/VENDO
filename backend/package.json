@@ -14,6 +14,7 @@
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
     "seed:owner-passwords": "tsx src/seedOwnerPasswords.ts",
+    "seed:super-admin": "tsx src/seedSuperAdmin.ts",
     "validate:reports": "tsx src/validateReports.ts",
     "test": "vitest run"
   },
