@@ -20,10 +20,15 @@ declare global {
   }
 }
 
+// SameSite=None is only honoured by browsers when paired with Secure, so force
+// Secure whenever the policy is None — even if NODE_ENV detection is off — so the
+// cross-origin auth cookie can never be silently dropped for lacking Secure.
+const COOKIE_SECURE = env.isProd || env.session.sameSite === "none";
+
 export function setSessionCookie(res: Response, token: string): void {
   res.cookie(env.session.cookieName, token, {
     httpOnly: true,
-    secure: env.isProd,
+    secure: COOKIE_SECURE,
     sameSite: env.session.sameSite,
     domain: env.session.cookieDomain,
     path: "/",
@@ -34,7 +39,7 @@ export function setSessionCookie(res: Response, token: string): void {
 export function clearSessionCookie(res: Response): void {
   res.clearCookie(env.session.cookieName, {
     httpOnly: true,
-    secure: env.isProd,
+    secure: COOKIE_SECURE,
     sameSite: env.session.sameSite,
     domain: env.session.cookieDomain,
     path: "/",
