@@ -107,7 +107,13 @@ export function ClockWidget({
 
   const elapsedSeconds =
     active && nowMs !== null ? Math.max(0, Math.floor((nowMs - Date.parse(active.clockIn)) / 1000)) : null;
-  const elapsedMinutes = elapsedSeconds !== null ? elapsedSeconds / 60 : active?.durationMinutes ?? 0;
+  // Live elapsed string for the collapsed header pill. Uses seconds (H:MM:SS) so
+  // it visibly ticks every second — the old minute-only format read as frozen for
+  // the first minute after clocking in. Falls back to the server's minute count
+  // for the single frame before the first client tick seeds `nowMs` (so the first
+  // render still matches the server — no hydration mismatch).
+  const pillElapsed =
+    elapsedSeconds !== null ? formatClock(elapsedSeconds) : formatMinutes(active?.durationMinutes ?? 0);
 
   const doClockIn = useCallback(async () => {
     setBusy(true);
@@ -156,7 +162,7 @@ export function ClockWidget({
           <Icon name="clock" className="w-[18px] h-[18px]" strokeWidth={1.7} />
         )}
         <span className="hidden lg:inline tabular-nums">
-          {!loaded ? "Clock" : active ? `On the clock · ${formatMinutes(elapsedMinutes)}` : "Clock in"}
+          {!loaded ? "Clock" : active ? `On the clock · ${pillElapsed}` : "Clock in"}
         </span>
       </button>
 
