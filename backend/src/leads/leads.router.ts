@@ -1,7 +1,14 @@
 import { Router } from "express";
-import { enterpriseIntakeSchema, leadSchema } from "./leads.schema.js";
-import { insertLead, listLeads } from "./leads.repository.js";
+import { enterpriseIntakeSchema, leadSchema, verifyEmailSchema } from "./leads.schema.js";
+import {
+  insertLead,
+  listLeads,
+  setLeadVerifyToken,
+  verifyLeadEmailByToken,
+} from "./leads.repository.js";
 import { sendEnterpriseLeadAlertEmail } from "../notifications/enterpriseLeadEmail.js";
+import { sendLeadVerificationEmail } from "../notifications/verificationEmail.js";
+import { createVerifyToken, hashVerifyToken } from "./leadVerification.js";
 import { leadLimiter } from "../auth/rateLimit.js";
 import { requireRole } from "../auth/auth.middleware.js";
 
@@ -33,13 +40,49 @@ leadsRouter.post("/", leadLimiter, async (req, res) => {
 
   try {
     const lead = await insertLead(parsed.data);
-    // First cut: persisted to NeonDB. A future iteration also notifies the Super Admin.
+    // Unless this address is already confirmed (a returning prospect), mint a
+    // fresh single-use token and email a verification link. Best-effort: store
+    // the hash, then fire the mail without blocking the response — a mail hiccup
+    // must never fail the submission (and with no RESEND_API_KEY it just logs).
+    if (!lead.emailVerified) {
+      const token = createVerifyToken();
+      await setLeadVerifyToken(lead.id, token.hash, token.expiresAt);
+      void sendLeadVerificationEmail({ name: lead.name, email: lead.email, token: token.raw });
+    }
     return res.status(201).json({ ok: true, lead });
   } catch (err) {
     console.error("[leads] failed to persist lead:", err);
     return res
       .status(500)
       .json({ ok: false, error: "Something went wrong saving your request. Please try again." });
+  }
+});
+
+/**
+ * POST /api/leads/verify-email — confirm a prospect owns their email.
+ *
+ * Public (the link lands here from the email) and rate-limited. The frontend
+ * /verify-email page posts the raw token; we hash it and consume a matching,
+ * unexpired, unconsumed lead token. A neutral response either way so the endpoint
+ * never discloses which emails are in the pipeline.
+ */
+leadsRouter.post("/verify-email", leadLimiter, async (req, res) => {
+  const parsed = verifyEmailSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: "Missing verification token." });
+  }
+  try {
+    const outcome = await verifyLeadEmailByToken(hashVerifyToken(parsed.data.token));
+    if (!outcome.ok) {
+      return res.status(400).json({
+        ok: false,
+        error: "This link is invalid or has expired. If you already confirmed, you're all set.",
+      });
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[leads] email verification failed:", err);
+    return res.status(500).json({ ok: false, error: "Could not verify your email. Please try again." });
   }
 });
 

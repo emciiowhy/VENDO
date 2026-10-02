@@ -66,4 +66,10 @@ export interface AdminLead {
    * keep the password field optional. The hash itself is never sent to the client.
    */
   hasOwnerPassword: boolean;
+  /**
+   * True once the prospect confirmed ownership of their email via the link sent
+   * on their demo request. The drawer surfaces this so an operator can prefer
+   * approving verified leads (a fake/typo'd address never verifies).
+   */
+  emailVerified: boolean;
 }

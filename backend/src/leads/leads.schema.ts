@@ -77,4 +77,13 @@ export type EnterpriseIntakeInput = z.infer<typeof enterpriseIntakeSchema>;
 export interface Lead extends Omit<LeadInput, "password"> {
   id: string;
   createdAt: string;
+  /** True once the prospect has confirmed ownership of their email address. */
+  emailVerified: boolean;
 }
+
+/** The token a /verify-email click posts back to confirm an address. */
+export const verifyEmailSchema = z.object({
+  token: z.string().trim().min(1, "Missing verification token.").max(512),
+});
+
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;

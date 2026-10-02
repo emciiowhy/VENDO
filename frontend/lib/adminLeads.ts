@@ -21,6 +21,8 @@ export interface Lead {
   message: string | null;
   /** True when the prospect set their own owner password on the demo request. */
   hasOwnerPassword: boolean;
+  /** True once the prospect confirmed ownership of their email via the sent link. */
+  emailVerified: boolean;
 }
 
 export interface ProvisionPayload {

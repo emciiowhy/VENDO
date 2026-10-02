@@ -41,6 +41,25 @@ export async function submitLead(payload: LeadPayload): Promise<LeadResult> {
   }
 }
 
+export type VerifyEmailResult = { ok: true } | { ok: false; error?: string };
+
+/**
+ * Confirm a prospect owns their email. The verification link in the demo-request
+ * email lands on the frontend /verify-email page, which posts the raw token here.
+ */
+export async function verifyLeadEmail(token: string): Promise<VerifyEmailResult> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/leads/verify-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    return (await res.json()) as VerifyEmailResult;
+  } catch {
+    return { ok: false, error: "Could not reach the server. Please try again." };
+  }
+}
+
 /**
  * The Enterprise concierge intake. Distinct from the demo lead: Enterprise never
  * self-serves a trial, so this funnel captures the extra operational detail a rep
