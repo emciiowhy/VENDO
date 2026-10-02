@@ -18,8 +18,12 @@ import { env } from "../env.js";
  * upstream changes.
  */
 
-/** Absolute root of the static uploads tree; app.ts serves this at /uploads. */
-export const UPLOADS_ROOT = join(process.cwd(), "uploads");
+/**
+ * Absolute root of the static uploads tree; app.ts serves this at /uploads.
+ * Honors UPLOADS_DIR (e.g. a mounted persistent disk in production) and falls
+ * back to `./uploads` under the process CWD for local dev.
+ */
+export const UPLOADS_ROOT = env.uploadsDir || join(process.cwd(), "uploads");
 const PRODUCTS_DIR = join(UPLOADS_ROOT, "products");
 
 const EXT_BY_MIME: Record<string, string> = {
