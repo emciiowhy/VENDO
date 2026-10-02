@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # screenshot harness session tokens — holds a live vendopos_session JWT, never commit
 __shots/tokens.json

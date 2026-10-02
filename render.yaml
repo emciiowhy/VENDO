@@ -1,0 +1,55 @@
+# Render Blueprint — VendoPOS API (Express backend).
+# Render dashboard → New → Blueprint → pick this repo. Values marked
+# `sync: false` are prompted for on first deploy (secrets never live in git).
+# Replace yourdomain.com with your real Hostinger domain before applying.
+services:
+  - type: web
+    name: vendopos-api
+    runtime: node
+    rootDir: backend
+    region: singapore          # closest Render region to Neon ap-southeast-1 and PH users
+    # "starter" (paid) is recommended: the free plan sleeps after 15 min idle
+    # (≈50 s cold start at the till) and cannot attach the uploads disk below.
+    plan: starter
+    # devDependencies (tsc, tsx) are needed to build even with NODE_ENV=production.
+    # The migration is idempotent, so running it on every deploy is safe.
+    buildCommand: npm ci --include=dev && npm run build && node dist/migrate.js
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    # Product images, logos, avatars and payment QRs are written to ./uploads.
+    # Render's filesystem is wiped on every deploy, so mount a persistent disk there.
+    disk:
+      name: vendopos-uploads
+      mountPath: /opt/render/project/src/backend/uploads
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://yourdomain.com
+      - key: CORS_ORIGIN
+        value: https://yourdomain.com,https://www.yourdomain.com
+      - key: COOKIE_DOMAIN
+        value: .yourdomain.com
+      - key: SESSION_COOKIE_NAME
+        value: vendopos_session
+      - key: PUBLIC_BASE_URL
+        value: https://api.yourdomain.com
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://api.yourdomain.com/auth/google/callback
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: VendoPOS <no-reply@yourdomain.com>
+      - key: ADMIN_ALERT_EMAIL
+        sync: false
