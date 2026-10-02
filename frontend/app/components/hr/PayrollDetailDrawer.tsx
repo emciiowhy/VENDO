@@ -67,33 +67,43 @@ export function PayrollDetailDrawer({ id, onClose }: { id: string; onClose: () =
             </div>
 
             <div className="p-6 space-y-5">
-              <div className="rounded-xl2 bg-brand-50 p-4 text-center">
-                <div className="text-[12px] font-semibold text-brand-600">Total gross pay</div>
-                <div className="mt-1 text-[1.9rem] font-extrabold tracking-tightest tabular-nums text-brand-700">
-                  {formatCents(run.totalGrossCents)}
+              <div className="rounded-xl2 bg-accent-50 dark:bg-accent-500/10 p-4 text-center">
+                <div className="text-[12px] font-semibold text-accent-700 dark:text-accent-400">Total net pay</div>
+                <div className="mt-1 text-[1.9rem] font-extrabold tracking-tightest tabular-nums text-accent-700 dark:text-accent-300">
+                  {formatCents(run.totalNetCents)}
+                </div>
+                <div className="mt-1 text-[11.5px] text-ink-soft tabular-nums">
+                  Gross {formatCents(run.totalGrossCents)} − deductions {formatCents(run.totalDeductionsCents)}
                 </div>
               </div>
 
               <div className="rounded-xl2 hairline overflow-hidden">
-                <table className="w-full text-[13px]">
+                <table className="w-full text-[12.5px]">
                   <thead>
-                    <tr className="text-left text-[11.5px] font-semibold text-ink-faint bg-paper/50">
+                    <tr className="text-left text-[11px] font-semibold text-ink-faint bg-paper/50">
                       <th className="px-3 py-2 font-semibold">Employee</th>
-                      <th className="px-2 py-2 font-semibold">Basis</th>
-                      <th className="px-3 py-2 font-semibold text-right">Gross</th>
+                      <th className="px-2 py-2 font-semibold text-right">Gross</th>
+                      <th className="px-2 py-2 font-semibold text-right">Deduct.</th>
+                      <th className="px-3 py-2 font-semibold text-right">Net</th>
                     </tr>
                   </thead>
                   <tbody>
                     {run.items.map((it) => (
-                      <tr key={it.id} className="border-t border-ink/5">
+                      <tr key={it.id} className="border-t border-ink/5 align-top">
                         <td className="px-3 py-2.5">
                           <span className="font-semibold">{it.name}</span>
                           <span className="block text-[11px] text-ink-faint">
-                            {it.payType} · {formatCents(it.payRateCents)}
+                            {basisLabel(it.payType, it.basisQty)}
                           </span>
                         </td>
-                        <td className="px-2 py-2.5 text-ink-soft">{basisLabel(it.payType, it.basisQty)}</td>
-                        <td className="px-3 py-2.5 text-right font-bold tabular-nums">{formatCents(it.grossCents)}</td>
+                        <td className="px-2 py-2.5 text-right tabular-nums">{formatCents(it.grossCents)}</td>
+                        <td
+                          className="px-2 py-2.5 text-right tabular-nums text-rose-600"
+                          title={`SSS ${formatCents(it.sssCents)} · PhilHealth ${formatCents(it.philhealthCents)} · Pag-IBIG ${formatCents(it.pagibigCents)} · Tax ${formatCents(it.withholdingTaxCents)}`}
+                        >
+                          −{formatCents(it.totalDeductionsCents)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-bold tabular-nums">{formatCents(it.netCents)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -106,7 +116,8 @@ export function PayrollDetailDrawer({ id, onClose }: { id: string; onClose: () =
                 </div>
               )}
               <p className="text-[11.5px] text-ink-faint">
-                Gross pay only — statutory deductions (SSS, PhilHealth, Pag-IBIG, tax) are not yet applied.
+                Net = gross − employee-share statutory deductions (SSS, PhilHealth, Pag-IBIG, BIR
+                withholding), computed on 2025 schedules. Hover a deduction for the breakdown.
               </p>
             </div>
           </>

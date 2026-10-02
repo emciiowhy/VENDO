@@ -338,6 +338,13 @@ export interface PayrollItem {
   payRateCents: number;
   basisQty: number;
   grossCents: number;
+  // Employee-side statutory deductions, derived from gross (see deductions.ts).
+  sssCents: number;
+  philhealthCents: number;
+  pagibigCents: number;
+  withholdingTaxCents: number;
+  totalDeductionsCents: number;
+  netCents: number;
 }
 
 export interface PayrollRunSummary {
@@ -353,4 +360,8 @@ export interface PayrollRunSummary {
 export interface PayrollRunDetail extends PayrollRunSummary {
   note: string | null;
   items: PayrollItem[];
+  /** Σ employee statutory deductions across the run (centavos). */
+  totalDeductionsCents: number;
+  /** Σ take-home net pay across the run (centavos). */
+  totalNetCents: number;
 }
