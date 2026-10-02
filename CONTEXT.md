@@ -57,10 +57,10 @@ Tracking Customers and loyalty over time.
 The subscription tiers a Tenant can be on. Tiers differ by which Modules are unlocked. All prices in Philippine peso (₱); landing-page figures are indicative placeholders pending finalisation.
 
 **Starter**:
-POS + Inventory. For single-location coffee shops and small retailers. Indicative ₱499/mo (placeholder).
+POS + Inventory. For single-location coffee shops and small retailers. Indicative ₱599/mo (placeholder).
 
 **Business**:
-Starter plus Procurement & Supply Chain, CRM, and Finance & Accounting. For growing multi-staff retailers and restaurants. Indicative ₱1,499/mo (placeholder).
+Starter plus Procurement & Supply Chain, CRM, and Finance & Accounting. For growing multi-staff retailers and restaurants. Indicative ₱1,999/mo (placeholder).
 
 **Enterprise**:
 The full ERP — adds Manufacturing, HR, and multi-location. Pricing is "Contact us" (custom).

@@ -27,8 +27,8 @@ export interface PlanSpec {
 }
 
 export const PLAN_SPECS: Record<Plan, PlanSpec> = {
-  starter: { key: "starter", label: "Starter", priceCents: 49_900, productLimit: 30 },
-  business: { key: "business", label: "Business", priceCents: 149_900, productLimit: 300 },
+  starter: { key: "starter", label: "Starter", priceCents: 59_900, productLimit: 30 },
+  business: { key: "business", label: "Business", priceCents: 199_900, productLimit: 300 },
   enterprise: { key: "enterprise", label: "Enterprise", priceCents: 799_900, productLimit: null },
 };
 

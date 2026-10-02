@@ -276,11 +276,10 @@
   <h3>Plan catalogue (backend <code>billing/plans.ts</code>)</h3>
   <table>
     <tr><th>Plan</th><th>Billing price / month</th><th>Product capacity</th><th>Target</th></tr>
-    <tr><td><span class="tag t-s">Starter</span></td><td>₱499.00 (49,900 centavos)</td><td>30 products</td><td>Single-location coffee shops, small retailers</td></tr>
-    <tr><td><span class="tag t-b">Business</span></td><td>₱1,499.00 (149,900 centavos)</td><td>300 products</td><td>Growing multi-staff retailers and restaurants</td></tr>
+    <tr><td><span class="tag t-s">Starter</span></td><td>₱599.00 (59,900 centavos)</td><td>30 products</td><td>Single-location coffee shops, small retailers</td></tr>
+    <tr><td><span class="tag t-b">Business</span></td><td>₱1,999.00 (199,900 centavos)</td><td>300 products</td><td>Growing multi-staff retailers and restaurants</td></tr>
     <tr><td><span class="tag t-e">Enterprise</span></td><td>₱7,999.00 (799,900 centavos) for MRR; "Contact us" publicly</td><td>Unlimited</td><td>Full ERP, manufacturing, HR, multi-location</td></tr>
   </table>
-  <div class="warn"><b>Pricing note.</b> The public marketing pricing page currently advertises <b>₱599</b> (Starter) and <b>₱1,999</b> (Business), while the backend MRR engine uses ₱499 and ₱1,499. Both are marked as indicative placeholders pending finalisation — align <code>billing/plans.ts</code> with <code>Pricing.tsx</code> once prices are final.</div>
   <p>Exceeding capacity on <code>POST /api/inventory/products</code> returns <code>403 {"code":"plan_limit_exceeded"}</code>. The platform also models a <b>0.5%</b> transaction-fee rate on merchant GMV for fee-revenue charts.</p>
 
   <h3>Feature matrix (backend <code>lib/tiers.ts</code>, mirrored in <code>frontend/lib/tiers.ts</code>)</h3>
@@ -923,7 +922,6 @@ npm run validate:reports</pre>
     <tr><td>—</td><td>Statutory payroll deductions</td><td>SSS, PhilHealth, Pag-IBIG, withholding tax not yet computed</td></tr>
     <tr><td>—</td><td>Subscription payment collection</td><td>MRR is reported; card / e-wallet charging is not yet wired</td></tr>
     <tr><td>—</td><td>Cloud object storage</td><td>Uploads use local disk; swap the storage provider for S3 / Supabase / Cloudinary in production</td></tr>
-    <tr><td>—</td><td>Price alignment</td><td>Marketing (₱599 / ₱1,999) vs. billing engine (₱499 / ₱1,499)</td></tr>
     <tr><td>C</td><td>Biometric attendance, controlled-substance register, weight pricing, promotions engine, wholesale tiers</td><td>Vertical-specific; not core</td></tr>
   </table>
   <p class="muted" style="margin-top:20px">— End of document —</p>

@@ -12,8 +12,8 @@ export type Plan = "starter" | "business" | "enterprise";
 
 /** Indicative monthly price per plan, in whole pesos (mirrors PLAN_SPECS). */
 export const PLAN_PRICE: Record<Plan, number> = {
-  starter: 499,
-  business: 1499,
+  starter: 599,
+  business: 1999,
   enterprise: 7999,
 };
 
