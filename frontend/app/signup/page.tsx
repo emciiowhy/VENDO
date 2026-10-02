@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { IconSprite, Icon } from "../../components/Icon";
-import { BrandMark } from "../../components/BrandMark";
-import { SignupForm } from "../../components/auth/SignupForm";
+import { IconSprite, Icon } from "../components/Icon";
+import { BrandMark } from "../components/BrandMark";
+import { SignupForm } from "../components/auth/SignupForm";
 
 export const metadata: Metadata = {
   title: "Start your free trial — VendoPOS",
