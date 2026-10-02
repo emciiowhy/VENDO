@@ -460,17 +460,21 @@ export function StoreSignIn() {
                   ))}
                 </div>
               ) : !cashiers || cashiers.length === 0 ? (
-                <div className="py-2 text-center">
-                  <p className="text-[13px] text-ink-soft">
-                    No cashier profiles found for this store.
+                <div className="py-3 text-center">
+                  <div className="mx-auto mb-3 grid place-items-center w-11 h-11 rounded-full bg-amber-50 text-amber-600">
+                    <Icon name="users" className="w-5 h-5" strokeWidth={1.8} />
+                  </div>
+                  <p className="text-[13.5px] font-bold text-ink">No cashiers set up yet</p>
+                  <p className="mx-auto mt-1 max-w-[30ch] text-[12.5px] text-ink-soft leading-relaxed">
+                    The store owner needs to add a cashier first. Sign in as the owner, then add
+                    cashiers from the dashboard under <span className="font-semibold">Cashiers</span>.
                   </p>
                   <button
                     type="button"
-                    onClick={() => pickCashier(null)}
-                    className="press mt-3 inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] py-2.5 rounded-[10px] shadow-btn"
+                    onClick={() => setPhase("owner")}
+                    className="press mt-4 inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] py-2.5 rounded-[10px] shadow-btn"
                   >
-                    Continue to PIN
-                    <Icon name="chevron" className="w-4 h-4 -mr-1" strokeWidth={2} />
+                    Sign in as owner to set up
                   </button>
                 </div>
               ) : (
