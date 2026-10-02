@@ -702,3 +702,34 @@ details[open] .faq-plus {
     transition: none;
   }
 }
+
+/* ---- Hero POS demo (landing) ----------------------------------------------
+   The animated point-of-sale card in the hero. The floating "today" stat gently
+   rises and settles so the composition reads as live rather than a flat mockup;
+   order rows ease in as they're "rung up" (driven by React state). All motion is
+   decorative and fully disabled under reduced-motion. */
+@keyframes vp-hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+.vp-hero-float {
+  animation: vp-hero-float 4.5s ease-in-out infinite;
+}
+.vp-hero-line {
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .vp-hero-float {
+    animation: none;
+  }
+  .vp-hero-line {
+    transition: none;
+  }
+}
