@@ -5,12 +5,16 @@
   "description": "VendoPOS API — Lead capture seam (POST /api/leads) backed by NeonDB",
   "type": "module",
   "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
     "seed:owner-passwords": "tsx src/seedOwnerPasswords.ts",
+    "seed:super-admin": "tsx src/seedSuperAdmin.ts",
     "validate:reports": "tsx src/validateReports.ts",
     "test": "vitest run"
   },

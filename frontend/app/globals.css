@@ -204,9 +204,12 @@ details[open] .faq-plus {
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }
+/* The logo belt is decorative social proof and keeps scrolling even under
+   reduced-motion (it's a gentle, non-flashing horizontal drift) — but we slow it
+   down there so it's calmer for motion-sensitive visitors. */
 @media (prefers-reduced-motion: reduce) {
   .animate-marquee-infinite {
-    animation: none;
+    animation-duration: 60s;
   }
 }
 
@@ -699,6 +702,37 @@ details[open] .faq-plus {
 @media (prefers-reduced-motion: reduce) {
   .theme-root,
   .theme-root * {
+    transition: none;
+  }
+}
+
+/* ---- Hero POS demo (landing) ----------------------------------------------
+   The animated point-of-sale card in the hero. The floating "today" stat gently
+   rises and settles so the composition reads as live rather than a flat mockup;
+   order rows ease in as they're "rung up" (driven by React state). All motion is
+   decorative and fully disabled under reduced-motion. */
+@keyframes vp-hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+.vp-hero-float {
+  animation: vp-hero-float 4.5s ease-in-out infinite;
+}
+.vp-hero-line {
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .vp-hero-float {
+    animation: none;
+  }
+  .vp-hero-line {
     transition: none;
   }
 }

@@ -1,44 +1,34 @@
-# Render Blueprint — VendoPOS API (Express backend).
-# Render dashboard → New → Blueprint → pick this repo. Values marked
-# `sync: false` are prompted for on first deploy (secrets never live in git).
-# Domain: vendopos.shop (Hostinger) — app at vendopos.shop, API at api.vendopos.shop.
+# Render Blueprint — VendoPOS backend API (Express + Postgres/Neon).
+# The Next.js frontend deploys separately on Vercel (root dir: frontend),
+# with NEXT_PUBLIC_API_URL=https://api.vendopos.shop.
+#
+# After the first apply: add the custom domain `api.vendopos.shop` to this
+# service in the Render dashboard, and point a CNAME there from Hostinger.
 services:
   - type: web
     name: vendopos-api
     runtime: node
     rootDir: backend
-    region: singapore          # closest Render region to Neon ap-southeast-1 and PH users
-    # "starter" (paid) is recommended: the free plan sleeps after 15 min idle
-    # (≈50 s cold start at the till) and cannot attach the uploads disk below.
-    plan: starter
-    # devDependencies (tsc, tsx) are needed to build even with NODE_ENV=production.
-    # The migration is idempotent, so running it on every deploy is safe.
-    buildCommand: npm ci --include=dev && npm run build && node dist/migrate.js
-    startCommand: node dist/index.js
+    region: singapore          # co-located with Neon ap-southeast-1 (low latency)
+    plan: free                 # free idles/cold-starts; bump to "starter" for always-on + a disk
+    branch: main
     healthCheckPath: /health
-    # Product images, logos, avatars and payment QRs are written to ./uploads.
-    # Render's filesystem is wiped on every deploy, so mount a persistent disk there.
-    disk:
-      name: vendopos-uploads
-      mountPath: /opt/render/project/src/backend/uploads
-      sizeGB: 1
+    # --include=dev so TypeScript (a devDependency) is installed even though
+    # NODE_ENV=production; compile to dist/; then apply idempotent migrations
+    # (migrate.ts uses CREATE/ALTER ... IF NOT EXISTS, so it's safe every deploy).
+    buildCommand: npm install --include=dev && npm run build && npm run migrate
+    startCommand: npm start
     envVars:
-      - key: NODE_VERSION
-        value: "22"
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        sync: false
+        sync: false            # paste your rotated Neon connection string when prompted
       - key: JWT_SECRET
-        generateValue: true
-      - key: FRONTEND_URL
-        value: https://vendopos.shop
+        generateValue: true    # Render generates a strong random secret (>=32 chars)
       - key: CORS_ORIGIN
         value: https://vendopos.shop,https://www.vendopos.shop
-      - key: COOKIE_DOMAIN
-        value: .vendopos.shop
-      - key: SESSION_COOKIE_NAME
-        value: vendopos_session
+      - key: FRONTEND_URL
+        value: https://vendopos.shop
       - key: PUBLIC_BASE_URL
         value: https://api.vendopos.shop
       - key: GOOGLE_CLIENT_ID
@@ -48,8 +38,23 @@ services:
       - key: GOOGLE_REDIRECT_URI
         value: https://api.vendopos.shop/auth/google/callback
       - key: RESEND_API_KEY
-        sync: false
+        sync: false            # leave blank to log emails instead of sending
       - key: EMAIL_FROM
-        value: VendoPOS <no-reply@vendopos.shop>
+        value: VendoPOS <noreply@vendopos.shop>
       - key: ADMIN_ALERT_EMAIL
         sync: false
+
+# ── Persisting uploaded images (product photos + payment QRs) ─────────────────
+# The free instance disk is EPHEMERAL: uploads vanish on every deploy/restart.
+# To keep them, do all three:
+#   1. change `plan: free` above to `plan: starter` (or higher),
+#   2. add this env var to the list above:  - key: UPLOADS_DIR  value: /data/uploads
+#   3. add this block to the service (same indent level as envVars):
+#
+#        disk:
+#          name: uploads
+#          mountPath: /data/uploads
+#          sizeGB: 1
+#
+# (Alternatively, swap the bodies of products.storage.ts / paymentQr.storage.ts
+#  for an object-store client — S3 / Supabase Storage / Cloudinary.)

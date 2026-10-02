@@ -62,7 +62,6 @@ async function issueSession(
 
 export const authRouter = Router();
 
-const STATE_COOKIE = "vendopos_oauth_state";
 const STATE_MAX_AGE_MS = 1000 * 60 * 10; // 10 minutes to complete the dance
 
 /** Bounce the browser to the frontend /login with a machine-readable reason. */
@@ -75,23 +74,18 @@ function failToLogin(res: import("express").Response, reason: string): void {
 /**
  * GET /auth/google — kick off the OAuth dance.
  *
- * Mints a CSRF `state` nonce, stashes a signed copy in a short-lived HTTP-only
- * cookie, and redirects to the Google consent screen. Next.js links here
- * directly (a plain anchor), so the whole flow is top-level navigation and the
- * client never touches a token.
+ * Uses a STATELESS CSRF `state`: a signed, timestamped nonce carried only in the
+ * URL (not a cookie). This survives a cross-origin proxy (e.g. the Vercel rewrite
+ * that fronts this API on the app's own origin), where a short-lived state cookie
+ * may not be reliably stored/returned across the Google round-trip. The HMAC
+ * signature (JWT secret) makes the value unforgeable and the embedded timestamp
+ * bounds its lifetime, so CSRF protection holds without a cookie.
  */
 authRouter.get("/google", (req, res) => {
   if (!googleConfigured()) {
     return failToLogin(res, "auth_unconfigured");
   }
-  const state = randomState();
-  res.cookie(STATE_COOKIE, sign(state), {
-    httpOnly: true,
-    secure: env.isProd,
-    sameSite: "lax",
-    path: "/",
-    maxAge: STATE_MAX_AGE_MS,
-  });
+  const state = sign(`${randomState()}.${Date.now()}`);
   res.redirect(buildConsentUrl(state));
 });
 
@@ -108,12 +102,11 @@ authRouter.get("/google/callback", async (req, res) => {
   if (error) return failToLogin(res, "google_denied");
   if (!googleConfigured()) return failToLogin(res, "auth_unconfigured");
 
-  // CSRF: the state echoed by Google must match our signed cookie, then burn it.
-  const cookieState = unsign(
-    (req.cookies as Record<string, string> | undefined)?.[STATE_COOKIE],
-  );
-  res.clearCookie(STATE_COOKIE, { path: "/" });
-  if (!state || !cookieState || state !== cookieState) {
+  // CSRF: verify the stateless state token Google echoed back — signature intact
+  // (unforgeable) and issued within the allowed window (not stale/replayed).
+  const unsigned = state ? unsign(state) : null;
+  const issuedAt = unsigned ? Number(unsigned.split(".")[1]) : NaN;
+  if (!unsigned || !Number.isFinite(issuedAt) || Date.now() - issuedAt > STATE_MAX_AGE_MS) {
     return failToLogin(res, "bad_state");
   }
   if (!code) return failToLogin(res, "missing_code");

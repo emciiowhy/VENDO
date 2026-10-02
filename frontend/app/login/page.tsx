@@ -89,7 +89,7 @@ export default function LoginPage() {
             <p className="font-extrabold text-[15px] tracking-tight">Questions?</p>
             <p className="mt-1 text-[13px] text-white/80 leading-relaxed">
               Our team is here 7 days a week. Reach us at{" "}
-              <span className="font-semibold text-white">support@vendopos.app</span> by chat, email,
+              <span className="font-semibold text-white">support@vendopos.shop</span> by chat, email,
               or phone.
             </p>
           </div>

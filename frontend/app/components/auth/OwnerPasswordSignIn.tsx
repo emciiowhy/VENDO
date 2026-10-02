@@ -11,7 +11,7 @@ import { passwordLogin } from "@/lib/auth";
  * reveals the Store ID + email + password fields. The Store ID scopes the
  * lookup to one tenant before the email + password are checked.
  */
-const SUFFIX = ".vendopos.app";
+const SUFFIX = ".vendopos.shop";
 const STORE_KEY = "vendopos_last_store";
 
 export function OwnerPasswordSignIn() {

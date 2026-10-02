@@ -63,6 +63,12 @@ export const MEDIA = {
   "hardware-hero": unsplash("1498050108023-c5249f4df085"),
   "hardware-bundle": unsplash("1441986300917-64674bd600d8"),
 
+  // Hero POS demo product thumbnails (small, decorative — verified 200)
+  "hero-coffee": unsplash("1495474472287-4d71bcdd2085", 200, 200),
+  "hero-milktea": unsplash("1558857563-b371033873b8", 200, 200),
+  "hero-ensaymada": unsplash("1509440159596-0249088772ff", 200, 200),
+  "hero-ubecake": unsplash("1578985545062-69928b1d9587", 200, 200),
+
   // Company
   team: unsplash("1600880292203-757bb62b4baf"),
   story: unsplash("1507003211169-0a1dd7228f2d"),

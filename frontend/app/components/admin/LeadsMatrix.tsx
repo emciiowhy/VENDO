@@ -203,7 +203,10 @@ export function LeadsMatrix() {
                       {l.businessType ? <> · {l.businessType}</> : null}
                     </div>
                   </td>
-                  <td className={"px-4 py-3.5 text-[13px] text-ink-soft " + tone}>{l.email}</td>
+                  <td className={"px-4 py-3.5 text-[13px] text-ink-soft " + tone}>
+                    <div>{l.email}</div>
+                    <EmailVerifyBadge verified={l.emailVerified} />
+                  </td>
                   <td className={"px-4 py-3.5 whitespace-nowrap " + tone}>
                     <div className="text-[13px] text-ink-soft">{formatDate(l.requestedAt)}</div>
                     <div className="text-[11.5px] text-ink-faint">{relativeTime(l.requestedAt)}</div>
@@ -284,6 +287,25 @@ export function LeadStatusBadge({ status }: { status: LeadStatus }) {
     >
       <span className={"w-1.5 h-1.5 rounded-full " + m.dot} />
       {m.label}
+    </span>
+  );
+}
+
+/**
+ * Tiny indicator of whether the prospect confirmed their email. A fake or typo'd
+ * address never verifies, so this tells the operator which leads are safe to
+ * provision at a glance.
+ */
+export function EmailVerifyBadge({ verified }: { verified: boolean }) {
+  return verified ? (
+    <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-accent-600">
+      <Icon name="check" className="w-3 h-3" strokeWidth={2.4} />
+      Email verified
+    </span>
+  ) : (
+    <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-ink-faint">
+      <Icon name="clock" className="w-3 h-3" strokeWidth={2} />
+      Unverified
     </span>
   );
 }
@@ -492,6 +514,9 @@ function ProvisionDrawer({
           <div className="rounded-[12px] bg-paper hairline px-4 py-3.5 space-y-1.5">
             <SummaryRow label="Requested by" value={lead.contactName} />
             <SummaryRow label="Email" value={lead.email} />
+            <div className="pt-0.5">
+              <EmailVerifyBadge verified={lead.emailVerified} />
+            </div>
             <SummaryRow label="Phone" value={lead.phone} />
             {lead.businessType && <SummaryRow label="Business" value={lead.businessType} />}
             {lead.hasOwnerPassword && (
@@ -524,7 +549,7 @@ function ProvisionDrawer({
                 spellCheck={false}
               />
               <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[12.5px] font-medium text-ink-faint pointer-events-none">
-                .vendopos.app
+                .vendopos.shop
               </span>
             </div>
           </Field>

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { IconSprite, Icon } from "../../components/Icon";
-import { BrandMark } from "../../components/BrandMark";
-import { SignupForm } from "../../components/auth/SignupForm";
+import { IconSprite, Icon } from "../components/Icon";
+import { BrandMark } from "../components/BrandMark";
+import { SignupForm } from "../components/auth/SignupForm";
 
 export const metadata: Metadata = {
   title: "Start your free trial — VendoPOS",
@@ -76,7 +76,7 @@ export default function SignupPage() {
             <p className="font-extrabold text-[15px] tracking-tight">Need a hand?</p>
             <p className="mt-1 text-[13px] text-white/80 leading-relaxed">
               We&apos;re here 7 days a week at{" "}
-              <span className="font-semibold text-white">support@vendopos.app</span> — or book a
+              <span className="font-semibold text-white">support@vendopos.shop</span> — or book a
               guided walkthrough anytime.
             </p>
           </div>

@@ -29,6 +29,14 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000")
 const isProd = (process.env.NODE_ENV ?? "development") === "production";
 
 /**
+ * Where the browser lives. Resolved once here (not just inside `env`) so the
+ * cookie SameSite policy can key off whether we're deployed behind HTTPS —
+ * independent of NODE_ENV, which a host may not report as exactly "production".
+ */
+const frontendUrl = optional("FRONTEND_URL", corsOrigins[0] ?? "http://localhost:3000");
+const servedOverHttps = /^https:/i.test(frontendUrl);
+
+/**
  * The JWT/session-signing secret. In PRODUCTION it is mandatory and must be long
  * enough to resist offline guessing — a short or missing secret would let anyone
  * forge a session cookie (full account takeover), so we fail fast at boot rather
@@ -59,7 +67,7 @@ export const env = {
    * Where the browser lives. After the Google OAuth dance the backend redirects
    * here (to a role-specific dashboard route). Defaults to the first CORS origin.
    */
-  frontendUrl: optional("FRONTEND_URL", corsOrigins[0] ?? "http://localhost:3000"),
+  frontendUrl,
 
   /**
    * Public origin of this API, used to build absolute URLs for uploaded media
@@ -68,6 +76,15 @@ export const env = {
    * this — see products.storage.ts.
    */
   publicBaseUrl: optional("PUBLIC_BASE_URL", `http://localhost:${port}`),
+
+  /**
+   * Absolute directory the local-disk media provider writes uploads to (product
+   * images, payment QRs), served at /uploads. Defaults to `./uploads` under the
+   * process CWD. On an ephemeral host (e.g. Render free tier) point this at a
+   * mounted persistent disk (e.g. /data/uploads) so images survive redeploys —
+   * or wire a real object store and this becomes inert. See products.storage.ts.
+   */
+  uploadsDir: optional("UPLOADS_DIR"),
 
   /**
    * Direct Google OAuth (handled on the backend to keep the client secret and
@@ -94,7 +111,7 @@ export const env = {
    * The default `from` is a cosmetic placeholder for the pre-deploy phase. NOTE:
    * before real delivery, this MUST change — a gmail.com sender is rejected by
    * Resend (you can only send from a domain you verify). At deploy, either verify
-   * a real domain in Resend (e.g. noreply@vendopos.app) or swap the transport to
+   * a real domain in Resend (e.g. noreply@vendopos.shop) or swap the transport to
    * Gmail SMTP/API. See docs/staging-validation.md §7.
    */
   email: {
@@ -117,6 +134,28 @@ export const env = {
     cookieName: optional("SESSION_COOKIE_NAME", "vendopos_session"),
     // Set to e.g. ".vendopos.com" when frontend and API sit on split subdomains.
     cookieDomain: optional("COOKIE_DOMAIN") || undefined,
+    /**
+     * Cookie SameSite policy. When the frontend and API live on DIFFERENT origins
+     * (e.g. Vercel `vendopos.shop` → Render `api.vendopos.shop`), the post-login
+     * credentialed `fetch` to the API is cross-origin and a `Lax` cookie is not
+     * reliably sent — so the user appears logged out the instant the workspace
+     * loads. `None` (which the browser requires to be paired with Secure, true in
+     * prod) sends the cookie on those cross-origin calls; CSRF is still contained
+     * by the strict CORS allowlist. Defaults to `none` in production and `lax`
+     * locally (same-origin dev over http, where `None` without Secure is rejected).
+     * Override with COOKIE_SAMESITE if the frontend and API are same-origin.
+     */
+    sameSite: resolveSameSite(),
     maxAgeMs: 1000 * 60 * 60 * 24 * 7, // 7 days
   },
 };
+
+/** The validated SameSite value for auth cookies (see session.sameSite above). */
+function resolveSameSite(): "lax" | "strict" | "none" {
+  const raw = optional("COOKIE_SAMESITE").toLowerCase();
+  if (raw === "lax" || raw === "strict" || raw === "none") return raw;
+  // Deployed behind HTTPS (split frontend/API) → None so the cross-origin auth
+  // cookie is sent; plain http (local dev) → Lax (None needs Secure, unavailable
+  // on http). Keyed off the frontend URL scheme, not NODE_ENV, to avoid misdetection.
+  return servedOverHttps ? "none" : "lax";
+}
