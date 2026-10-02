@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VAT_CLASSES, type VatClass } from "../pos/pos.schema.js";
 
 /**
  * Validation for the Merchant Inventory & Category CRUD Matrix.
@@ -59,6 +60,10 @@ export const productCreateSchema = z.object({
   stock: intField("stock quantity"),
   lowStockThreshold: intField("low-stock threshold"),
   isActive: booleanField,
+  // BIR VAT classification. Absent → defaults to VATABLE (PH retail norm).
+  vatClass: z
+    .enum(VAT_CLASSES, { errorMap: () => ({ message: "Choose a valid VAT class." }) })
+    .optional(),
 });
 
 /** Update: every field optional, but at least the shape is validated. */
@@ -100,6 +105,7 @@ export interface Product {
   lowStock: boolean;
   imageUrl: string | null;
   isActive: boolean;
+  vatClass: VatClass;
   createdAt: string;
   updatedAt: string;
 }

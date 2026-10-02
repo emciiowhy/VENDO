@@ -172,11 +172,11 @@ export function printSaleReceipt(args: {
     parts.push(row(`Less: ${sale.discountLabel || "Discount"}`, `−${formatCents(sale.discountCents)}`));
     parts.push(`<div class="rule"></div>`);
   }
-  // VAT summary (the system books all sales as 12% VAT-inclusive; exempt and
-  // zero-rated lines are shown at zero until product VAT classes are modelled).
-  parts.push(row("VATable Sales", formatCents(sale.subtotalCents)));
-  parts.push(row("VAT-Exempt Sales", formatCents(0)));
-  parts.push(row("Zero-Rated Sales", formatCents(0)));
+  // VAT summary — the per-class figures the server booked from each line's VAT
+  // classification (VATable net / exempt / zero-rated + 12% output VAT).
+  parts.push(row("VATable Sales", formatCents(sale.vatableSalesCents)));
+  parts.push(row("VAT-Exempt Sales", formatCents(sale.vatExemptCents)));
+  parts.push(row("Zero-Rated Sales", formatCents(sale.zeroRatedCents)));
   parts.push(row("VAT (12%)", formatCents(sale.vatCents)));
   parts.push(`<div class="rule"></div>`);
   parts.push(row("TOTAL AMOUNT DUE", formatCents(sale.totalCents), { strong: true }));

@@ -68,6 +68,9 @@ describe("toCsv (BIR ledger export)", () => {
         grossCents: 15000,
         netCents: 13393,
         vatCents: 1607,
+        vatableSalesCents: 13393,
+        vatExemptCents: 0,
+        zeroRatedCents: 0,
         discountCents: 0,
       },
       {
@@ -78,10 +81,22 @@ describe("toCsv (BIR ledger export)", () => {
         grossCents: 44800,
         netCents: 40000,
         vatCents: 4800,
+        vatableSalesCents: 40000,
+        vatExemptCents: 0,
+        zeroRatedCents: 0,
         discountCents: 5000,
       },
     ],
-    totals: { grossCents: 59800, netCents: 53393, vatCents: 6407, discountCents: 5000, count: 2 },
+    totals: {
+      grossCents: 59800,
+      netCents: 53393,
+      vatCents: 6407,
+      vatableSalesCents: 53393,
+      vatExemptCents: 0,
+      zeroRatedCents: 0,
+      discountCents: 5000,
+      count: 2,
+    },
   };
 
   it("emits a header, one row per invoice, and a TOTALS line", () => {

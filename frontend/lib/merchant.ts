@@ -104,6 +104,9 @@ export interface ComplianceRow {
   grossCents: number;
   netCents: number;
   vatCents: number;
+  vatableSalesCents: number;
+  vatExemptCents: number;
+  zeroRatedCents: number;
   discountCents: number;
 }
 
@@ -115,6 +118,9 @@ export interface ComplianceLedger {
     grossCents: number;
     netCents: number;
     vatCents: number;
+    vatableSalesCents: number;
+    vatExemptCents: number;
+    zeroRatedCents: number;
     discountCents: number;
     count: number;
   };

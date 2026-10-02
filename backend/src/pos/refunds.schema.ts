@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { computeVatBreakdown, type VatClass } from "./pos.schema.js";
 
 /**
  * Void / Return request contracts. As with checkout, the client never sends
@@ -7,10 +8,6 @@ import { z } from "zod";
  * original sale's snapshotted prices.
  */
 
-/** VAT is 12% and PRICE-INCLUSIVE, so vat = net × 12/112 (mirrors checkout). */
-const VAT_NUM = 12;
-const VAT_DEN = 112;
-
 export interface RefundFigures {
   /** The returned items' share of the original cart discount. */
   discountShareCents: number;
@@ -18,29 +15,41 @@ export interface RefundFigures {
   refundNetCents: number;
   refundVatCents: number;
   refundSubtotalCents: number;
+  /** Per-class breakdown of the refunded net (mirrors the sale's VAT summary). */
+  refundVatableSalesCents: number;
+  refundVatExemptCents: number;
+  refundZeroRatedCents: number;
 }
 
 /**
  * Pure refund maths (centavos), extracted so it can be unit-tested without a
  * database. The returned items' gross is reduced by their PROPORTIONAL share of
  * the sale's cart discount (so partial returns can't claw back more discount
- * than they carried), then VAT is split out of the net exactly as checkout
- * booked it. Everything is integer centavos via Math.round, never floats.
+ * than they carried), then the net is split across VAT classes and VAT extracted
+ * from the VATable portion only — exactly as checkout booked it (via the shared
+ * `computeVatBreakdown`). Everything is integer centavos, never floats.
  */
 export function computeRefund(p: {
-  returnedGrossCents: number;
+  returnedLines: { vatClass: VatClass; grossCents: number }[];
   originalTotalCents: number;
   originalDiscountCents: number;
 }): RefundFigures {
+  const returnedGross = p.returnedLines.reduce((sum, l) => sum + l.grossCents, 0);
   const originalGross = p.originalTotalCents + p.originalDiscountCents;
   const discountShareCents =
     p.originalDiscountCents > 0 && originalGross > 0
-      ? Math.round((p.originalDiscountCents * p.returnedGrossCents) / originalGross)
+      ? Math.round((p.originalDiscountCents * returnedGross) / originalGross)
       : 0;
-  const refundNetCents = p.returnedGrossCents - discountShareCents;
-  const refundVatCents = Math.round((refundNetCents * VAT_NUM) / VAT_DEN);
-  const refundSubtotalCents = refundNetCents - refundVatCents;
-  return { discountShareCents, refundNetCents, refundVatCents, refundSubtotalCents };
+  const b = computeVatBreakdown(p.returnedLines, discountShareCents);
+  return {
+    discountShareCents,
+    refundNetCents: b.netCents,
+    refundVatCents: b.vatCents,
+    refundSubtotalCents: b.subtotalCents,
+    refundVatableSalesCents: b.vatableSalesCents,
+    refundVatExemptCents: b.vatExemptCents,
+    refundZeroRatedCents: b.zeroRatedCents,
+  };
 }
 
 /** Void the whole sale. An optional reason is recorded for the audit trail. */
@@ -73,6 +82,9 @@ export interface Reversal {
   /** Negative figures: what was taken back off the books. */
   subtotalCents: number;
   vatCents: number;
+  vatableSalesCents: number;
+  vatExemptCents: number;
+  zeroRatedCents: number;
   discountCents: number;
   totalCents: number;
   paymentMethod: string;
@@ -91,6 +103,7 @@ export interface SaleLineDetail {
   qty: number;
   returnedQty: number;
   returnableQty: number;
+  vatClass: VatClass;
 }
 
 /** Full sale detail for the void/return screen (and receipt reprint). */
@@ -100,6 +113,9 @@ export interface SaleDetail {
   status: "completed" | "voided" | "partially_returned" | "returned";
   subtotalCents: number;
   vatCents: number;
+  vatableSalesCents: number;
+  vatExemptCents: number;
+  zeroRatedCents: number;
   discountCents: number;
   discountLabel: string | null;
   /** Gross of items before discount (= total + discount). */

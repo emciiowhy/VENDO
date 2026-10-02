@@ -368,10 +368,16 @@ export interface ComplianceRow {
   paymentRef: string | null;
   /** VAT-inclusive official sale total (centavos). */
   grossCents: number;
-  /** Net of VAT — the taxable base (centavos). */
+  /** Net of VAT — the taxable base of the whole ticket (centavos). */
   netCents: number;
-  /** 12% output VAT extracted from the inclusive total (centavos). */
+  /** 12% output VAT extracted from the VATable portion (centavos). */
   vatCents: number;
+  /** VATable sales, net of VAT (centavos). */
+  vatableSalesCents: number;
+  /** VAT-exempt sales (centavos). */
+  vatExemptCents: number;
+  /** Zero-rated sales (centavos). */
+  zeroRatedCents: number;
   /** Customer discount applied (centavos). */
   discountCents: number;
 }
@@ -386,6 +392,9 @@ export interface ComplianceLedger {
     grossCents: number;
     netCents: number;
     vatCents: number;
+    vatableSalesCents: number;
+    vatExemptCents: number;
+    zeroRatedCents: number;
     discountCents: number;
     count: number;
   };
@@ -399,6 +408,9 @@ interface SaleLedgerRow {
   total_cents: number;
   subtotal_cents: number;
   vat_cents: number;
+  vatable_sales_cents: number;
+  vat_exempt_cents: number;
+  zero_rated_cents: number;
   discount_cents: number;
 }
 
@@ -419,7 +431,8 @@ export async function getComplianceLedger(
 ): Promise<ComplianceLedger> {
   const { rows } = await query<SaleLedgerRow>(
     `SELECT reference, created_at AS at, payment_method, payment_ref,
-            total_cents, subtotal_cents, vat_cents, discount_cents
+            total_cents, subtotal_cents, vat_cents,
+            vatable_sales_cents, vat_exempt_cents, zero_rated_cents, discount_cents
        FROM sales
       WHERE tenant_id = $1
         AND (created_at AT TIME ZONE $4) >= $2::timestamp
@@ -436,6 +449,9 @@ export async function getComplianceLedger(
     grossCents: r.total_cents,
     netCents: r.subtotal_cents,
     vatCents: r.vat_cents,
+    vatableSalesCents: r.vatable_sales_cents,
+    vatExemptCents: r.vat_exempt_cents,
+    zeroRatedCents: r.zero_rated_cents,
     discountCents: r.discount_cents,
   }));
 
@@ -444,11 +460,23 @@ export async function getComplianceLedger(
       acc.grossCents += r.grossCents;
       acc.netCents += r.netCents;
       acc.vatCents += r.vatCents;
+      acc.vatableSalesCents += r.vatableSalesCents;
+      acc.vatExemptCents += r.vatExemptCents;
+      acc.zeroRatedCents += r.zeroRatedCents;
       acc.discountCents += r.discountCents;
       acc.count += 1;
       return acc;
     },
-    { grossCents: 0, netCents: 0, vatCents: 0, discountCents: 0, count: 0 },
+    {
+      grossCents: 0,
+      netCents: 0,
+      vatCents: 0,
+      vatableSalesCents: 0,
+      vatExemptCents: 0,
+      zeroRatedCents: 0,
+      discountCents: 0,
+      count: 0,
+    },
   );
 
   return { periodStart, periodEnd, rows: out, totals };

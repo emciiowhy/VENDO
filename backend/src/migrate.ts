@@ -957,6 +957,46 @@ CREATE TABLE IF NOT EXISTS pos_audit_logs (
 
 CREATE INDEX IF NOT EXISTS pos_audit_logs_tenant_idx  ON pos_audit_logs (tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS pos_audit_logs_cashier_idx ON pos_audit_logs (cashier_user_id, created_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- Per-product VAT classification (BIR output-VAT breakdown on the receipt).
+--
+-- PH retail prices are VAT-INCLUSIVE, but not every line is VATable: staple
+-- goods are VAT-EXEMPT and export/zero-rated sales carry 0% output VAT. Each
+-- product now carries a \`vat_class\`; checkout snapshots it onto every
+-- \`sale_items\` row (so a later re-classification never rewrites history) and
+-- books the sale's VATable / VAT-exempt / zero-rated amounts into three new
+-- \`sales\` columns. The receipt's VAT SUMMARY and the BIR compliance export read
+-- those stored figures instead of assuming the whole ticket is VATable. Classes:
+--   VATABLE      — 12% inclusive (the default; vat = portion × 12/112)
+--   EXEMPT       — VAT-exempt (no output VAT)
+--   ZERO_RATED   — 0%-rated (no output VAT)
+-- The three money columns net automatically for contra (void/return) rows, so
+-- they carry NO non-negative CHECK — mirroring vat_cents/subtotal_cents above.
+-- ---------------------------------------------------------------------------
+ALTER TABLE products ADD COLUMN IF NOT EXISTS vat_class TEXT NOT NULL DEFAULT 'VATABLE'
+  CHECK (vat_class IN ('VATABLE', 'EXEMPT', 'ZERO_RATED'));
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS vat_class TEXT NOT NULL DEFAULT 'VATABLE'
+  CHECK (vat_class IN ('VATABLE', 'EXEMPT', 'ZERO_RATED'));
+
+-- Per-class money breakdown on the sale header. \`vatable_sales_cents\` is the
+-- NET-of-VAT taxable base (not the inclusive amount); the three columns plus
+-- vat_cents reconstitute the total, and (vatable + exempt + zero) == subtotal.
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS vatable_sales_cents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS vat_exempt_cents    INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS zero_rated_cents    INTEGER NOT NULL DEFAULT 0;
+
+-- Backfill legacy rows (every pre-existing sale was booked wholly VATable, so its
+-- taxable base is its subtotal). Idempotent & safe: only touches rows that carry
+-- output VAT (vat_cents <> 0) but have no breakdown yet — a new fully-exempt or
+-- zero-rated sale has vat_cents = 0 and is never matched; a new VATable/mixed sale
+-- already has vatable_sales_cents <> 0 and is never matched.
+UPDATE sales
+   SET vatable_sales_cents = subtotal_cents
+ WHERE vat_cents <> 0
+   AND vatable_sales_cents = 0
+   AND vat_exempt_cents = 0
+   AND zero_rated_cents = 0;
 `;
 
 async function migrate() {

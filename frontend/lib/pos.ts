@@ -9,6 +9,16 @@ const BASE = `${API_BASE_URL}/api/v1/pos`;
 
 export type PaymentMethod = "Cash" | "GCash" | "Maya" | "QRPH";
 
+/** BIR VAT classification carried by every product and sale line. */
+export type VatClass = "VATABLE" | "EXEMPT" | "ZERO_RATED";
+
+/** Human labels for each VAT class (for selects / badges). */
+export const VAT_CLASS_LABELS: Record<VatClass, string> = {
+  VATABLE: "VATable (12%)",
+  EXEMPT: "VAT-Exempt",
+  ZERO_RATED: "Zero-Rated (0%)",
+};
+
 export interface CatalogProduct {
   id: string;
   categoryId: string | null;
@@ -19,6 +29,7 @@ export interface CatalogProduct {
   stock: number;
   lowStockThreshold: number;
   imageUrl: string | null;
+  vatClass: VatClass;
 }
 
 export interface CatalogCategory {
@@ -63,6 +74,9 @@ export interface Sale {
   reference: string;
   subtotalCents: number;
   vatCents: number;
+  vatableSalesCents: number;
+  vatExemptCents: number;
+  zeroRatedCents: number;
   grossCents: number;
   discountCents: number;
   discountLabel: string | null;
@@ -249,6 +263,7 @@ export interface SaleLineDetail {
   qty: number;
   returnedQty: number;
   returnableQty: number;
+  vatClass: VatClass;
 }
 
 export interface SaleDetail {
@@ -257,6 +272,9 @@ export interface SaleDetail {
   status: SaleStatus;
   subtotalCents: number;
   vatCents: number;
+  vatableSalesCents: number;
+  vatExemptCents: number;
+  zeroRatedCents: number;
   discountCents: number;
   discountLabel: string | null;
   grossCents: number;
@@ -277,6 +295,9 @@ export interface Reversal {
   kind: "void" | "return";
   subtotalCents: number;
   vatCents: number;
+  vatableSalesCents: number;
+  vatExemptCents: number;
+  zeroRatedCents: number;
   discountCents: number;
   totalCents: number;
   paymentMethod: string;
