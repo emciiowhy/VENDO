@@ -92,11 +92,30 @@ const STOCK = [
   { name: "Caramel Syrup", sub: "Stock 28", low: false },
 ];
 const STAFF = [
-  { name: "Maria Santos", role: "Cashier · On shift", on: true },
+  { name: "Maria Santos", role: "Cashier", on: true },
   { name: "Jose Cruz", role: "Barista", on: false },
   { name: "Ana Reyes", role: "Manager", on: true },
   { name: "Liza Tan", role: "Cashier", on: false },
 ];
+
+/** Avatar tints cycled per person so a people list reads distinctly at a glance. */
+const AVATAR_TINTS = [
+  "bg-brand-50 text-brand-700",
+  "bg-accent-50 text-accent-600",
+  "bg-amber-50 text-amber-600",
+  "bg-brand-100 text-brand-700",
+];
+
+/** Up-to-two-letter monogram from a name (e.g. "Maria Santos" → "MS"). */
+function staffInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
 const BOARD = [
   { head: "Queued", tickets: ["#1042 · Latte ×2", "#1043 · Ensaymada"] },
   { head: "In progress", tickets: ["#1041 · Ube Cake"] },
@@ -250,19 +269,50 @@ function ListBody() {
 
 function RosterBody() {
   return (
-    <div className="p-4 space-y-2.5">
-      {STAFF.map((m) => (
-        <div key={m.name} className="flex items-center gap-3 hairline rounded-lg p-2.5 bg-paper">
-          <span className="grid place-items-center w-9 h-9 rounded-full bg-brand-50 hairline text-brand-600 shrink-0">
-            <Icon name="users" className="w-4 h-4" strokeWidth={1.6} />
-          </span>
+    <div className="p-4 space-y-2">
+      {STAFF.map((m, i) => (
+        <div
+          key={m.name}
+          className="flex items-center gap-3 hairline rounded-xl px-3 py-2.5 bg-paper"
+        >
+          {/* Initial-avatar with an overlaid presence badge — on-shift staff get a
+              gentle live pulse (CSS-only; stilled under reduced-motion). */}
+          <div className="relative shrink-0">
+            <span
+              className={
+                "grid place-items-center w-9 h-9 rounded-full font-extrabold text-[12px] tracking-tight " +
+                AVATAR_TINTS[i % AVATAR_TINTS.length]
+              }
+            >
+              {staffInitials(m.name)}
+            </span>
+            <span className="absolute -bottom-0.5 -right-0.5 flex w-3 h-3">
+              {m.on && (
+                <span className="absolute inline-flex w-full h-full rounded-full bg-accent-500 opacity-70 animate-ping motion-reduce:hidden" />
+              )}
+              <span
+                className={
+                  "relative inline-flex w-3 h-3 rounded-full ring-2 ring-paper " +
+                  (m.on ? "bg-accent-500" : "bg-ink/25")
+                }
+              />
+            </span>
+          </div>
+
           <div className="min-w-0 flex-1">
-            <div className="text-[12px] font-bold text-ink truncate">{m.name}</div>
+            <div className="text-[12.5px] font-bold text-ink truncate">{m.name}</div>
             <div className="text-[10.5px] text-ink-faint truncate">{m.role}</div>
           </div>
-          <span
-            className={`w-2.5 h-2.5 rounded-full shrink-0 ${m.on ? "bg-accent-500" : "bg-ink/15"}`}
-          />
+
+          {m.on ? (
+            <span className="inline-flex items-center text-[9.5px] font-bold uppercase tracking-wider text-accent-600 bg-accent-50 rounded-full px-2 py-0.5 shrink-0">
+              On shift
+            </span>
+          ) : (
+            <span className="text-[9.5px] font-semibold uppercase tracking-wider text-ink-faint shrink-0">
+              Off
+            </span>
+          )}
         </div>
       ))}
     </div>

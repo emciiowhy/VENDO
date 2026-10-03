@@ -75,11 +75,11 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-function Thumb({ product }: { product: Product }) {
+function Thumb({ product, active }: { product: Product; active: boolean }) {
   const [failed, setFailed] = useState(false);
   const src = media(product.mediaKey);
   return (
-    <div className="w-9 h-9 rounded-md overflow-hidden hairline bg-brand-50 grid place-items-center mb-2.5">
+    <div className="w-full aspect-[4/3] rounded-md overflow-hidden hairline bg-brand-50 grid place-items-center">
       {src && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -87,10 +87,13 @@ function Thumb({ product }: { product: Product }) {
           alt={product.name}
           loading="lazy"
           onError={() => setFailed(true)}
-          className="w-full h-full object-cover"
+          className={
+            "w-full h-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] " +
+            (active ? "scale-105" : "scale-100")
+          }
         />
       ) : (
-        <Icon name={product.fallbackIcon} className="w-4 h-4 text-brand-600" strokeWidth={1.6} />
+        <Icon name={product.fallbackIcon} className="w-6 h-6 text-brand-600" strokeWidth={1.6} />
       )}
     </div>
   );
@@ -116,6 +119,12 @@ export function HeroPosDemo() {
   const total = useCountUp(reduced ? FINAL_TOTAL : target, !reduced);
   const todayTotal = useCountUp(12480, !reduced);
 
+  // The catalog tile for the most-recently rung-up line lights up as it's added
+  // — a brief "tapped to cart" highlight that ties the grid to the order. Only
+  // during the ring-up steps, and never under reduced-motion.
+  const activeName =
+    !reduced && visible > 0 && step <= LINES.length ? LINES[visible - 1].label.split(" ×")[0] : null;
+
   return (
     <div className="relative">
       <div className="lift rounded-xl2 bg-white hairline shadow-soft overflow-hidden">
@@ -132,13 +141,33 @@ export function HeroPosDemo() {
         <div className="grid grid-cols-[1.35fr_1fr]">
           {/* catalog */}
           <div className="p-4 grid grid-cols-2 gap-2.5 content-start hairline-r">
-            {PRODUCTS.map((p) => (
-              <div key={p.name} className="hairline rounded-lg p-3">
-                <Thumb product={p} />
-                <div className="text-[12.5px] font-bold text-ink leading-tight">{p.name}</div>
-                <div className="text-[12px] text-ink-faint">{p.price}</div>
-              </div>
-            ))}
+            {PRODUCTS.map((p) => {
+              const active = p.name === activeName;
+              return (
+                <div
+                  key={p.name}
+                  className={
+                    "relative rounded-lg p-2.5 hairline transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] " +
+                    (active
+                      ? "ring-2 ring-brand-500/50 shadow-sm -translate-y-0.5 bg-brand-50/50"
+                      : "bg-white")
+                  }
+                >
+                  <Thumb product={p} active={active} />
+                  <div className="mt-2 text-[12.5px] font-bold text-ink leading-tight">{p.name}</div>
+                  <div className="text-[12px] text-ink-faint">{p.price}</div>
+                  <span
+                    aria-hidden
+                    className={
+                      "absolute top-1.5 right-1.5 grid place-items-center w-5 h-5 rounded-full bg-brand-600 text-white shadow-sm transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] " +
+                      (active ? "opacity-100 scale-100" : "opacity-0 scale-50")
+                    }
+                  >
+                    <Icon name="check" className="w-3 h-3" strokeWidth={2.6} />
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           {/* order */}
