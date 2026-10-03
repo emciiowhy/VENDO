@@ -4,6 +4,17 @@ import type { Metadata } from "next";
 export const SITE_NAME = "VendoPOS";
 
 /**
+ * Public origin used for canonical URLs, og:url/og:image, robots and the
+ * sitemap. NEXT_PUBLIC_APP_URL overrides; production builds otherwise default
+ * to the live domain so a missing env var can never ship localhost URLs to
+ * search engines.
+ */
+export const SITE_URL = (
+  process.env.NEXT_PUBLIC_APP_URL ??
+  (process.env.NODE_ENV === "production" ? "https://vendopos.shop" : "http://localhost:3000")
+).replace(/\/+$/, "");
+
+/**
  * Shared social-card image. A 1024×1024 brand mark in /public that resolves
  * absolutely against `metadataBase` (set in the root layout), guaranteeing a
  * valid og:image / twitter:image on every route. Swap for a dedicated
