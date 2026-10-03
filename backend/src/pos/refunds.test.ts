@@ -1,13 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { computeRefund, returnSchema, voidSchema } from "./refunds.schema.js";
+import {
+  computeRefund,
+  returnSchema,
+  summarizeReversals,
+  voidSchema,
+} from "./refunds.schema.js";
 
 describe("Void / Return request validation", () => {
-  it("accepts a void with an optional reason", () => {
+  it("requires a reason on a void (accountability)", () => {
     expect(voidSchema.safeParse({ reason: "Wrong item rung up" }).success).toBe(true);
-    expect(voidSchema.safeParse({}).success).toBe(true);
+    expect(voidSchema.safeParse({}).success).toBe(false);
+    expect(voidSchema.safeParse({ reason: "  " }).success).toBe(false);
   });
 
-  it("accepts a return with one or more lines", () => {
+  it("accepts a return with one or more lines and a reason", () => {
     const parsed = returnSchema.safeParse({
       lines: [{ saleItemId: "11111111-1111-1111-1111-111111111111", qty: 2 }],
       reason: "Damaged",
@@ -15,15 +21,39 @@ describe("Void / Return request validation", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("requires a reason on a return", () => {
+    expect(
+      returnSchema.safeParse({
+        lines: [{ saleItemId: "11111111-1111-1111-1111-111111111111", qty: 1 }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects a return with no lines", () => {
-    expect(returnSchema.safeParse({ lines: [] }).success).toBe(false);
+    expect(returnSchema.safeParse({ lines: [], reason: "no lines" }).success).toBe(false);
   });
 
   it("rejects a non-positive return quantity", () => {
     const parsed = returnSchema.safeParse({
       lines: [{ saleItemId: "11111111-1111-1111-1111-111111111111", qty: 0 }],
+      reason: "bad qty",
     });
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe("summarizeReversals", () => {
+  it("tallies voids, returns and the total refunded", () => {
+    const s = summarizeReversals([
+      { kind: "void", amountCents: 5000 },
+      { kind: "return", amountCents: 1500 },
+      { kind: "return", amountCents: 500 },
+    ]);
+    expect(s).toEqual({ total: 3, voids: 1, returns: 2, refundedCents: 7000 });
+  });
+
+  it("is zeroed for an empty window", () => {
+    expect(summarizeReversals([])).toEqual({ total: 0, voids: 0, returns: 0, refundedCents: 0 });
   });
 });
 

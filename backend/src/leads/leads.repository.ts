@@ -1,5 +1,6 @@
 import { query } from "../db.js";
 import { hashPassword } from "../auth/auth.crypto.js";
+import { validatePassword } from "../auth/password.policy.js";
 import { notifyNewLead } from "../notifications/notifications.repository.js";
 import type { Lead, LeadInput } from "./leads.schema.js";
 
@@ -35,7 +36,7 @@ export async function insertLead(input: LeadInput): Promise<Lead> {
   // Hash the optional owner password at the seam (never store the raw value).
   // Empty/absent → null, so the lead provisions a Google-only owner as before.
   const ownerPasswordHash =
-    input.password && input.password.length >= 8 ? hashPassword(input.password) : null;
+    input.password && validatePassword(input.password) === null ? hashPassword(input.password) : null;
   // Email is the pipeline key (unique). A re-submission refreshes the contact
   // details and resurfaces the lead rather than erroring on the constraint;
   // the provisioning status is intentionally left untouched. The owner password

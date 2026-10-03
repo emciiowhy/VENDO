@@ -52,9 +52,13 @@ export function computeRefund(p: {
   };
 }
 
-/** Void the whole sale. An optional reason is recorded for the audit trail. */
+/**
+ * Void the whole sale. A reason is REQUIRED and recorded on the contra row + the
+ * owner's audit trail — so a cashier can't quietly reverse a sale with no
+ * explanation the owner can later hold them to.
+ */
 export const voidSchema = z.object({
-  reason: z.string().trim().max(280).optional(),
+  reason: z.string().trim().min(3, "Enter a reason for the void.").max(280),
 });
 export type VoidInput = z.infer<typeof voidSchema>;
 
@@ -68,7 +72,8 @@ export const returnSchema = z.object({
       }),
     )
     .min(1, "Choose at least one item to return."),
-  reason: z.string().trim().max(280).optional(),
+  // Required for the same accountability reason as a void (see above).
+  reason: z.string().trim().min(3, "Enter a reason for the return.").max(280),
 });
 export type ReturnInput = z.infer<typeof returnSchema>;
 
@@ -140,4 +145,51 @@ export interface SaleSummary {
   paymentMethod: string;
   cashierName: string | null;
   createdAt: string;
+}
+
+// ── Owner review of committed reversals ─────────────────────────────────────
+
+/**
+ * One committed void/return as the owner reviews it: which reversal, against
+ * which sale, by whom, why, and how much went back. Sourced from the contra
+ * `sales` rows (the single source of truth) — so a cashier can't quietly refund
+ * without the owner seeing it here, with their name and stated reason attached.
+ */
+export interface ReversalLogEntry {
+  id: string;
+  /** The reversal serial (VD-000001 / RV-000001). */
+  reference: string;
+  kind: "void" | "return";
+  /** The original sale's reference this reversed (null if the sale was purged). */
+  originalReference: string | null;
+  /** Who processed the reversal (null if that user was since removed). */
+  cashierName: string | null;
+  reason: string | null;
+  /** Positive peso amount refunded (the contra row's magnitude). */
+  amountCents: number;
+  createdAt: string;
+}
+
+/** Owner-facing rollup over a window of reversals. */
+export interface ReversalSummary {
+  total: number;
+  voids: number;
+  returns: number;
+  /** Total peso value refunded across the window (centavos). */
+  refundedCents: number;
+}
+
+/** Summarise reversals for the owner dashboard. Pure — unit-testable. */
+export function summarizeReversals(
+  rows: Pick<ReversalLogEntry, "kind" | "amountCents">[],
+): ReversalSummary {
+  let voids = 0;
+  let returns = 0;
+  let refundedCents = 0;
+  for (const r of rows) {
+    if (r.kind === "void") voids += 1;
+    else returns += 1;
+    refundedCents += r.amountCents;
+  }
+  return { total: rows.length, voids, returns, refundedCents };
 }

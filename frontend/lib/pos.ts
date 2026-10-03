@@ -358,6 +358,38 @@ export async function returnSaleLines(
   }
 }
 
+// ── Owner review of committed reversals ─────────────────────────────────────
+
+export interface ReversalLogEntry {
+  id: string;
+  reference: string;
+  kind: "void" | "return";
+  originalReference: string | null;
+  cashierName: string | null;
+  reason: string | null;
+  /** Positive peso amount refunded. */
+  amountCents: number;
+  createdAt: string;
+}
+
+export interface ReversalSummary {
+  total: number;
+  voids: number;
+  returns: number;
+  refundedCents: number;
+}
+
+/** The owner/manager review of every committed void/return, with a rollup. */
+export async function listReversals(
+  limit = 100,
+): Promise<Result<{ reversals: ReversalLogEntry[]; summary: ReversalSummary }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/reversals?limit=${limit}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
 // ── Terminal audit trail (cashier accountability) ───────────────────────────
 
 /** The sensitive live-terminal actions the register reports for auditing. */

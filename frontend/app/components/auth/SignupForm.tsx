@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "../Icon";
 import { signUp, type SignupPlan } from "@/lib/auth";
+import { validatePassword, MIN_PASSWORD_LENGTH } from "@/lib/passwordPolicy";
 
 /**
  * Self-service trial signup. Only four fields stand between a prospect and a live
@@ -18,8 +19,6 @@ const PLAN_COPY: Record<SignupPlan, { label: string; price: string; blurb: strin
   starter: { label: "Starter", price: "₱299/mo", blurb: "POS, inventory & BIR receipts." },
   business: { label: "Business", price: "₱499/mo", blurb: "Adds procurement, CRM & finance." },
 };
-
-const MIN_PASSWORD = 8;
 
 function coercePlan(value: string | null): SignupPlan {
   return value === "business" ? "business" : "starter";
@@ -54,7 +53,8 @@ export function SignupForm() {
     if (businessName.trim().length < 2) next.businessName = "Enter your business name.";
     if (ownerName.trim().length < 2) next.ownerName = "Enter your name.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = "Enter a valid email address.";
-    if (password.length < MIN_PASSWORD) next.password = `At least ${MIN_PASSWORD} characters.`;
+    const passwordError = validatePassword(password);
+    if (passwordError) next.password = passwordError;
     if (Object.keys(next).length > 0) {
       setErrors(next);
       return;
@@ -165,7 +165,7 @@ export function SignupForm() {
         placeholder="••••••••"
         autoComplete="new-password"
         error={errors.password}
-        hint={`At least ${MIN_PASSWORD} characters — you'll sign in with your email + this password.`}
+        hint={`At least ${MIN_PASSWORD_LENGTH} characters with a mix of letters and numbers or symbols — you'll sign in with your email + this password.`}
       />
 
       {topError && (
