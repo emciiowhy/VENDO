@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { Icon, IconSprite, type IconName } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
@@ -8,17 +9,12 @@ import { MarketingPhoto } from "@/app/components/marketing/MarketingPhoto";
 import { blogPhoto } from "@/lib/marketingMedia";
 import { listPosts, formatPostDate } from "@/lib/blog";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Resources — VendoPOS",
   description:
     "Guides, stories, and answers for running your business on VendoPOS — the blog, how it works, why PH businesses switch, and FAQs.",
-  openGraph: {
-    title: "Resources — VendoPOS",
-    description:
-      "Guides, stories, and answers for running your business on VendoPOS — the blog, how it works, why PH businesses switch, and FAQs.",
-    type: "website",
-  },
-};
+  path: "/resources",
+});
 
 const LINKS: { icon: IconName; title: string; body: string; href: string; cta: string }[] = [
   {

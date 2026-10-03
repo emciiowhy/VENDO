@@ -1,21 +1,19 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { Icon, IconSprite, type IconName } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
 import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Data & Security Architecture — VendoPOS",
   description:
     "Enterprise-grade protection running through every register transaction — fenced tenant database scoping on NeonDB, HTTP-only session propagation, and immutable invoice sequence-integrity tracking.",
-  openGraph: {
-    title: "Data & Security Architecture — VendoPOS",
-    description:
-      "Database scoping, session-layer protection, and audit resiliency — the infrastructure controls behind every VendoPOS register transaction.",
-    type: "website",
-  },
-};
+  path: "/security",
+  ogDescription:
+    "Database scoping, session-layer protection, and audit resiliency — the infrastructure controls behind every VendoPOS register transaction.",
+});
 
 const HQ = "Cebu City, Philippines";
 const PHONE = "0915 515 2314";

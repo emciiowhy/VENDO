@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { Icon, IconSprite } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
@@ -10,17 +11,12 @@ import { TrustStrip } from "@/app/components/marketing/TrustStrip";
 import { media } from "@/lib/marketingMedia";
 import { industriesByGroup } from "@/lib/industries";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Industries — VendoPOS",
   description:
     "One POS + ERP platform built for how Filipino businesses actually run — F&B, retail, service, and multi-branch enterprise.",
-  openGraph: {
-    title: "Industries — VendoPOS",
-    description:
-      "One POS + ERP platform built for how Filipino businesses actually run — F&B, retail, service, and multi-branch enterprise.",
-    type: "website",
-  },
-};
+  path: "/industry",
+});
 
 export default function IndustryLanding() {
   const groups = industriesByGroup();

@@ -1,21 +1,20 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { Icon, IconSprite, type IconName } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
 import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 import { ContactForm } from "@/app/components/marketing/ContactForm";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Contact Us — VendoPOS",
   description:
     "Talk to VendoPOS. Enterprise sales replies in under 2 hours; platform support in under 30 minutes. Reach our team in Cebu or send us a message.",
-  openGraph: {
-    title: "Contact VendoPOS",
-    description:
-      "Talk to enterprise sales or platform support — fast response-time guarantees and a direct line to our team in the Philippines.",
-    type: "website",
-  },
-};
+  path: "/contact",
+  ogTitle: "Contact VendoPOS",
+  ogDescription:
+    "Talk to enterprise sales or platform support — fast response-time guarantees and a direct line to our team in the Philippines.",
+});
 
 /** High-utility contact channels with explicit response-time guarantees. */
 const CHANNELS: {

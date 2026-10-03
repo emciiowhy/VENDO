@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
+import { OG_IMAGE, SITE_NAME } from "@/lib/seo";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -18,6 +19,7 @@ export const metadata: Metadata = {
   title: "VendoPOS — One platform to run your whole business | POS + ERP for the Philippines",
   description:
     "VendoPOS is one multi-tenant POS + ERP built for Filipino businesses. BIR-ready receipts, GCash/Maya/QRPH payments, offline-capable, peso-first. Request a demo.",
+  alternates: { canonical: "/" },
   icons: {
     icon: "/vendo-logo.png",
     apple: "/vendo-logo.png",
@@ -27,7 +29,16 @@ export const metadata: Metadata = {
     description:
       "Run sales, stock, suppliers, finances, and staff in one system. BIR-ready, GCash/Maya/QRPH, offline-capable, peso-first.",
     type: "website",
-    images: ["/vendo-logo.png"],
+    url: "/",
+    siteName: SITE_NAME,
+    images: [OG_IMAGE],
+  },
+  twitter: {
+    card: "summary",
+    title: "VendoPOS — POS + ERP built for the Philippines",
+    description:
+      "Run sales, stock, suppliers, finances, and staff in one system. BIR-ready, GCash/Maya/QRPH, offline-capable, peso-first.",
+    images: [OG_IMAGE.url],
   },
 };
 

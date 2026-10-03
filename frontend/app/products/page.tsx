@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { Icon, IconSprite } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
@@ -8,17 +9,12 @@ import { TrustStrip } from "@/app/components/marketing/TrustStrip";
 import { RoadmapBadge } from "@/app/components/marketing/RoadmapBadge";
 import { productsByGroup, productStatus } from "@/lib/products";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Products — VendoPOS",
   description:
     "Everything to run your business on one platform: POS, payments, inventory, finance, procurement, manufacturing, HR, CRM, and more.",
-  openGraph: {
-    title: "Products — VendoPOS",
-    description:
-      "Everything to run your business on one platform: POS, payments, inventory, finance, procurement, manufacturing, HR, CRM, and more.",
-    type: "website",
-  },
-};
+  path: "/products",
+});
 
 export default function ProductsLanding() {
   const groups = productsByGroup();
