@@ -13,6 +13,7 @@ import { AnnouncementBar, ConfigStyle } from "../theme/TenantThemeConfig";
 import { logout } from "@/lib/auth";
 import { formatPesoExact } from "@/lib/format";
 import { resolveAssetUrl } from "@/lib/images";
+import { FallbackImg } from "../FallbackImg";
 import {
   getActiveShift,
   getCatalog,
@@ -660,17 +661,12 @@ export function PosTerminal() {
           </button>
 
           <div className="flex items-center gap-2.5">
-            {user.tenantLogoUrl ? (
-              // Store logo is a cross-origin uploads URL; plain <img> avoids Image config.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={user.tenantLogoUrl}
-                alt={storeName}
-                className="w-8 h-8 rounded-[8px] object-cover hairline"
-              />
-            ) : (
-              <BrandMark className="w-8 h-8" />
-            )}
+            <FallbackImg
+              src={resolveAssetUrl(user.tenantLogoUrl)}
+              alt={storeName}
+              className="w-8 h-8 rounded-[8px] object-cover hairline"
+              fallback={<BrandMark className="w-8 h-8" />}
+            />
             <div className="leading-tight">
               <div className="font-extrabold text-[15px] tracking-tightest">{storeName}</div>
               <div className="text-[11px] font-semibold text-ink-faint flex items-center gap-1.5">

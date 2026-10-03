@@ -1,5 +1,6 @@
 import { getTrustedBrands, type Brand } from "@/lib/publicTenants";
 import { resolveAssetUrl } from "@/lib/images";
+import { FallbackImg } from "./FallbackImg";
 
 /**
  * "Trusted by" belt — an infinitely loop-scrolling marquee of the stores live on
@@ -21,18 +22,16 @@ function Wordmark({ name, mark, logoUrl }: Brand) {
   return (
     <div className="group mx-2.5 shrink-0 select-none">
       <div className="flex items-center gap-2.5 rounded-full bg-surface/70 hairline pl-2 pr-5 py-2 opacity-80 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-0.5 group-hover:bg-surface group-hover:opacity-100 group-hover:shadow-soft">
-        {logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={logo}
-            alt={`${name} logo`}
-            className="w-8 h-8 rounded-[9px] hairline object-cover bg-surface"
-          />
-        ) : (
-          <span className="grid place-items-center w-8 h-8 rounded-[9px] bg-brand-50 text-brand-600 font-extrabold text-[12.5px] tracking-tight">
-            {mark}
-          </span>
-        )}
+        <FallbackImg
+          src={logo}
+          alt={`${name} logo`}
+          className="w-8 h-8 rounded-[9px] hairline object-cover bg-surface"
+          fallback={
+            <span className="grid place-items-center w-8 h-8 rounded-[9px] bg-brand-50 text-brand-600 font-extrabold text-[12.5px] tracking-tight">
+              {mark}
+            </span>
+          }
+        />
         <span className="text-[1rem] font-extrabold tracking-tightest whitespace-nowrap text-ink">
           {name}
         </span>
