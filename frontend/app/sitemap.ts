@@ -11,13 +11,19 @@ import { PRODUCTS } from "@/lib/products";
  * discover the whole site from one URL submitted in Search Console.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
+  // lastModified is only emitted where we know a real edit date (blog posts).
+  // Stamping every page with the build time teaches crawlers to ignore it.
   const page = (
     path: string,
     priority: number,
     changeFrequency: "weekly" | "monthly" | "yearly" = "monthly",
-    lastModified: Date = now,
-  ) => ({ url: `${SITE_URL}${path}`, lastModified, changeFrequency, priority });
+    lastModified?: Date,
+  ) => ({
+    url: `${SITE_URL}${path}`,
+    ...(lastModified && { lastModified }),
+    changeFrequency,
+    priority,
+  });
 
   return [
     page("/", 1, "weekly"),

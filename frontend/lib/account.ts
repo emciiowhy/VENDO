@@ -7,6 +7,7 @@
  */
 import { API_BASE_URL } from "./api";
 import type { MerchantThemeConfig } from "./themeConfig";
+import { shrinkImage } from "./shrinkImage";
 
 const BASE = `${API_BASE_URL}/api/v1/account`;
 
@@ -41,13 +42,25 @@ async function send<T>(
 }
 
 async function upload<T>(path: string, file: File): Promise<Ok<T>> {
+  let res: Response;
   try {
     const form = new FormData();
-    form.append("image", file);
-    const res = await fetch(`${BASE}${path}`, { method: "POST", credentials: "include", body: form });
-    return (await res.json()) as Ok<T>;
+    form.append("image", await shrinkImage(file));
+    res = await fetch(`${BASE}${path}`, { method: "POST", credentials: "include", body: form });
   } catch {
     return { ok: false, error: "Could not reach the server. Check your connection." };
+  }
+  try {
+    return (await res.json()) as Ok<T>;
+  } catch {
+    // Non-JSON reply (e.g. the proxy's 413 page) — say what actually happened.
+    return {
+      ok: false,
+      error:
+        res.status === 413
+          ? "That image is too large. Try a smaller photo."
+          : `Upload failed (error ${res.status}). Please try again.`,
+    };
   }
 }
 
