@@ -7,7 +7,7 @@ import { env } from "./env.js";
 import { leadsRouter } from "./leads/leads.router.js";
 import { authRouter } from "./auth/auth.router.js";
 import { productsRouter } from "./products/products.router.js";
-import { UPLOADS_ROOT } from "./products/products.storage.js";
+import { UPLOADS_ROOT, serveMedia } from "./media/media.store.js";
 import { adminLeadsRouter } from "./admin/adminLeads.router.js";
 import { adminTenantsRouter } from "./admin/adminTenants.router.js";
 import { posRouter } from "./pos/pos.router.js";
@@ -71,8 +71,9 @@ export function createApp() {
     res.json({ ok: true, service: "vendopos-backend", time: new Date().toISOString() });
   });
 
-  // Publicly served product media (local-disk storage provider). When a cloud
-  // bucket is wired in, image URLs point there instead and this becomes inert.
+  // Publicly served media: the durable Postgres store first, then any legacy
+  // file still on local disk (pre-migration uploads in dev).
+  app.use("/uploads", serveMedia);
   app.use(
     "/uploads",
     express.static(UPLOADS_ROOT, {

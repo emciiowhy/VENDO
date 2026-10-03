@@ -333,9 +333,11 @@ export function Nav() {
   return (
     <header ref={navRef} className="sticky top-0 z-50 glass hairline-b">
       <div className="max-w-[1160px] mx-auto px-6 h-[68px] flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2.5">
-          <BrandMark className="w-8 h-8" />
-          <span className="font-extrabold text-[19px] tracking-tightest">VendoPOS</span>
+        <Link href="/" className="flex items-center gap-2.5" aria-label="VendoPOS — home">
+          <BrandMark className="w-8 h-8" alt="VendoPOS" />
+          <span className="font-extrabold text-[19px] tracking-tightest" aria-hidden="true">
+            VendoPOS
+          </span>
         </Link>
 
         {/* Desktop nav */}

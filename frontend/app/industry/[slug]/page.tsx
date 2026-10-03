@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { notFound } from "next/navigation";
 import { IndustryView } from "@/app/components/marketing/IndustryView";
 import { INDUSTRIES, getIndustry } from "@/lib/industries";
@@ -18,11 +19,7 @@ export async function generateMetadata({
   const entry = getIndustry(slug);
   if (!entry) return { title: "Industry not found — VendoPOS" };
   const title = `${entry.name} — VendoPOS`;
-  return {
-    title,
-    description: entry.intro,
-    openGraph: { title, description: entry.intro, type: "website" },
-  };
+  return pageMetadata({ title, description: entry.intro, path: `/industry/${slug}` });
 }
 
 export default async function IndustryPage({

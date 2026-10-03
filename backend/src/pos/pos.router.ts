@@ -2,13 +2,14 @@ import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { orderSchema, shiftCloseSchema, shiftOpenSchema } from "./pos.schema.js";
-import { returnSchema, voidSchema } from "./refunds.schema.js";
+import { returnSchema, summarizeReversals, voidSchema } from "./refunds.schema.js";
 import { auditEventSchema, summarizeAudit } from "./audit.js";
 import { listAuditLogs, recordAuditLog } from "./audit.repository.js";
 import { createOrder, getCatalog, listCashiers } from "./pos.repository.js";
 import {
   getSaleDetail,
   listRecentSales,
+  listReversals,
   reverseSale,
   type ReverseMode,
   type ReverseResult,
@@ -201,6 +202,28 @@ posRouter.get("/sales/:id", async (req, res) => {
   } catch (err) {
     console.error("[pos] sale detail failed:", err);
     res.status(500).json({ ok: false, error: "Could not load the sale." });
+  }
+});
+
+/**
+ * GET /api/v1/pos/reversals — the owner/manager review of every committed void
+ * and return: which sale, by which cashier, why, and how much went back. Gated
+ * like the audit read — a cashier can process a reversal but can't read (or hide)
+ * the store's reversal history, so a problem can never be quietly denied.
+ */
+posRouter.get("/reversals", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (req.user?.role !== "MERCHANT_OWNER" && req.user?.role !== "MANAGER") {
+    return res.status(403).json({ ok: false, error: "Only the store owner or a manager can review reversals." });
+  }
+  try {
+    const limit = Number(req.query.limit) || 100;
+    const reversals = await listReversals(tenantId, limit);
+    return res.json({ ok: true, reversals, summary: summarizeReversals(reversals) });
+  } catch (err) {
+    console.error("[pos] reversals list failed:", err);
+    return res.status(500).json({ ok: false, error: "Could not load reversals." });
   }
 });
 

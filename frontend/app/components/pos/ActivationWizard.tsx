@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
 import { BrandMark } from "../BrandMark";
+import { FallbackImg } from "../FallbackImg";
+import { resolveAssetUrl } from "@/lib/images";
 import { PinPad } from "../auth/PinPad";
 import { switchByPin, type SessionUser } from "@/lib/auth";
 import { listCashiers, openShift, type ActiveShift, type CashierProfile } from "@/lib/pos";
@@ -276,17 +278,12 @@ export function ActivationWizard({
         <div className="shrink-0 px-6 pt-5 pb-4 hairline-b">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              {user.tenantLogoUrl ? (
-                // Store logo is a cross-origin uploads URL; plain <img> avoids Image config.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={user.tenantLogoUrl}
-                  alt={user.tenantName ?? "Store"}
-                  className="w-9 h-9 rounded-[9px] object-cover hairline shrink-0"
-                />
-              ) : (
-                <BrandMark className="w-9 h-9 shrink-0" />
-              )}
+              <FallbackImg
+                src={resolveAssetUrl(user.tenantLogoUrl)}
+                alt={user.tenantName ?? "Store"}
+                className="w-9 h-9 rounded-[9px] object-cover hairline shrink-0"
+                fallback={<BrandMark className="w-9 h-9 shrink-0" />}
+              />
               <div className="min-w-0">
                 <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
                   Terminal activation

@@ -4,6 +4,7 @@ import { computeRefund } from "./refunds.schema.js";
 import type { VatClass } from "./pos.schema.js";
 import type {
   Reversal,
+  ReversalLogEntry,
   SaleDetail,
   SaleLineDetail,
   SaleSummary,
@@ -134,6 +135,46 @@ export async function getSaleDetail(tenantId: string, saleId: string): Promise<S
     createdAt: h.created_at.toISOString(),
     lines: detailLines,
   };
+}
+
+/**
+ * Committed voids/returns for the owner's review, newest first — read straight
+ * off the contra `sales` rows (kind void/return), joined to the sale each one
+ * reversed and the staffer who processed it. Money is returned as a positive
+ * magnitude (the stored contra total is negative).
+ */
+export async function listReversals(tenantId: string, limit = 100): Promise<ReversalLogEntry[]> {
+  const { rows } = await query<{
+    id: string;
+    reference: string;
+    kind: "void" | "return";
+    original_reference: string | null;
+    cashier_name: string | null;
+    reversal_reason: string | null;
+    total_cents: number;
+    created_at: Date;
+  }>(
+    `SELECT r.id, r.reference, r.kind, r.total_cents, r.reversal_reason, r.created_at,
+            o.reference AS original_reference,
+            u.name      AS cashier_name
+       FROM sales r
+       LEFT JOIN sales o ON o.id = r.reverses_sale_id
+       LEFT JOIN users u ON u.id = r.cashier_user_id
+      WHERE r.tenant_id = $1 AND r.kind IN ('void', 'return')
+      ORDER BY r.created_at DESC
+      LIMIT $2`,
+    [tenantId, Math.min(Math.max(limit, 1), 500)],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    reference: r.reference,
+    kind: r.kind,
+    originalReference: r.original_reference,
+    cashierName: r.cashier_name,
+    reason: r.reversal_reason,
+    amountCents: Math.abs(r.total_cents),
+    createdAt: r.created_at.toISOString(),
+  }));
 }
 
 // ── Write side (the ACID reversal) ───────────────────────────────────────────

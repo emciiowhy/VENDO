@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { Icon, IconSprite } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
@@ -9,17 +10,12 @@ import { TrustStrip } from "@/app/components/marketing/TrustStrip";
 import { media } from "@/lib/marketingMedia";
 import { HARDWARE, HARDWARE_BUNDLES, hardware, hardwarePhotoKey } from "@/lib/hardware";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Hardware — VendoPOS",
   description:
     "POS hardware built for speed and reliability — terminals, printers, scanners, cash drawers, payment readers and displays, in bundles for every business.",
-  openGraph: {
-    title: "Hardware — VendoPOS",
-    description:
-      "POS hardware built for speed and reliability — terminals, printers, scanners, cash drawers, payment readers and displays, in bundles for every business.",
-    type: "website",
-  },
-};
+  path: "/hardware",
+});
 
 export default function HardwareLanding() {
   return (

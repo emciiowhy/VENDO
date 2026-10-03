@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
 import { useToast } from "../Toast";
 import { getPasswordStatus, setPassword } from "@/lib/auth";
+import { validatePassword, MIN_PASSWORD_LENGTH } from "@/lib/passwordPolicy";
 
 /**
  * Owner/manager account security — set or change the password used for the
@@ -12,7 +13,7 @@ import { getPasswordStatus, setPassword } from "@/lib/auth";
  * to confirm; once a password exists, changing it requires the current one.
  * The session scopes everything server-side.
  */
-const MIN_LENGTH = 8;
+const MIN_LENGTH = MIN_PASSWORD_LENGTH;
 
 type State =
   | { status: "loading" }
@@ -56,7 +57,8 @@ export function SecurityCard() {
 
   async function submit() {
     if (hasPassword && !current) return setError("Enter your current password.");
-    if (next.length < MIN_LENGTH) return setError(`New password must be at least ${MIN_LENGTH} characters.`);
+    const passwordError = validatePassword(next);
+    if (passwordError) return setError(passwordError);
     if (next !== confirm) return setError("The two new passwords don't match.");
     setBusy(true);
     setError(null);

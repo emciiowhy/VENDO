@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { notFound } from "next/navigation";
 import { ProductView } from "@/app/components/marketing/ProductView";
 import { getProduct, PRODUCTS } from "@/lib/products";
@@ -23,11 +24,7 @@ export async function generateMetadata({
   const product = getProduct(slug);
   if (!product) return { title: "Product not found — VendoPOS" };
   const title = `${product.name} — VendoPOS`;
-  return {
-    title,
-    description: product.intro,
-    openGraph: { title, description: product.intro, type: "website" },
-  };
+  return pageMetadata({ title, description: product.intro, path: `/products/${slug}` });
 }
 
 export default async function ProductPage({

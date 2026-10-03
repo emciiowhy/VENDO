@@ -1,20 +1,19 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { Icon, IconSprite, type IconName } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
 import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Careers — VendoPOS",
   description:
     "Help us solve complex distributed retail challenges. We're hiring engineers to build a multi-tenant POS + ERP platform with typesafe codebases, zero-warning compilations, and product-led velocity.",
-  openGraph: {
-    title: "Careers at VendoPOS — Solve complex distributed retail challenges",
-    description:
-      "We're hiring engineers to build a multi-tenant POS + ERP platform for the Philippines.",
-    type: "website",
-  },
-};
+  path: "/careers",
+  ogTitle: "Careers at VendoPOS — Solve complex distributed retail challenges",
+  ogDescription:
+    "We're hiring engineers to build a multi-tenant POS + ERP platform for the Philippines.",
+});
 
 /** Culture badges — the non-negotiables of how we ship. */
 const CULTURE: { icon: IconName; label: string; blurb: string }[] = [

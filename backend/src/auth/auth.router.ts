@@ -29,6 +29,7 @@ import type { MerchantThemeConfig } from "../merchant/theme.config.js";
 import { evaluateTenantStatus, type TenantLifecycle } from "../billing/trial.js";
 import { createPinRequest, listActiveCashiers } from "../staff/staff.repository.js";
 import { signUpMerchant, type SignupPlan } from "./signup.repository.js";
+import { validatePassword } from "./password.policy.js";
 import {
   clearSessionCookie,
   clientContext,
@@ -219,7 +220,9 @@ authRouter.post("/logout", async (req, res) => {
 // sign in with Store ID + email + password instead of Google. Cashiers (PIN) and
 // the Super Admin are excluded from this path.
 
-const MIN_PASSWORD_LENGTH = 8;
+// Password strength for owner/manager accounts is enforced by the shared
+// validatePassword policy (see password.policy.ts) — length, no all-spaces,
+// variety, and a common-password screen.
 
 /**
  * POST /auth/password-login — Store ID + email + password for an owner/manager.
@@ -288,9 +291,8 @@ authRouter.post("/signup", credentialsLimiter, async (req, res) => {
   if (businessName.length < 2) errors.businessName = "Enter your business name.";
   if (ownerName.length < 2) errors.ownerName = "Enter your name.";
   if (!EMAIL_RE.test(email)) errors.email = "Enter a valid email address.";
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
-  }
+  const passwordError = validatePassword(password);
+  if (passwordError) errors.password = passwordError;
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ ok: false, errors });
   }
@@ -336,11 +338,9 @@ authRouter.post("/password", requireRole("MERCHANT_OWNER", "MANAGER"), async (re
   const currentPassword = body?.currentPassword === undefined ? "" : String(body.currentPassword);
   const newPassword = String(body?.newPassword ?? "");
 
-  if (newPassword.length < MIN_PASSWORD_LENGTH) {
-    return res.status(400).json({
-      ok: false,
-      errors: { newPassword: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` },
-    });
+  const newPasswordError = validatePassword(newPassword);
+  if (newPasswordError) {
+    return res.status(400).json({ ok: false, errors: { newPassword: newPasswordError } });
   }
 
   try {

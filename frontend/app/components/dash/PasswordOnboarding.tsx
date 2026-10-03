@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
 import { useToast } from "../Toast";
 import { getPasswordStatus, setPassword } from "@/lib/auth";
+import { validatePassword, MIN_PASSWORD_LENGTH } from "@/lib/passwordPolicy";
 
 /**
  * First-run onboarding for owners/managers who signed in with Google and don't
@@ -15,7 +16,7 @@ import { getPasswordStatus, setPassword } from "@/lib/auth";
  * Existing accounts were backfilled with a default password, so `hasPassword`
  * is already true for them and this never shows; it's only the genuinely new.
  */
-const MIN_LENGTH = 8;
+const MIN_LENGTH = MIN_PASSWORD_LENGTH;
 const SKIP_KEY = "vp_pw_onboard_skipped";
 
 export function PasswordOnboarding() {
@@ -47,7 +48,8 @@ export function PasswordOnboarding() {
   }
 
   async function submit() {
-    if (next.length < MIN_LENGTH) return setError(`Use at least ${MIN_LENGTH} characters.`);
+    const passwordError = validatePassword(next);
+    if (passwordError) return setError(passwordError);
     if (next !== confirm) return setError("The two passwords don't match.");
     setBusy(true);
     setError(null);

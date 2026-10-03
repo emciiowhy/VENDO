@@ -1,21 +1,19 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { Icon, IconSprite, type IconName } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
 import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Terms of Service — VendoPOS",
   description:
     "The operating agreement for the VendoPOS cloud-based retail and restaurant ERP platform — account provisioning, 14-day trial gates, multi-tenant responsibilities, and data export policies.",
-  openGraph: {
-    title: "Terms of Service — VendoPOS",
-    description:
-      "Account provisioning, automated trial expiration gates, multi-tenant responsibilities, and termination & data export policies for the VendoPOS platform.",
-    type: "website",
-  },
-};
+  path: "/terms",
+  ogDescription:
+    "Account provisioning, automated trial expiration gates, multi-tenant responsibilities, and termination & data export policies for the VendoPOS platform.",
+});
 
 const EFFECTIVE_DATE = "June 14, 2026";
 const GOVERNING_LAW = "Republic of the Philippines";

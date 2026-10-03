@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { notFound } from "next/navigation";
 import { HardwareView } from "@/app/components/marketing/HardwareView";
 import { HARDWARE, hardware } from "@/lib/hardware";
@@ -18,7 +19,7 @@ export async function generateMetadata({
   const entry = hardware.get(slug);
   if (!entry) return { title: "Hardware not found — VendoPOS" };
   const title = `${entry.name} — VendoPOS`;
-  return { title, description: entry.intro, openGraph: { title, description: entry.intro, type: "website" } };
+  return pageMetadata({ title, description: entry.intro, path: `/hardware/${slug}` });
 }
 
 export default async function HardwarePage({

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import { notFound } from "next/navigation";
 import { CompanyView } from "@/app/components/marketing/CompanyView";
 import { COMPANY, company } from "@/lib/company";
@@ -18,7 +19,7 @@ export async function generateMetadata({
   const entry = company.get(slug);
   if (!entry) return { title: "Page not found — VendoPOS" };
   const title = `${entry.name} — VendoPOS`;
-  return { title, description: entry.intro, openGraph: { title, description: entry.intro, type: "website" } };
+  return pageMetadata({ title, description: entry.intro, path: `/company/${slug}` });
 }
 
 export default async function CompanyPage({

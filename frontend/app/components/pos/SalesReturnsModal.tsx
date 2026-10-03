@@ -130,6 +130,9 @@ export function SalesReturnsModal({
     return returnedGross - discountShare;
   }, [detail, returnedGross]);
 
+  // A reason is mandatory on every reversal — it's recorded on the contra row
+  // and the owner's audit log, so a cashier can't quietly refund with no account.
+  const reasonValid = reason.trim().length >= 3;
   const canVoid = detail?.status === "completed";
   const canReturn = selectedLines.length > 0;
 
@@ -147,9 +150,13 @@ export function SalesReturnsModal({
 
   const doVoid = useCallback(async () => {
     if (!detail) return;
+    if (reason.trim().length < 3) {
+      setError("Enter a reason for the void (recorded in your audit log).");
+      return;
+    }
     setSubmitting(true);
     setError(null);
-    const res = await voidSale(detail.id, reason.trim() || undefined);
+    const res = await voidSale(detail.id, reason.trim());
     setSubmitting(false);
     if (res.ok) {
       setResult({
@@ -166,10 +173,14 @@ export function SalesReturnsModal({
 
   const doReturn = useCallback(async () => {
     if (!detail) return;
+    if (reason.trim().length < 3) {
+      setError("Enter a reason for the return (recorded in your audit log).");
+      return;
+    }
     const lines = selectedLines.map((l) => ({ saleItemId: l.saleItemId, qty: qty[l.saleItemId] ?? 0 }));
     setSubmitting(true);
     setError(null);
-    const res = await returnSaleLines(detail.id, lines, reason.trim() || undefined);
+    const res = await returnSaleLines(detail.id, lines, reason.trim());
     setSubmitting(false);
     if (res.ok) {
       setResult({
@@ -380,10 +391,19 @@ export function SalesReturnsModal({
                     <input
                       value={reason}
                       onChange={(e) => setReason(e.target.value)}
-                      placeholder="Reason (optional)"
+                      placeholder="Reason for void / return (required)"
                       maxLength={280}
-                      className="mt-3 w-full rounded-[10px] bg-paper hairline px-3.5 py-2.5 text-[13px] outline-none focus:border-brand-300 transition"
+                      aria-label="Reason for the reversal"
+                      className={
+                        "mt-3 w-full rounded-[10px] bg-paper px-3.5 py-2.5 text-[13px] outline-none transition border " +
+                        (reason.length > 0 && !reasonValid
+                          ? "border-rose-300 focus:border-rose-400"
+                          : "hairline focus:border-brand-300")
+                      }
                     />
+                    <p className="mt-1.5 text-[11.5px] text-ink-faint">
+                      Recorded on the refund slip and your owner audit log — every reversal is accounted for.
+                    </p>
 
                     {returnedGross > 0 && (
                       <div className="mt-3 flex items-center justify-between rounded-[10px] bg-brand-50 px-3.5 py-2.5 text-[13px]">
@@ -437,7 +457,7 @@ export function SalesReturnsModal({
           <div className="px-5 py-4 hairline-t grid grid-cols-2 gap-2.5">
             <button
               type="button"
-              disabled={!canVoid || submitting}
+              disabled={!canVoid || !reasonValid || submitting}
               onClick={() => void doVoid()}
               className="inline-flex items-center justify-center gap-2 rounded-[10px] bg-surface hairline py-3 font-semibold text-[13.5px] text-rose-600 hover:border-rose-200 disabled:opacity-40 disabled:hover:border-[var(--hairline)] transition"
               title={canVoid ? "Cancel the whole sale" : "Sales with returns can't be voided — return the rest"}
@@ -447,7 +467,7 @@ export function SalesReturnsModal({
             </button>
             <button
               type="button"
-              disabled={!canReturn || submitting}
+              disabled={!canReturn || !reasonValid || submitting}
               onClick={() => void doReturn()}
               className="inline-flex items-center justify-center gap-2 rounded-[10px] bg-brand-600 text-white py-3 font-bold text-[13.5px] hover:bg-brand-700 disabled:opacity-40 transition"
             >

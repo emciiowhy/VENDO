@@ -1009,13 +1009,24 @@ UPDATE sales
    AND vatable_sales_cents = 0
    AND vat_exempt_cents = 0
    AND zero_rated_cents = 0;
+
+-- Durable uploaded images (product photos, payment QRs, logos, avatars). The
+-- host disk is ephemeral on Render's free tier, so bytes live here instead and
+-- are served at /uploads/<path>. Uploads are capped at 2 MB each.
+CREATE TABLE IF NOT EXISTS media_objects (
+  path         TEXT PRIMARY KEY,
+  content_type TEXT NOT NULL,
+  bytes        BYTEA NOT NULL,
+  size_bytes   INTEGER NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs ready.",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects ready.",
   );
 }
 

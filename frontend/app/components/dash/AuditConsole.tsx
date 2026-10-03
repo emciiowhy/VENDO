@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../Icon";
 import { formatCents } from "@/lib/format";
-import { listAuditLogs, type AuditAction, type AuditLog, type AuditSummary } from "@/lib/pos";
+import {
+  listAuditLogs,
+  listReversals,
+  type AuditAction,
+  type AuditLog,
+  type AuditSummary,
+  type ReversalLogEntry,
+  type ReversalSummary,
+} from "@/lib/pos";
 
 /**
  * Owner/manager view of the POS terminal audit trail — the sensitive shop-floor
@@ -147,6 +155,129 @@ export function AuditConsole() {
                         </tr>
                       );
                     })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      <ReversalsReview />
+    </div>
+  );
+}
+
+/**
+ * Committed voids & returns — the money-back reversals, sourced from the sales
+ * ledger. Sits beside the terminal-action log so the owner has one place to see
+ * every reversal with the cashier who did it and the reason they were made to
+ * give. Independent fetch so a hiccup in one section never blanks the other.
+ */
+function ReversalsReview() {
+  const [state, setState] = useState<
+    | { status: "loading" }
+    | { status: "error"; message: string }
+    | { status: "ready"; reversals: ReversalLogEntry[]; summary: ReversalSummary }
+  >({ status: "loading" });
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const res = await listReversals(200);
+      if (!alive) return;
+      if (res.ok) setState({ status: "ready", reversals: res.reversals, summary: res.summary });
+      else setState({ status: "error", message: res.error ?? "Could not load reversals." });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return (
+    <div className="space-y-5 pt-4">
+      <div>
+        <h2 className="text-[1.3rem] font-extrabold tracking-tightest">Refunds &amp; voids</h2>
+        <p className="text-[13.5px] text-ink-soft">
+          Every committed void and return on your registers — the cashier who processed it and the
+          reason they gave.
+        </p>
+      </div>
+
+      {state.status === "loading" && <Skeleton />}
+      {state.status === "error" && (
+        <div className="rounded-xl2 bg-surface hairline shadow-card p-8 text-center">
+          <p className="text-[14px] font-semibold text-rose-600">{state.message}</p>
+        </div>
+      )}
+
+      {state.status === "ready" && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Kpi icon="refresh" label="Reversals" value={String(state.summary.total)} />
+            <Kpi icon="ban" label="Voided sales" value={String(state.summary.voids)} tone="danger" />
+            <Kpi icon="refresh" label="Returns" value={String(state.summary.returns)} tone="warn" />
+            <Kpi icon="peso" label="Total refunded" value={formatCents(state.summary.refundedCents)} tone="danger" />
+          </div>
+
+          {state.reversals.length === 0 ? (
+            <div className="rounded-xl2 bg-surface hairline shadow-card px-5 py-14 text-center">
+              <span className="inline-grid place-items-center w-12 h-12 rounded-[14px] bg-accent-50 text-accent-600">
+                <Icon name="shield" className="w-6 h-6" strokeWidth={1.6} />
+              </span>
+              <p className="mt-3 text-[14px] font-semibold">No refunds or voids yet</p>
+              <p className="mt-1 text-[13px] text-ink-soft max-w-[46ch] mx-auto">
+                When a cashier voids a sale or returns items, it lands here with their name and the
+                reason they entered.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13.5px]">
+                  <thead>
+                    <tr className="text-left text-[12px] font-semibold text-ink-faint border-b border-ink/8 bg-paper/40">
+                      <th className="px-5 py-2.5 font-semibold">When</th>
+                      <th className="px-3 py-2.5 font-semibold">Cashier</th>
+                      <th className="px-3 py-2.5 font-semibold">Type</th>
+                      <th className="px-3 py-2.5 font-semibold">Against</th>
+                      <th className="px-3 py-2.5 font-semibold">Reason</th>
+                      <th className="px-5 py-2.5 font-semibold text-right">Refunded</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.reversals.map((r) => (
+                      <tr key={r.id} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition">
+                        <td className="px-5 py-3 text-ink-soft tabular-nums whitespace-nowrap">
+                          {fmtWhen(r.createdAt)}
+                        </td>
+                        <td className="px-3 py-3 font-semibold">{r.cashierName ?? "—"}</td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={
+                              "inline-flex items-center gap-1.5 text-[11.5px] font-bold rounded-full px-2.5 py-0.5 " +
+                              (r.kind === "void" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-700")
+                            }
+                          >
+                            <Icon name={r.kind === "void" ? "ban" : "refresh"} className="w-3.5 h-3.5" strokeWidth={1.9} />
+                            {r.kind === "void" ? "Void" : "Return"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 font-mono text-ink-soft whitespace-nowrap">
+                          {r.originalReference ?? "—"}
+                        </td>
+                        <td className="px-3 py-3 text-ink-soft max-w-[260px]">
+                          {r.reason ? (
+                            <span className="line-clamp-2">{r.reason}</span>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-right font-bold tracking-tight tabular-nums whitespace-nowrap text-rose-600">
+                          −{formatCents(r.amountCents)}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
