@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon, type IconName } from "../Icon";
+import { NotificationDetail, type DetailView } from "../NotificationDetail";
 import {
   getNotifications,
   getUnreadCount,
@@ -34,6 +35,7 @@ export function NotificationBell() {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [detail, setDetail] = useState<AppNotification | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const refreshCount = useCallback(async () => {
@@ -90,8 +92,10 @@ export function NotificationBell() {
       setUnread((u) => Math.max(0, u - 1));
       void markNotificationRead(n.id);
     }
+    // Open the message in a centered popup so it can be read in full; navigation
+    // now happens from the popup's "Go there" action rather than on click.
     setOpen(false);
-    if (n.link) router.push(n.link);
+    setDetail(n);
   }
 
   async function onMarkAll() {
@@ -106,11 +110,11 @@ export function NotificationBell() {
         type="button"
         aria-label="Notifications"
         onClick={toggle}
-        className="relative grid place-items-center w-9 h-9 rounded-[10px] hairline bg-surface text-ink-soft hover:text-ink transition duration-150"
+        className="press relative grid place-items-center w-11 h-11 sm:w-9 sm:h-9 rounded-[12px] sm:rounded-[10px] hairline bg-surface text-ink-soft hover:text-ink active:text-ink transition duration-150"
       >
-        <Icon name="bell" className="w-[18px] h-[18px]" />
+        <Icon name="bell" className="w-[19px] h-[19px] sm:w-[18px] sm:h-[18px]" />
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 grid place-items-center rounded-full bg-rose-500 text-white text-[10px] font-bold ring-2 ring-surface">
+          <span className="absolute top-1 right-1 sm:-top-1 sm:-right-1 min-w-[17px] h-[17px] px-1 grid place-items-center rounded-full bg-rose-500 text-white text-[10px] font-bold ring-2 ring-surface">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -178,8 +182,24 @@ export function NotificationBell() {
           </div>
         </div>
       )}
+
+      {detail && (
+        <NotificationDetail
+          view={toDetailView(detail)}
+          onClose={() => setDetail(null)}
+          onGoThere={(link) => {
+            setDetail(null);
+            router.push(link);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+/** Map a stored notification onto the shared detail-popup shape. */
+function toDetailView(n: AppNotification): DetailView {
+  return { severity: n.severity, title: n.title, body: n.body, at: n.createdAt, link: n.link };
 }
 
 /** "just now" / "5m ago" / "3h ago" / "2d ago" / a date for older. */

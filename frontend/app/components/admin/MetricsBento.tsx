@@ -9,15 +9,15 @@ import { PLAN_LABEL, type Plan } from "./tenants.data";
 
 /**
  * Module 1 — Global Metrics Summary. Not a flat grid of equal tiles: MRR is the
- * one figure a platform admin came to read, so it leads as the feature card,
- * Active Merchants sits beside it as the secondary hero, and live infrastructure
- * load runs underneath as a thin telemetry strip — big → big → dense, so the eye
- * has somewhere to land. Green carries money + health; blue carries the platform
- * and its infra.
+ * one figure a platform admin came to read, so it leads as the feature card; the
+ * platform's two other vital signs — Active Merchants and GMV this month — stack
+ * beside it at a smaller step, and live infrastructure load runs underneath as a
+ * thin telemetry strip — big → medium → dense, so the eye has somewhere to land.
+ * Green carries money + health (MRR, GMV); blue carries the platform and its infra.
  *
- * Every figure here is live: MRR / merchants / per-plan split + month-over-month
- * deltas come from the billing analytics rollup; the telemetry strip samples the
- * real NeonDB pool and a fresh query round-trip. No placeholders.
+ * Every figure here is live: MRR / merchants / GMV / per-plan split + month-over-
+ * month deltas come from the billing analytics rollup; the telemetry strip samples
+ * the real NeonDB pool and a fresh query round-trip. No placeholders.
  *
  * setState only fires after an `await` inside the effect (or from the lazy
  * initial state), never synchronously in the effect body.
@@ -59,8 +59,13 @@ export function MetricsBento() {
 
   // Receipts settled in the current Manila month (0 until the first sale lands).
   const monthKey = new Date().toISOString().slice(0, 7);
-  const receiptsThisMonth =
-    analytics?.feeTrend.find((f) => f.month.slice(0, 7) === monthKey)?.txns ?? 0;
+  const thisMonthFee = analytics?.feeTrend.find((f) => f.month.slice(0, 7) === monthKey);
+  const receiptsThisMonth = thisMonthFee?.txns ?? 0;
+  // GMV = the peso volume flowing through every tenant's register this month.
+  // Distinct from MRR (what WE bill): this is the platform's actual pulse. The
+  // MoM delta reuses the same series helper the MRR/stores figures trust.
+  const gmvThisMonth = thisMonthFee?.gmvCents ?? 0;
+  const gmvDelta = momDelta(analytics?.feeTrend.map((f) => f.gmvCents));
 
   if (error) {
     return (
@@ -105,22 +110,39 @@ export function MetricsBento() {
           </div>
         </section>
 
-        {/* Active merchants — secondary hero, given room to breathe */}
-        <section className="rounded-xl2 bg-surface hairline shadow-card p-6 flex flex-col">
-          <CardHead icon="store" label="Active Merchants" tone="brand" />
-          <div className="mt-3 flex items-end gap-2.5">
-            <span className="text-hero font-extrabold tabular-nums">
-              {analytics ? formatCount(analytics.activeStores) : <Skeleton w="4.5rem" h="2.2rem" />}
-            </span>
-            <Delta value={storesDelta} className="pb-1" />
-          </div>
-          <p className="mt-2 text-fine text-ink-soft">Live storefronts nationwide</p>
-          <p className="mt-auto pt-4 text-fine text-ink-faint">
-            {storesDelta === null
-              ? "Subscription seats billing this month"
-              : `Onboarding ${storesDelta >= 0 ? "up" : "down"} ${Math.abs(storesDelta)}% this month`}
-          </p>
-        </section>
+        {/* Right column — the two other vital signs, stacked so MRR stays the
+            single dominant figure on the screen. Active Merchants (brand blue =
+            the platform) over GMV (emerald = money moving through the rails);
+            both at text-stat so neither competes with the MRR feature. */}
+        <div className="flex flex-col gap-5">
+          <section className="flex-1 rounded-xl2 bg-surface hairline shadow-card p-6 flex flex-col">
+            <CardHead icon="store" label="Active Merchants" tone="brand" />
+            <div className="mt-3 flex items-end gap-2.5">
+              <span className="text-stat font-extrabold tabular-nums">
+                {analytics ? formatCount(analytics.activeStores) : <Skeleton w="3.5rem" h="1.8rem" />}
+              </span>
+              <Delta value={storesDelta} className="pb-0.5" />
+            </div>
+            <p className="mt-auto pt-3 text-fine text-ink-faint">
+              {storesDelta === null
+                ? "Live storefronts nationwide"
+                : `Onboarding ${storesDelta >= 0 ? "up" : "down"} ${Math.abs(storesDelta)}% this month`}
+            </p>
+          </section>
+
+          <section className="flex-1 rounded-xl2 bg-surface hairline shadow-card p-6 flex flex-col">
+            <CardHead icon="cart" label="GMV this month" tone="money" />
+            <div className="mt-3 flex items-end gap-2.5">
+              <span className="text-stat font-extrabold tabular-nums">
+                {analytics ? formatCentsWhole(gmvThisMonth) : <Skeleton w="5rem" h="1.8rem" />}
+              </span>
+              <Delta value={gmvDelta} className="pb-0.5" />
+            </div>
+            <p className="mt-auto pt-3 text-fine text-ink-faint">
+              Gross volume across all tenants
+            </p>
+          </section>
+        </div>
       </div>
 
       {/* Telemetry strip: dense horizontal band, deliberately flat against the

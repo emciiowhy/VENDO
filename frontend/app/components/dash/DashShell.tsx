@@ -251,10 +251,10 @@ export function DashShell({
                 )}
               </div>
 
-              <div className="ml-auto flex items-center gap-3">
+              <div className="ml-auto flex items-center gap-2 sm:gap-3">
                 <ThemeToggle />
                 <NotificationBell />
-                <div className="flex items-center gap-2.5 pl-1">
+                <div className="flex items-center gap-2.5 sm:pl-1">
                   <div className="hidden sm:block text-right leading-tight">
                     <div className="text-note font-bold tracking-tight">{user.name}</div>
                     <div className="text-cap font-semibold text-ink-faint">
@@ -264,9 +264,9 @@ export function DashShell({
                   <FallbackImg
                     src={avatarUrl}
                     alt={user.name}
-                    className="w-9 h-9 rounded-full object-cover hairline"
+                    className="w-11 h-11 sm:w-9 sm:h-9 rounded-full object-cover hairline"
                     fallback={
-                      <span className="w-9 h-9 rounded-full bg-ink text-paper grid place-items-center font-bold text-[13px] tracking-tight">
+                      <span className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-ink text-paper grid place-items-center font-bold text-[15px] sm:text-[13px] tracking-tight">
                         {initials || "U"}
                       </span>
                     }

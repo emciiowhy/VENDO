@@ -1,6 +1,13 @@
 import { Router, type Request, type Response } from "express";
 import { requireRole } from "../auth/auth.middleware.js";
-import { getActivitySince, getVarianceAlertsSince, sampleServerMetrics } from "./health.repository.js";
+import {
+  detectConditionEvents,
+  getActivitySince,
+  getVarianceAlertsSince,
+  sampleServerMetrics,
+  INITIAL_CONDITION_STATE,
+  type ConditionState,
+} from "./health.repository.js";
 
 /**
  * Real-time System Health telemetry, mounted at /api/v1/admin/health and fenced
@@ -54,6 +61,9 @@ adminHealthRouter.get("/stream", requireRole("SUPER_ADMIN"), async (req: Request
   // Variance flags are seeded from connect time so only Z-Reads committed while
   // watching raise a fresh security flag.
   let alertHighWater = new Date();
+  // Infra-condition state carried across ticks so pool/latency problems emit a
+  // single "saturated"/"recovered" activity line on transition, not every tick.
+  let condState: ConditionState = INITIAL_CONDITION_STATE;
 
   const send = (event: string, data: unknown) => {
     if (!alive) return;
@@ -63,7 +73,13 @@ adminHealthRouter.get("/stream", requireRole("SUPER_ADMIN"), async (req: Request
   async function tick() {
     if (!alive) return;
     try {
-      send("metrics", await sampleServerMetrics());
+      const metrics = await sampleServerMetrics();
+      send("metrics", metrics);
+      // Infra conditions ride the same ticker as merchant activity: emit a
+      // health line whenever the pool/latency crosses into or out of trouble.
+      const { events: conditions, state } = detectConditionEvents(metrics, condState);
+      condState = state;
+      for (const cond of conditions) send("activity", cond);
       const events = await getActivitySince(highWater);
       for (const ev of events) {
         send("activity", ev);
