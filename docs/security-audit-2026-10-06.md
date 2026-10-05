@@ -151,9 +151,24 @@ injection path, and a frontend sweep for XSS sinks / committed secrets.
   origin with only the path varying — no open-proxy/SSRF. All `NEXT_PUBLIC_*`
   vars are non-secret (API/app/booking URLs, Google site verification).
 
-**Still not covered** (reasonable next targets): dependency CVE scan (your
-memory notes "0 vulns"; not re-run here), the notification/email producers end
-to end, and runtime validation of findings 1–3.
+**Dependency posture (scanned):** `npm audit --omit=dev` reports **0
+vulnerabilities** for both backend and frontend — i.e. zero production-runtime
+CVEs reachable by an attacker. The advisories that *do* appear are confined to
+build/test/lint tooling that never runs in production:
+
+- Backend (dev): 5 (1 critical, 1 high, 3 moderate) in `vitest → vite →
+  esbuild` (test runner).
+- Frontend (dev): 5 high in `eslint-config-next → fast-glob → micromatch →
+  braces` (lint config; `braces` stack-exhaustion ReDoS, build-time only).
+
+None process attacker-controlled input across a trust boundary in the deployed
+app, so none are findings. **Do NOT run `npm audit fix --force`:** on the
+frontend it would install `eslint-config-next@14.2.35`, a downgrade that breaks
+the Next 16 project. These clear when the upstream dev tools bump their
+transitive globbing/esbuild deps; low urgency.
+
+**Still not covered** (reasonable next targets): the notification/email
+producers end to end, and runtime validation of findings 1–3.
 
 ---
 
