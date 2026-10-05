@@ -85,6 +85,10 @@ export function createApp() {
       // Relax it for public product media so <img> tags resolve cross-origin.
       setHeaders: (res) => {
         res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        // Mirror serveMedia's hardening on the legacy static path: a stored SVG
+        // opened directly on the API origin must never execute script. `sandbox`
+        // (no allow-scripts) + default-src 'none' neutralises active content.
+        res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox");
       },
     }),
   );
