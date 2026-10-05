@@ -18,7 +18,10 @@ import { Icon } from "./Icon";
 export function StickyCta() {
   const [heroGone, setHeroGone] = useState(false);
   const [footerIn, setFooterIn] = useState(false);
-  const show = heroGone && !footerIn;
+  const [demoIn, setDemoIn] = useState(false);
+  // Retract over the footer AND the #demo form: both already have a Request-a-Demo
+  // action, so the floating bar there is redundant and would overlap the content.
+  const show = heroGone && !footerIn && !demoIn;
 
   useEffect(() => {
     if (!("IntersectionObserver" in window)) return;
@@ -41,6 +44,17 @@ export function StickyCta() {
         rootMargin: "0px 0px -10% 0px",
       });
       io.observe(footer);
+      observers.push(io);
+    }
+
+    // The #demo form is where the CTA points — retract once it's on screen so the
+    // bar never sits on top of the form's own "Request my demo" button.
+    const demo = document.getElementById("demo");
+    if (demo) {
+      const io = new IntersectionObserver(([e]) => setDemoIn(e.isIntersecting), {
+        rootMargin: "0px 0px -25% 0px",
+      });
+      io.observe(demo);
       observers.push(io);
     }
 

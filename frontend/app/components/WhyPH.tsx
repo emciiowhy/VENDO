@@ -37,7 +37,7 @@ const advantages: Advantage[] = [
 
 export function WhyPH() {
   return (
-    <section id="why" className="py-28">
+    <section id="why" className="py-16 sm:py-28">
       <div className="max-w-[1160px] mx-auto px-6">
         <div className="max-w-[60ch] reveal">
           <span className="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">

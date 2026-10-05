@@ -152,7 +152,7 @@ export function Testimonials() {
   }, [reduced, stride]);
 
   return (
-    <section id="stories" className="py-28 bg-paper hairline-y">
+    <section id="stories" className="py-16 sm:py-28 bg-paper hairline-y">
       <div className="max-w-[1160px] mx-auto px-6">
         <div className="max-w-[60ch] reveal">
           <span className="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">

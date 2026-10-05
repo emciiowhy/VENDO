@@ -72,7 +72,7 @@ const plans: Plan[] = [
  */
 export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean }) {
   return (
-    <section id="pricing" className="py-28">
+    <section id="pricing" className="py-16 sm:py-28">
       <div className="max-w-[1160px] mx-auto px-6">
         <div className="max-w-[60ch] reveal">
           <span className="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">
