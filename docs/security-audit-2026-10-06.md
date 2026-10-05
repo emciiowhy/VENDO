@@ -95,6 +95,25 @@ cross-site page can force-log-out a user. Nuisance-level only.
   mutation endpoints, or a double-submit CSRF token — primarily to close the
   body-less ones.
 
+### 5 — App HTML has no anti-framing header (clickjacking) · **Low** · FIXED
+
+**File:** `frontend/next.config.ts`
+
+The backend's `helmet()` hardens API (JSON) responses, but the dashboard HTML
+is served by Vercel/Next, which set no `X-Frame-Options` / `frame-ancestors`.
+Because the session cookie is `SameSite=None` (required for the split origins),
+it is sent inside a cross-origin iframe — so an attacker page could frame the
+authenticated dashboard and clickjack a logged-in owner into single-click state
+changes (store deactivate, void a sale) that bypass the client-side confirm
+modals.
+
+- **Severity rationale:** reachable but interaction-dependent (victim must visit
+  the attacker page while logged in, and the overlay must align with a specific
+  control) — it weakens rather than fully defeats a control.
+- **Fix applied:** added a `headers()` block setting `X-Frame-Options:
+  SAMEORIGIN`, CSP `frame-ancestors 'self'`, `X-Content-Type-Options: nosniff`,
+  and a referrer policy across all app routes.
+
 ### 4 — Session revocation fails open during a DB outage · **Informational**
 
 **File:** `backend/src/auth/auth.middleware.ts` (`sessionStillLive`, ~L73-81)
@@ -114,11 +133,27 @@ impersonation), middleware/role guards, DB layer, POS checkout + refunds/
 shifts, media upload/serve, leads, public, admin authz, the theme-config
 injection path, and a frontend sweep for XSS sinks / committed secrets.
 
-**Not covered this pass** (reasonable next targets): per-module repositories
-individually (HR/finance/procurement/manufacturing/CRM — spot-checked only for
-the tenant-scope pattern), the SSE health/notification streams, the Vercel
-frontend proxy/rewrite config and its cookie handling, dependency CVEs, and any
-runtime validation of findings 2–4.
+**Second pass (deeper review) — now also covered:**
+
+- **All module repositories** swept for by-id mutations missing the tenant
+  filter. Every `UPDATE`/`DELETE` is scoped by `tenant_id` (or by session
+  `user_id` for self-owned rows). The dynamic `SET ${sets.join(",")}` builders
+  (products/finance/procurement/manufacturing/staff/adminTenants) use
+  **hardcoded** column-name literals with parameterized values — no column
+  injection — and all carry `WHERE … tenant_id`. `manufacturing.updateRecipe`
+  does an unscoped `DELETE … WHERE recipe_id=$1`, but it is gated by a prior
+  tenant-scoped `getRecipe` ownership check, so it is not cross-tenant
+  reachable. Staff user/PIN writes are additionally `role='CASHIER'` fenced.
+- **Both SSE streams.** `/admin/health/stream` is `SUPER_ADMIN`-gated;
+  `/merchant/events/stream` is `MERCHANT_OWNER|MANAGER`-gated and tenant-scoped
+  (`getLowStockCrossingsSince(tenantId, …)`). Both `clearInterval` on `close`.
+- **Vercel/Next proxy** (`next.config.ts`): rewrite destination is a fixed env
+  origin with only the path varying — no open-proxy/SSRF. All `NEXT_PUBLIC_*`
+  vars are non-secret (API/app/booking URLs, Google site verification).
+
+**Still not covered** (reasonable next targets): dependency CVE scan (your
+memory notes "0 vulns"; not re-run here), the notification/email producers end
+to end, and runtime validation of findings 1–3.
 
 ---
 
