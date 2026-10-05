@@ -81,19 +81,29 @@ the disk fallback and opened directly on the API origin, could execute.
   `res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox")`
   in the `express.static` `setHeaders` callback, so both serving paths match.
 
-### 3 — CSRF on body-less POSTs (e.g. `/auth/logout`) · **Low**
+### 3 — CSRF on body-less POSTs (e.g. `/auth/logout`) · **Low** · FIXED
 
-**File:** `backend/src/auth/auth.router.ts` (`POST /auth/logout`, ~L205)
+**Files:** `backend/src/auth/csrf.ts` (new), `backend/src/app.ts`
 
 With `SameSite=None` (required for the split frontend/API origins), the session
 cookie rides on cross-site requests. Endpoints that require a JSON body are
 protected — `express.json()` + the CORS-allowlisted preflight block a
 cross-site forgery — but `/auth/logout` needs no body and no CSRF token, so a
-cross-site page can force-log-out a user. Nuisance-level only.
+cross-site page could force-log-out a user.
 
-- **Smallest fix:** require a custom header (e.g. `X-Requested-With`) on the
-  mutation endpoints, or a double-submit CSRF token — primarily to close the
-  body-less ones.
+- **Fix applied:** added an Origin-based CSRF guard (`csrfOriginGuard`) mounted
+  before all routes. Every mutating method (POST/PUT/PATCH/DELETE) must carry an
+  `Origin` — or a `Referer` fallback — that matches the same allowlist CORS
+  already trusts; a forged cross-site write carries the attacker's origin and is
+  rejected with 403. Read-only verbs pass through. It fails open only when
+  *neither* header is present (never a browser-driven CSRF). Chosen over a
+  client-side CSRF-token/header scheme because it needs **zero** frontend
+  changes — the 126 `lib/` fetch sites are untouched — so it can't regress any
+  call site. Covered by `backend/src/auth/csrf.test.ts` (5 tests).
+- **Validate:** confirm the Vercel same-origin proxy forwards the browser
+  `Origin`/`Referer` to the API in production (Next rewrites forward request
+  headers by default); if both were stripped the guard fails open, i.e. no
+  worse than before.
 
 ### 5 — App HTML has no anti-framing header (clickjacking) · **Low** · FIXED
 

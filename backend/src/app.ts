@@ -29,6 +29,7 @@ import { accountRouter } from "./account/account.router.js";
 import { notificationsRouter } from "./notifications/notifications.router.js";
 import { publicRouter } from "./public/public.router.js";
 import { enforceTrialStatus } from "./billing/trial.middleware.js";
+import { csrfOriginGuard } from "./auth/csrf.js";
 
 /**
  * Builds the Express application. Kept separate from the server bootstrap so
@@ -66,6 +67,12 @@ export function createApp() {
   if (env.nodeEnv !== "test") {
     app.use(morgan("dev"));
   }
+
+  // CSRF defence: every state-changing request must originate from an allowlisted
+  // origin (same list CORS trusts). Mounted before the routes so it fences the
+  // whole API — including body-less mutations like POST /auth/logout that the
+  // JSON-preflight does not. Read-only verbs pass straight through.
+  app.use(csrfOriginGuard);
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "vendopos-backend", time: new Date().toISOString() });
