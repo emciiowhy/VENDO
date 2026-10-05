@@ -44,8 +44,21 @@ export function TenantsDirectory() {
     void (async () => {
       const res = await getTenants();
       if (!alive) return;
-      if (res.ok) setState({ status: "ready", rows: res.tenants });
-      else setState({ status: "error", message: res.error ?? "Could not load tenants." });
+      if (res.ok) {
+        setState({ status: "ready", rows: res.tenants });
+        // Deep-link from the Overview watchlist: `?manage=<id>` opens that store's
+        // Manage panel straight away. Read from the URL (not useSearchParams) so the
+        // auth-walled client page needs no Suspense boundary; the param is then
+        // stripped so a refresh or back-nav doesn't re-open the modal.
+        const manageId = new URLSearchParams(window.location.search).get("manage");
+        if (manageId) {
+          const target = res.tenants.find((t) => t.id === manageId);
+          if (target) setActive(target);
+          window.history.replaceState(null, "", "/admin/tenants");
+        }
+      } else {
+        setState({ status: "error", message: res.error ?? "Could not load tenants." });
+      }
     })();
     return () => {
       alive = false;

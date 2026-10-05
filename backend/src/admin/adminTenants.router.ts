@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { getSubscribers } from "../billing/billing.repository.js";
 import { updateTenant } from "./adminTenants.repository.js";
+import { recordAudit } from "./adminAudit.repository.js";
+import { PLAN_SPECS } from "../billing/plans.js";
 
 /**
  * Super-Admin tenant control plane, mounted at /api/v1/admin/tenants. This is
@@ -49,6 +51,28 @@ adminTenantsRouter.patch("/:id", async (req, res) => {
   try {
     const tenant = await updateTenant(req.params.id, parsed.data);
     if (!tenant) return res.status(404).json({ ok: false, error: "Tenant not found." });
+
+    // Record each lever pulled to the platform audit trail (best-effort — the
+    // helper swallows its own errors, so logging can't fail the support action).
+    const actor = { actorUserId: req.user!.userId, actorName: req.user!.name };
+    if (parsed.data.plan) {
+      void recordAudit({
+        ...actor,
+        action: "tenant_plan_change",
+        targetTenantId: tenant.id,
+        targetName: tenant.name,
+        detail: `Plan set to ${PLAN_SPECS[parsed.data.plan].label}`,
+      });
+    }
+    if (parsed.data.status) {
+      void recordAudit({
+        ...actor,
+        action: "tenant_status_change",
+        targetTenantId: tenant.id,
+        targetName: tenant.name,
+        detail: parsed.data.status === "suspended" ? "Workspace suspended" : "Workspace reinstated",
+      });
+    }
     return res.json({ ok: true, tenant });
   } catch (err) {
     console.error("[admin/tenants] update failed:", err);

@@ -113,6 +113,43 @@ Every dialog/overlay animates in the same way — a missing entrance reads as dr
   Enter (guarded by the same condition as the Charge button) so a sale completes
   without leaving the keyboard.
 
+## Super Admin console patterns
+
+The platform Overview rhythm is now **read → scan → triage → launch**: MRR feature
+(2/3) with Active Merchants + GMV stacked beside it (1/3, both `text-stat` so MRR
+stays the only `text-feature`) → telemetry strip → **RiskWatchlist** → "Jump to".
+Money figures (MRR, GMV) are emerald; merchant count is brand blue.
+
+- **At-risk watchlist row** (`RiskWatchlist`): a flagged-ledger list, not a table.
+  Each row carries a **2px semantic left-edge** (`border-l-rose-400` danger /
+  `border-l-amber-400` warning) so the list is triage-able by colour before you read
+  names. Right side = reason chip (`bg-rose-50`/`bg-amber-50` + dot) over a muted
+  `text-fine tabular-nums` detail line (the number that makes it actionable — "silent
+  14 days", "2 days left"). Rows deep-link to `/admin/tenants?manage=<id>`.
+- **Directory deep-link**: `TenantsDirectory` reads `?manage=<id>` from
+  `window.location.search` in its post-`await` load effect (NOT `useSearchParams` —
+  the auth-walled client page then needs no Suspense boundary), opens that tenant's
+  Manage modal, and strips the param via `history.replaceState` so refresh/back
+  doesn't re-open it. Reuse this for any "open straight to X" deep-link.
+- **Broadcast composer** (`BroadcastComposer`): one `hairline-strong shadow-soft`
+  focal composer + a `hairline shadow-card` sticky aside holding a **live bell
+  preview** (renders exactly what the merchant sees, severity-coloured) and a
+  **derived recipient count**. Outward-facing/irreversible sends go through
+  `ConfirmDialog` naming the count. Severity → colour map is the canonical one:
+  info=brand, success=accent, warning=amber, danger=rose.
+- **Audit feed** (`AuditTrail`): an **activity feed of sentences** ("<b>actor</b> ·
+  action → <b>target</b>" + muted detail + right-aligned `tabular-nums` time), not a
+  column table — accountability reads faster as prose. Action → `{icon, tone}` map,
+  tones drawn from the same semantic palette.
+- **Account editor** (`AdminAccount`): mirrors the merchant Account hub card idiom
+  (`CardTitle` icon-tile + stacked `FormRow`s, inline check-mark save confirmation).
+
+**Refetch-on-change loading = DERIVED, never synchronous setState.** Lint rule
+`react-hooks/set-state-in-effect` forbids setting state in the effect body. When a
+value refetches as a filter changes (e.g. broadcast recipient count on audience
+change), store `{ forKey, value }` and derive `loading = !result || result.forKey
+!== key` instead of calling `setLoading(true)` before the fetch.
+
 ## Verifying changes visually
 
 Both back-office surfaces are auth-walled (`useSession` → `/auth/me`). Pattern used

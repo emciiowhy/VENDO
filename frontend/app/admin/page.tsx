@@ -3,6 +3,7 @@
 import { DashShell } from "../components/dash/DashShell";
 import { ADMIN_NAV } from "../components/admin/adminNav";
 import { MetricsBento } from "../components/admin/MetricsBento";
+import { RiskWatchlist } from "../components/admin/RiskWatchlist";
 import { PlatformShortcuts } from "../components/admin/PlatformShortcuts";
 
 /**
@@ -23,6 +24,7 @@ export default function AdminPage() {
     >
       <div className="space-y-7 max-w-[1180px]">
         <MetricsBento />
+        <RiskWatchlist />
         <PlatformShortcuts />
       </div>
     </DashShell>
