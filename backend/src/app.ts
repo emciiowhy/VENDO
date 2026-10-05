@@ -29,6 +29,7 @@ import { accountRouter } from "./account/account.router.js";
 import { notificationsRouter } from "./notifications/notifications.router.js";
 import { publicRouter } from "./public/public.router.js";
 import { enforceTrialStatus } from "./billing/trial.middleware.js";
+import { csrfOriginGuard } from "./auth/csrf.js";
 
 /**
  * Builds the Express application. Kept separate from the server bootstrap so
@@ -67,6 +68,12 @@ export function createApp() {
     app.use(morgan("dev"));
   }
 
+  // CSRF defence: every state-changing request must originate from an allowlisted
+  // origin (same list CORS trusts). Mounted before the routes so it fences the
+  // whole API — including body-less mutations like POST /auth/logout that the
+  // JSON-preflight does not. Read-only verbs pass straight through.
+  app.use(csrfOriginGuard);
+
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "vendopos-backend", time: new Date().toISOString() });
   });
@@ -85,6 +92,10 @@ export function createApp() {
       // Relax it for public product media so <img> tags resolve cross-origin.
       setHeaders: (res) => {
         res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        // Mirror serveMedia's hardening on the legacy static path: a stored SVG
+        // opened directly on the API origin must never execute script. `sandbox`
+        // (no allow-scripts) + default-src 'none' neutralises active content.
+        res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox");
       },
     }),
   );

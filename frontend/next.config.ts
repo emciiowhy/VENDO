@@ -24,6 +24,30 @@ const nextConfig: NextConfig = {
       ],
     };
   },
+
+  /**
+   * Security headers for the app's own HTML (the API, served by Render, is
+   * hardened separately by helmet). Chiefly anti-clickjacking: the session
+   * cookie is SameSite=None so it rides inside a cross-origin iframe, which
+   * would otherwise let an attacker frame the dashboard and trick a logged-in
+   * owner into single-click state changes (deactivate store, void a sale).
+   * `frame-ancestors 'self'` (plus the legacy X-Frame-Options) forbids any
+   * cross-origin framing while still allowing same-origin embeds. nosniff
+   * blocks MIME-type confusion. Referrer policy trims cross-origin leakage.
+   */
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
