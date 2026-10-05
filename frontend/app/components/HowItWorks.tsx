@@ -18,7 +18,7 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section id="how" className="py-28 bg-ink text-white relative overflow-hidden">
+    <section id="how" className="py-16 sm:py-28 bg-ink text-white relative overflow-hidden">
       <div className="absolute inset-0 grid-bg opacity-[0.15] [mask-image:radial-gradient(700px_400px_at_50%_0%,black,transparent_75%)]" />
       <div className="relative max-w-[1160px] mx-auto px-6">
         <div className="max-w-[60ch] reveal">

@@ -12,7 +12,7 @@ const tools: { icon: IconName; title: string; body: string }[] = [
 
 export function CoreTools() {
   return (
-    <section id="tools" className="py-28 bg-paper hairline-y">
+    <section id="tools" className="py-16 sm:py-28 bg-paper hairline-y">
       <div className="max-w-[1160px] mx-auto px-6">
         <div className="max-w-[60ch] reveal">
           <span className="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">

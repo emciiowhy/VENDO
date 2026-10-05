@@ -102,7 +102,7 @@ export function DemoForm() {
   }
 
   return (
-    <section id="demo" className="py-28 relative overflow-hidden">
+    <section id="demo" className="py-16 sm:py-28 relative overflow-hidden">
       <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-brand-50 blur-3xl rounded-full -z-10" />
       <div className="max-w-[760px] mx-auto px-6">
         <div className="rounded-[20px] bg-white hairline shadow-soft overflow-hidden">
