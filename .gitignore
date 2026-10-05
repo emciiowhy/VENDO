@@ -1,0 +1,4 @@
+# Agent-skill pointers. The real skill files are tracked under .agents/skills/;
+# the entries under .claude/ are machine-local symlinks into that directory
+# (absolute paths to the current user's home), so they must not be committed.
+.claude/skills/
