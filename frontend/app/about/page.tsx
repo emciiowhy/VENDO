@@ -9,11 +9,11 @@ import { ScrollReveal } from "@/app/components/ScrollReveal";
 export const metadata: Metadata = pageMetadata({
   title: "About Us — VendoPOS",
   description:
-    "VendoPOS builds the software that runs local commerce — a multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and offline-capable resiliency for Filipino businesses.",
+    "VendoPOS builds the software that runs local commerce — a multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and transactional integrity for Filipino businesses.",
   path: "/about",
   ogTitle: "About VendoPOS — We build the software that runs local commerce",
   ogDescription:
-    "A multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and offline-capable resiliency for Filipino businesses.",
+    "A multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and transactional integrity for Filipino businesses.",
 });
 
 /** Core engineering pillars — the heart of the bento grid. */
@@ -43,9 +43,9 @@ const PILLARS: {
   {
     icon: "bolt",
     eyebrow: "Reliability",
-    title: "Operational Resiliency",
-    body: "High-performance, offline-capable retail engines keep the counter moving when the network doesn't. Sales sync the moment connectivity returns — no lost transactions.",
-    points: ["Offline-capable POS engine", "Conflict-free sync on reconnect"],
+    title: "Correctness Under Load",
+    body: "Atomic, race-free checkout keeps stock and BIR serials consistent even when many cashiers sell at once. Every sale, void, and return settles as one indivisible transaction.",
+    points: ["Atomic, race-free checkout", "Collision-free invoice serials"],
   },
 ];
 

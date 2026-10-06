@@ -88,7 +88,7 @@ export default function CareersPage() {
             <p className="reveal mt-6 mx-auto max-w-[60ch] text-[1.1rem] leading-relaxed text-ink-soft">
               We&rsquo;re a small, senior team building the multi-tenant POS + ERP that thousands of
               Filipino businesses run on. The problems are real: isolation, correctness under load,
-              and offline resilience at the counter. If that sounds like your kind of hard, read on.
+              and real-time reporting across branches. If that sounds like your kind of hard, read on.
             </p>
           </div>
         </section>

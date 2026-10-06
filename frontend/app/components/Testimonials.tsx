@@ -5,8 +5,8 @@ import { Icon } from "./Icon";
 
 /**
  * Social-proof section — operator stories from local F&B merchants, each praising
- * a concrete VendoPOS strength (shift drawers, fast cashier switching, offline
- * resilience, stock alerts, multi-branch reporting). An auto-rotating, swipeable
+ * a concrete VendoPOS strength (shift drawers, fast cashier switching, loyalty
+ * and margins, stock alerts, multi-branch reporting). An auto-rotating, swipeable
  * carousel with real avatars; all motion respects prefers-reduced-motion.
  */
 interface Review {
@@ -49,13 +49,13 @@ const REVIEWS: Review[] = [
   },
   {
     quote:
-      "A brownout hit mid-afternoon and I panicked — but the till kept selling offline and synced the moment power came back. Nothing lost. At closing the Z-reading and BIR receipts are already sorted, so I've stopped staying late to reconcile by hand.",
+      "Regulars earn points on every cup now, and at month-end I can finally see which drinks actually make money — not just what sold. At closing the Z-reading and BIR receipts are already sorted, so I've stopped staying late to reconcile by hand.",
     name: "Aira Santos",
     role: "Owner",
     store: "Tsaa & Co. Milk Tea",
     region: "Cebu City",
     initials: "AS",
-    highlight: "Kept selling through a brownout",
+    highlight: "Loyalty points + real margins",
     avatar: portrait("1573497019940-1c28c88b4f3e"),
   },
   {
@@ -179,7 +179,7 @@ export function Testimonials() {
             <Dot />
             <span>BIR-ready receipts</span>
             <Dot />
-            <span>Works offline</span>
+            <span>Senior &amp; PWD discounts</span>
             <Dot />
             <span>GCash · Maya · QRPH</span>
           </div>

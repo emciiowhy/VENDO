@@ -3,7 +3,7 @@ import { Icon } from "./Icon";
 const today = [
   "Five or more tools, none of them connected.",
   "Tax season means rebuilding BIR reports by hand.",
-  "The internet drops and you can’t ring up a sale.",
+  "Senior and PWD discounts mean manual math and messy logs.",
   "Foreign POS tools price in dollars, ignore e-wallets.",
   "No single source of truth across the business.",
 ];
@@ -11,7 +11,7 @@ const today = [
 const withVendo = [
   "One platform, seven connected tools.",
   "BIR-ready receipts and reports out of the box.",
-  "Keeps selling offline, syncs the moment you’re back.",
+  "Senior & PWD discounts applied in a tap, logged for BIR.",
   "Peso-first with GCash, Maya, and QRPH built in.",
   "Everything in one place — one source of truth.",
 ];

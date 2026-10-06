@@ -67,7 +67,6 @@ describe("feature → minimum-tier matrix (official product tiers)", () => {
     expect(minTierForFeature("inventory_basic")).toBe("STARTER");
     expect(minTierForFeature("bir_receipts")).toBe("STARTER");
     expect(minTierForFeature("digital_payments_qrph")).toBe("STARTER");
-    expect(minTierForFeature("offline_mode")).toBe("STARTER");
   });
 
   it("gates the back-office ERP pillars at BUSINESS", () => {

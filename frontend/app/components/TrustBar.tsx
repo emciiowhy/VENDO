@@ -9,8 +9,8 @@ export function TrustBar() {
           BIR-ready receipts &amp; reports
         </div>
         <div className="flex items-center gap-2.5 text-[14px] font-semibold text-ink">
-          <Icon name="wifi-off" className="w-[18px] h-[18px] text-brand-600" strokeWidth={1.6} />
-          Offline-capable POS
+          <Icon name="tag" className="w-[18px] h-[18px] text-brand-600" strokeWidth={1.6} />
+          Senior &amp; PWD discounts
         </div>
         <div className="flex items-center gap-2.5 text-[14px] font-semibold text-ink">
           <Icon name="card" className="w-[18px] h-[18px] text-brand-600" strokeWidth={1.6} />

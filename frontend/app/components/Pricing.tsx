@@ -26,7 +26,7 @@ const plans: Plan[] = [
       "Inventory",
       "BIR-ready receipts",
       "GCash / Maya / QRPH",
-      "Offline-capable POS",
+      "Senior / PWD discounts",
     ],
   },
   {

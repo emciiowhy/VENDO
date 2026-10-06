@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     : undefined,
   title: "VendoPOS — One platform to run your whole business | POS + ERP for the Philippines",
   description:
-    "VendoPOS is one multi-tenant POS + ERP built for Filipino businesses. BIR-ready receipts, GCash/Maya/QRPH payments, offline-capable, peso-first. Request a demo.",
+    "VendoPOS is one multi-tenant POS + ERP built for Filipino businesses. BIR-ready receipts, GCash/Maya/QRPH payments, Senior/PWD discounts, peso-first. Request a demo.",
   alternates: { canonical: "/" },
   icons: {
     icon: "/vendo-logo.png",
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "VendoPOS — POS + ERP built for the Philippines",
     description:
-      "Run sales, stock, suppliers, finances, and staff in one system. BIR-ready, GCash/Maya/QRPH, offline-capable, peso-first.",
+      "Run sales, stock, suppliers, finances, and staff in one system. BIR-ready, GCash/Maya/QRPH, Senior/PWD discounts, peso-first.",
     type: "website",
     url: "/",
     siteName: SITE_NAME,
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "VendoPOS — POS + ERP built for the Philippines",
     description:
-      "Run sales, stock, suppliers, finances, and staff in one system. BIR-ready, GCash/Maya/QRPH, offline-capable, peso-first.",
+      "Run sales, stock, suppliers, finances, and staff in one system. BIR-ready, GCash/Maya/QRPH, Senior/PWD discounts, peso-first.",
     images: [OG_IMAGE.url],
   },
 };
