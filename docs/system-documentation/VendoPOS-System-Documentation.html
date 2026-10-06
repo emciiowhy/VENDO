@@ -27,7 +27,7 @@
   .warn { background: var(--warn-soft); border-left: 3px solid var(--warn); padding: 7px 10px; margin: 6px 0 10px; border-radius: 0 4px 4px 0; page-break-inside: avoid; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
   .card li { margin-bottom: 0; }
-  .card { font-size: 8.8pt; line-height: 1.4; }
+  .card { font-size: 8.4pt; line-height: 1.35; }
   .card { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; page-break-inside: avoid; }
   .card h4 { margin-top: 0; color: var(--brand); }
   .tag { display:inline-block; font-size:7.4pt; padding:0 5px; border-radius:3px; background:#e2e8f0; color:#334155; font-weight:bold; }
@@ -64,8 +64,8 @@
     <tr><td class="muted">Stack</td><td>Next.js 16 · React 19 · Tailwind CSS v4 · Express · TypeScript · PostgreSQL (NeonDB)</td></tr>
     <tr><td class="muted">Live</td><td>https://vendopos.shop · API https://api.vendopos.shop</td></tr>
     <tr><td class="muted">Repository</td><td>emciiowhy/VENDO</td></tr>
-    <tr><td class="muted">Document date</td><td>2 October 2026</td></tr>
-    <tr><td class="muted">Version</td><td>1.1 — reflects <code>main</code> as deployed to vendopos.shop (backend <code>vendopos-backend 0.1.0</code>)</td></tr>
+    <tr><td class="muted">Document date</td><td>6 October 2026</td></tr>
+    <tr><td class="muted">Version</td><td>1.2 — reflects <code>main</code> as deployed to vendopos.shop (backend <code>vendopos-backend 0.1.0</code>)</td></tr>
   </table>
 </div>
 
@@ -138,6 +138,7 @@
       <li>Monthly BIR sales ledger (JSON + CSV)</li>
       <li>Voids/returns as contra-entries; POS audit log of sensitive actions</li>
       <li>Cash-drawer variance flags to the centavo</li>
+      <li>Every refund and void needs a reason, reviewed by the owner</li>
     </ul></div>
     <div class="card"><h4>Platform operations</h4><ul>
       <li>Lead pipeline with e-mail verification and atomic lead → tenant provisioning</li>
@@ -145,6 +146,7 @@
       <li>MRR / ARPA billing analytics, subscriber register</li>
       <li>Live system-health stream (SSE), cross-tenant compliance register</li>
       <li>Support impersonation of a merchant owner</li>
+      <li>At-risk store watchlist, platform broadcasts and an admin audit trail</li>
     </ul></div>
   </div>
 
@@ -221,16 +223,17 @@
                   │ pg pool                        │ Resend (transactional e-mail)
                   ▼                                ▼
    ┌───────────────────────────────┐    ┌───────────────────────────┐
-   │  PostgreSQL — NeonDB          │    │  /uploads (UPLOADS_DIR)   │
-   │  serverless, ap-southeast-1   │    │  product images, logos,   │
-   │  idempotent migrate.ts        │    │  avatars, payment QRs     │
+   │  PostgreSQL — NeonDB          │    │  /uploads → media_objects │
+   │  serverless, ap-southeast-1   │    │  (images stored in        │
+   │  idempotent migrate.ts        │    │  Postgres, survive deploys)│
    └───────────────────────────────┘    └───────────────────────────┘</pre>
 
   <h3>Request pipeline</h3>
   <ol>
+    <li><b>CSRF guard</b> (<code>csrfOriginGuard</code>, mounted first): every POST / PUT / PATCH / DELETE must carry an <code>Origin</code> (or <code>Referer</code>) inside the CORS allow-list, otherwise <code>403</code>.</li>
     <li><b>helmet</b> sets security headers; <b>CORS</b> allows the configured origins with <code>credentials: true</code> and the verbs GET, POST, PUT, PATCH, DELETE, OPTIONS.</li>
     <li>JSON bodies are capped at <b>100 kB</b>; cookies are parsed for the session JWT.</li>
-    <li>Public seams mount first: <code>/health</code>, <code>/uploads</code>, <code>/auth</code>, <code>/api/v1/public</code>, <code>/api/leads</code>.</li>
+    <li>Public seams mount first: <code>/health</code>, <code>/uploads</code> (served from the <code>media_objects</code> table, with a sandboxing CSP), <code>/auth</code>, <code>/api/v1/public</code>, <code>/api/leads</code>.</li>
     <li><b>Trial checkpoint</b> (<code>enforceTrialStatus</code>) fences a lapsed-trial store out of every authenticated merchant module with <code>402</code> and a recovery marker. It is a no-op for anonymous and Super Admin requests.</li>
     <li>Each module router applies <code>requireRole(...)</code> and, where premium, <code>requireFeature(...)</code>.</li>
     <li><b>Rate limiting</b> (<code>express-rate-limit</code>) throttles brute force on login, PIN, sign-up and forgot-PIN (10 <i>failed</i> attempts per 15 minutes per IP) and floods on lead forms (30 per hour per IP), answering <code>429</code>.</li>
@@ -268,11 +271,12 @@
     <tr><td>Validation</td><td>zod</td><td>Every write payload is schema-validated; <code>400 {errors}</code> on failure</td></tr>
     <tr><td>Database</td><td>PostgreSQL via NeonDB (serverless), <code>pg</code> driver</td><td>Idempotent schema in <code>src/migrate.ts</code></td></tr>
     <tr><td>Auth</td><td>Google OAuth 2.0, <code>jsonwebtoken</code>, Node <code>crypto.scrypt</code></td><td>HTTP-only cookie <code>vendopos_session</code>, 7-day max age</td></tr>
-    <tr><td>Uploads</td><td>multer</td><td>Images ≤ 2 MB, served from <code>/uploads</code></td></tr>
+    <tr><td>Uploads</td><td>multer → Postgres (<code>media_objects</code>)</td><td>Images ≤ 2 MB (phone photos are shrunk to ≤ 1024 px in the browser first), served from <code>/uploads</code></td></tr>
     <tr><td>E-mail</td><td>Resend</td><td>Optional — without <code>RESEND_API_KEY</code> messages are logged</td></tr>
     <tr><td>Security headers / logs</td><td>helmet, morgan</td><td></td></tr>
+    <tr><td>SEO</td><td>Next.js <code>sitemap.ts</code> / <code>robots.ts</code>, JSON-LD, Open Graph &amp; Twitter cards</td><td>Marketing pages indexed; app surfaces excluded</td></tr>
     <tr><td>Rate limiting</td><td>express-rate-limit</td><td>Credential and lead-form throttles</td></tr>
-    <tr><td>Testing</td><td>vitest, supertest; Playwright (screenshots)</td><td>338 backend test cases in 37 files</td></tr>
+    <tr><td>Testing</td><td>vitest, supertest; Playwright (screenshots)</td><td>362 backend test cases in 40 files</td></tr>
     <tr><td>Hosting</td><td>Vercel (frontend), Render (API), NeonDB (Postgres), Hostinger (domain &amp; DNS), Resend (e-mail)</td><td>See section 29</td></tr>
   </table>
 </div>
@@ -355,6 +359,7 @@
     <li>PINs hashed as <code>scrypt$salt$hash</code>; passwords as <code>pw1$salt$hash</code> (scrypt, per-user salt); verification is constant-time (<code>timingSafeEqual</code>).</li>
     <li><code>GET /auth/me</code> returns <code>{userId, tenantId, role, email, name, tenantName, …}</code> with the tenant name, tier, status and theme looked up live.</li>
     <li><b>Impersonation:</b> <code>POST /auth/impersonate</code> (Super Admin) mints an owner session for support, shown with an <b>Impersonation Banner</b>; <code>/auth/impersonate/stop</code> returns to <code>/admin/tenants</code>.</li>
+    <li><b>Password policy</b> (shared backend + client): 10–128 characters, character variety required, common passwords rejected, blank or space-padded passwords rejected. Applied to sign-up, password change, first-run onboarding and the lead owner password.</li>
     <li><code>POST /auth/logout</code> clears the cookie. All sign-out and terminal-lock actions go through a confirm dialog.</li>
   </ul>
 </div>
@@ -429,11 +434,13 @@
   <p>A void or return never edits or deletes the original sale. It writes a <b>new</b> <code>sales</code> row with <code>kind='void'</code> or <code>kind='return'</code>, negative quantities in <code>sale_items</code> (linked by <code>reverses_sale_item_id</code>) and a link <code>reverses_sale_id</code>. Every revenue total therefore nets automatically. The original's <code>status</code> moves to <code>voided</code>, <code>partially_returned</code> or <code>returned</code>. Reversal documents carry their own serial from <code>reversal_counters</code>.</p>
   <ul>
     <li><code>GET /api/v1/pos/sales/:id</code> shows per-line <b>returnable quantity</b> (sold − already returned).</li>
-    <li><code>POST /api/v1/pos/sales/:id/void</code> reverses the whole sale; <code>POST …/returns</code> reverses chosen lines and quantities, with a reason.</li>
+    <li><code>POST /api/v1/pos/sales/:id/void</code> reverses the whole sale; <code>POST …/returns</code> reverses chosen lines and quantities. A <b>reason is mandatory</b> for every void and return.</li>
     <li>Stock is restored through the ledger (<code>sale_void</code> / <code>return</code>); loyalty points earned are clawed back and redeemed points restored proportionally.</li>
   </ul>
   <h3>POS audit log</h3>
   <p>Sensitive till actions are recorded in <code>pos_audit_logs</code> via <code>POST /api/v1/pos/audit</code>: <code>void_item</code> (line removed before payment), <code>cancel_transaction</code> (cart abandoned) and <code>open_drawer</code> (no-sale drawer open). Each row snapshots the cashier name, item, quantity, peso value and detail. Owners review it in <b>Audit log</b> (<code>/dashboard/audit</code>).</p>
+  <h3>Refunds &amp; voids review</h3>
+  <p><code>GET /api/v1/pos/reversals</code> (owner / manager only) lists every committed void and return with cashier, reason and amount. It appears as <b>Refunds &amp; voids</b> on the Audit log page.</p>
 </div>
 
 <!-- ============================ 11 ============================ -->
@@ -618,6 +625,7 @@
     <tr><td>Profile</td><td>Name, phone, avatar</td></tr>
     <tr><td>Preferences</td><td>Theme (light / dark / system); low-stock, variance and daily-summary notifications</td></tr>
     <tr><td>Security</td><td>Password, active sessions (revoke one / all others), login activity</td></tr>
+    <tr><td>Photos</td><td>Logo and avatar photos are downscaled in the browser before upload; failed uploads show the real error</td></tr>
     <tr><td>Data export</td><td>CSV of <code>sales</code>, <code>inventory</code> or <code>customers</code></td></tr>
     <tr><td>Danger zone</td><td>Owner-only store deactivation</td></tr>
   </table>
@@ -634,7 +642,10 @@
     <li><b>In-app notifications</b> (<code>notifications</code> table): severity <code>info / success / warning / danger</code>, unread de-duplication index. Bell with unread count; mark one or all read.</li>
     <li><b>Producers</b>: low stock after a sale, shift variance, PIN reset requests, trial events, and more — respecting each user's preferences.</li>
     <li><b>Merchant SSE</b> <code>/api/v1/merchant/events/stream</code>: <code>low-stock</code> events (3-second tick) turned into warning toasts.</li>
-    <li><b>Admin SSE</b> <code>/api/v1/admin/health/stream</code>: <code>metrics</code>, <code>activity</code>, <code>alert</code> events.</li>
+    <li><b>Admin SSE</b> <code>/api/v1/admin/health/stream</code>: <code>metrics</code>, <code>activity</code>, <code>alert</code> events. Live Activity also reports infrastructure changes (pool saturated, latency high, recovered), emitted only when the condition changes.</li>
+    <li><b>Health notifications</b> reuse the same detector; latency notices are limited to one per 30 minutes.</li>
+    <li><b>Platform broadcasts</b> from the Super Admin land in merchants' bells.</li>
+    <li>Clicking any notification or activity line opens a detail popup with the full message and a "Go there" link.</li>
     <li><b>E-mail</b> (Resend): onboarding, trial-expired recovery and enterprise-lead alerts.</li>
   </ul>
 </div>
@@ -644,24 +655,28 @@
   <h2>22. Super Admin Platform Console</h2>
   <table>
     <tr><th style="width:22%">Page</th><th>Function</th></tr>
-    <tr><td><code>/admin</code></td><td>Metrics bento overview, platform shortcuts</td></tr>
+    <tr><td><code>/admin</code></td><td>Metrics bento overview with MRR and platform GMV; <b>at-risk watchlist</b> (dormant, trial ending, suspended) ranked by urgency and linked to the tenant panel; platform shortcuts</td></tr>
     <tr><td><code>/admin/leads</code></td><td>Leads Matrix: pipeline <code>PENDING_DEMO / APPROVED / REJECTED</code> with an e-mail <b>verified</b> badge; approve (atomic provisioning with store name, slug, plan, owner) or reject</td></tr>
     <tr><td><code>/admin/tenants</code></td><td>Tenants Directory: all stores, plan, status, owner; change plan/status; impersonate owner</td></tr>
     <tr><td><code>/admin/billing</code></td><td>MRR engine: MRR, active subscribers, ARPA, annual run rate, per-tier breakdown, six-month fee trend and cumulative MRR growth; Subscribers drawer</td></tr>
     <tr><td><code>/admin/health</code></td><td>Health Matrix: NeonDB pool occupancy, query round-trip latency, cross-tenant activity ticker, shift-variance alerts</td></tr>
     <tr><td><code>/admin/compliance</code></td><td>Cross-tenant BIR compliance register and consolidated CSV</td></tr>
+    <tr><td>Broadcast</td><td>Compose a notice to all stores or by plan, with a live recipient count and confirmation</td></tr>
+    <tr><td>Audit trail</td><td><code>admin_audit_logs</code>: plan and status changes, broadcasts and profile edits by the Super Admin</td></tr>
+    <tr><td>Account</td><td>Super Admin profile, avatar and password</td></tr>
   </table>
 </div>
 
 <!-- ============================ 23 ============================ -->
 <div class="section" style="page-break-before:auto;margin-top:18px">
   <h2>23. Marketing Website &amp; Lead Capture</h2>
-  <p>Public pages: home (hero with a live animated POS demo, problem, core tools, how it works, comparison vs. Square and Lightspeed, testimonials, pricing, FAQ, why-PH, sticky CTA), <code>/products/[slug]</code>, <code>/industry/[slug]</code>, <code>/hardware/[slug]</code>, <code>/enterprise</code> (concierge), <code>/company/[slug]</code>, <code>/about</code>, <code>/careers</code>, <code>/blog/[slug]</code>, <code>/resources</code>, <code>/security</code>, <code>/contact</code>, <code>/terms</code>, <code>/privacy</code>, and stateless previews <code>/preview/merchant</code> and <code>/preview/pos</code>.</p>
+  <p>Public pages: home (hero with a live animated POS demo, a "trusted by" marquee of real stores — paid stores plus trial stores that have rung up a real sale — a testimonials carousel, problem, core tools, how it works, comparison vs. Square and Lightspeed, testimonials, pricing, FAQ, why-PH, sticky CTA), <code>/products/[slug]</code>, <code>/industry/[slug]</code>, <code>/hardware/[slug]</code>, <code>/enterprise</code> (concierge), <code>/company/[slug]</code>, <code>/about</code>, <code>/careers</code>, <code>/blog/[slug]</code>, <code>/resources</code>, <code>/security</code>, <code>/contact</code>, <code>/terms</code>, <code>/privacy</code>, and stateless previews <code>/preview/merchant</code> and <code>/preview/pos</code>.</p>
   <ul>
     <li><code>POST /api/leads</code> (rate-limited) — demo request <code>{name, businessName, email, phone, businessType, message?}</code>; upsert on e-mail; <code>400 {errors}</code> on invalid input.</li>
     <li><code>POST /api/leads/verify-email</code> — confirms the prospect's e-mail from the link (single-use, 24-hour token stored only as a SHA-256 hash); page <code>/verify-email</code>.</li>
     <li><code>GET /api/leads</code> — now <b>Super Admin only</b> (prospect personal data).</li>
     <li><code>POST /api/leads/enterprise</code> — enterprise concierge request; e-mails the sales alert.</li>
+    <li><b>SEO</b>: <code>/sitemap.xml</code> (all public marketing routes), <code>/robots.txt</code> (keeps dashboard, POS, admin and auth out of search), Organization / WebSite / SoftwareApplication JSON-LD, Open Graph and Twitter cards, image alt text, optional Google site verification.</li>
     <li><code>GET /api/v1/public/tenants</code> — public directory of stores (trust strip).</li>
   </ul>
 </div>
@@ -704,6 +719,8 @@
     <tr><td><code>employees</code>, <code>attendance</code>, <code>payroll_runs</code>, <code>payroll_items</code>, <code>payroll_counters</code></td><td>HR and payroll; attendance unique per employee per day</td></tr>
     <tr><td><code>customers</code></td><td>CRM with loyalty_points ≥ 0</td></tr>
     <tr><td><code>notifications</code></td><td>Per-user notifications with severity and unread de-dupe</td></tr>
+    <tr><td><code>media_objects</code></td><td>Uploaded images stored in the database (path, content type, bytes) and served at <code>/uploads/*</code></td></tr>
+    <tr><td><code>admin_audit_logs</code></td><td>Super Admin actions: tenant_plan_change, tenant_status_change, broadcast, profile_update</td></tr>
   </table>
   <h3>Notable indexes</h3>
   <p><code>sales (tenant_id, created_at DESC)</code>, <code>sales (tenant_id, lower(reference))</code> unique, <code>sales_status_idx</code>, <code>stock_movements</code> by tenant / product / ref, <code>purchase_order_items_product_idx</code> (reorder and balance-sheet cost lookup), partial unique indexes for one open shift, one active timecard and one pending PIN request.</p>
@@ -736,7 +753,8 @@
     <tr><td><code>GET /catalog</code> · <code>GET /cashiers</code></td><td>Register feed; cashier names</td></tr>
     <tr><td><code>POST /orders</code></td><td>ACID checkout</td></tr>
     <tr><td><code>GET /sales</code> · <code>GET /sales/:id</code></td><td>Sales history / detail with returnable qty</td></tr>
-    <tr><td><code>POST /sales/:id/void</code> · <code>POST /sales/:id/returns</code></td><td>Contra-entry void / return</td></tr>
+    <tr><td><code>POST /sales/:id/void</code> · <code>POST /sales/:id/returns</code></td><td>Contra-entry void / return (reason required)</td></tr>
+    <tr><td><code>GET /reversals</code> (OW, MG)</td><td>Refunds &amp; voids review</td></tr>
     <tr><td><code>POST /audit</code> · <code>GET /audit</code></td><td>POS audit log</td></tr>
     <tr><td><code>GET /shifts/active</code> · <code>POST /shifts/open</code> · <code>POST /shifts/close</code></td><td>X-Read, open, Z-Read</td></tr>
   </table>
@@ -812,10 +830,14 @@
   <tr><td><code>GET /tenants</code> · <code>PATCH /tenants/:id</code></td><td>Tenant directory</td></tr>
   <tr><td><code>GET /analytics/billing</code> · <code>GET /analytics/subscribers</code></td><td>MRR engine</td></tr>
   <tr><td><code>GET /health/metrics</code> · <code>GET /health/stream</code></td><td>System health</td></tr>
-  <tr><td><code>GET /compliance/summary</code> · <code>GET /compliance/export</code></td><td>Compliance register</td></tr></table>
+  <tr><td><code>GET /compliance/summary</code> · <code>GET /compliance/export</code></td><td>Compliance register</td></tr>
+  <tr><td><code>GET /at-risk</code></td><td>At-risk store watchlist</td></tr>
+  <tr><td><code>GET /broadcast/recipients</code> · <code>POST /broadcast</code></td><td>Platform broadcasts</td></tr>
+  <tr><td><code>GET /audit</code></td><td>Admin audit trail</td></tr>
+  <tr><td><code>GET|PATCH /account/profile</code> · <code>POST|DELETE /account/profile/avatar</code> · <code>GET /account/password/status</code> · <code>POST /account/password</code></td><td>Super Admin account</td></tr></table>
 
   <h4>Standard responses</h4>
-  <p><code>200/201 {ok:true,…}</code> · <code>400 {ok:false,errors}</code> validation · <code>401</code> no session · <code>402</code> trial expired · <code>403</code> wrong role, tier (feature locked) or <code>plan_limit_exceeded</code> · <code>404</code> not found / other tenant · <code>409</code> conflict (duplicate, open shift, slug collision) · <code>429</code> rate-limited · <code>500</code> generic error (no stack trace).</p>
+  <p><code>200/201 {ok:true,…}</code> · <code>400 {ok:false,errors}</code> validation · <code>401</code> no session · <code>402</code> trial expired · <code>403</code> wrong role, tier (feature locked) or <code>plan_limit_exceeded</code> · <code>404</code> not found / other tenant · <code>409</code> conflict (duplicate, open shift, slug collision) · <code>403</code> also for a failed CSRF origin check · <code>429</code> rate-limited · <code>500</code> generic error (no stack trace).</p>
 </div>
 
 <!-- ============================ 27 ============================ -->
@@ -836,6 +858,7 @@
     <tr><td><code>/me</code></td><td>Any staff</td><td>Employee self-service clock records</td></tr>
     <tr><td><code>/admin</code>, <code>/admin/leads</code>, <code>/tenants</code>, <code>/billing</code>, <code>/health</code>, <code>/compliance</code></td><td>SA</td><td>Platform console</td></tr>
     <tr><td><code>/preview/merchant</code>, <code>/preview/pos</code></td><td>Public</td><td>Stateless product previews</td></tr>
+    <tr><td><code>/sitemap.xml</code>, <code>/robots.txt</code></td><td>Search engines</td><td>Indexing</td></tr>
   </table>
 </div>
 
@@ -849,9 +872,14 @@
     <li><b>Sessions</b>: first-party HTTP-only cookie via the same-origin proxy, signed stateless CSRF <code>state</code> on OAuth, revocable sessions, login audit, 7-day expiry.</li>
     <li><b>Abuse protection</b>: per-IP rate limits on credentials and public forms; lead e-mail verification; the lead list is Super Admin only.</li>
     <li><b>Fail-safe configuration</b>: production requires a ≥ 32-character <code>JWT_SECRET</code>; a central error handler never exposes internals; dependencies patched for known Express and Next.js advisories.</li>
+    <li><b>CSRF</b>: Origin-based guard on every state-changing request (needs no client token).</li>
+    <li><b>Clickjacking</b>: the web app sends <code>X-Frame-Options: SAMEORIGIN</code>, CSP <code>frame-ancestors 'self'</code>, <code>X-Content-Type-Options: nosniff</code> and a referrer policy.</li>
+    <li><b>Uploads</b>: served with a <code>sandbox</code> CSP so a stored SVG can never run script.</li>
     <li><b>Transport</b>: helmet headers, explicit CORS allow-list with credentials, 100 kB JSON cap, 2 MB image cap with MIME filter.</li>
     <li><b>Integrity</b>: immutable stock ledger, contra-entry reversals, locked serial counters, frozen Z-Read snapshots, POS audit log.</li>
-    <li><b>Infrastructure</b>: managed NeonDB (encryption at rest, backups) and HTTPS hosting.</li>
+    <li><b>Infrastructure</b>: managed NeonDB (encryption at rest, backups) with the database TLS certificate <b>verified</b> (<code>rejectUnauthorized: true</code>), and HTTPS hosting.</li>
+    <li><b>Dependencies</b>: <code>npm audit --omit=dev</code> is clean for backend and frontend; remaining advisories are in dev/test tooling only.</li>
+    <li><b>Security audit</b> (6 Oct 2026, <code>docs/security-audit-2026-10-06.md</code>): DB TLS verification (medium), CSRF on body-less POSTs and clickjacking (low) fixed; legacy disk-upload sandbox needs staging validation; session revocation fails open during a DB outage (informational, accepted).</li>
   </ul>
 </div>
 
@@ -888,7 +916,7 @@ npm run build &amp;&amp; npm start  # production</pre>
     <tr><td><code>JWT_SECRET</code></td><td>Random string, ≥ 32 characters in production (boot fails otherwise); signs sessions and OAuth state</td></tr>
     <tr><td><code>SESSION_COOKIE_NAME</code> / <code>COOKIE_DOMAIN</code></td><td>Cookie name (default <code>vendopos_session</code>) and optional shared domain</td></tr>
     <tr><td><code>PUBLIC_BASE_URL</code></td><td>Origin used to build upload URLs</td></tr>
-    <tr><td><code>UPLOADS_DIR</code></td><td>Where uploads are written (default <code>./uploads</code>); point at a persistent disk in production</td></tr>
+    <tr><td><code>UPLOADS_DIR</code></td><td>Legacy on-disk upload folder, used only as a fallback for older files (new uploads go to Postgres)</td></tr>
     <tr><td><code>COOKIE_SAMESITE</code></td><td>Optional override of the derived cookie SameSite</td></tr>
     <tr><td><code>ADMIN_ALERT_EMAIL</code></td><td>Inbox for Enterprise enquiry alerts</td></tr>
     <tr><td><code>SUPER_ADMIN_EMAIL</code></td><td>Used by <code>npm run seed:super-admin</code></td></tr>
@@ -896,6 +924,8 @@ npm run build &amp;&amp; npm start  # production</pre>
   </table>
   <h3>Environment variables — frontend</h3>
   <table><tr><td style="width:30%"><code>NEXT_PUBLIC_API_URL</code></td><td>Where the browser sends API calls: <code>http://localhost:4000</code> locally; <code>https://vendopos.shop</code> in production (same-origin proxy)</td></tr>
+  <tr><td><code>NEXT_PUBLIC_APP_URL</code></td><td>Canonical site URL for SEO (defaults to <code>https://vendopos.shop</code> in production builds)</td></tr>
+  <tr><td><code>NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION</code></td><td>Optional Google Search Console token</td></tr>
   <tr><td><code>API_PROXY_TARGET</code></td><td>Backend origin the proxy forwards to (default <code>https://api.vendopos.shop</code>)</td></tr></table>
   <h3>Bootstrapping the first Super Admin</h3>
   <pre>SUPER_ADMIN_EMAIL=you@gmail.com npm run seed:super-admin   # idempotent
@@ -907,7 +937,7 @@ INSERT INTO users (email, name, role) VALUES ('you@gmail.com', 'You', 'SUPER_ADM
   <table>
     <tr><th style="width:22%">Piece</th><th>Setup</th></tr>
     <tr><td>Frontend — Vercel</td><td>Root directory <code>frontend</code>; <code>NEXT_PUBLIC_API_URL=https://vendopos.shop</code>; domain <code>vendopos.shop</code> (+ <code>www</code> redirect).</td></tr>
-    <tr><td>API — Render</td><td><code>render.yaml</code> blueprint: root <code>backend</code>, Singapore, build <code>npm install --include=dev &amp;&amp; npm run build &amp;&amp; npm run migrate</code>, start <code>npm start</code>, health check <code>/health</code>; custom domain <code>api.vendopos.shop</code>. Free plan by default — use Starter plus a disk at <code>UPLOADS_DIR</code> so uploads survive deploys.</td></tr>
+    <tr><td>API — Render</td><td><code>render.yaml</code> blueprint: root <code>backend</code>, Singapore, build <code>npm install --include=dev &amp;&amp; npm run build &amp;&amp; npm run migrate</code>, start <code>npm start</code>, health check <code>/health</code>; custom domain <code>api.vendopos.shop</code>. Free plan by default; uploads are stored in Postgres so they survive restarts. Starter avoids the ~50 s cold start after 15 minutes idle.</td></tr>
     <tr><td>Database — NeonDB</td><td>Pooled connection string in <code>DATABASE_URL</code>; migrations run on every deploy.</td></tr>
     <tr><td>DNS — Hostinger</td><td><code>A @ → 216.198.79.1</code> (Vercel), <code>CNAME www → vendopos.shop</code>, <code>CNAME api → vendopos-api.onrender.com</code>, plus Resend records (<code>resend._domainkey</code>, <code>send</code>, <code>rsend</code>) and existing mail SPF/DMARC.</td></tr>
     <tr><td>E-mail — Resend</td><td>Domain <code>vendopos.shop</code> verified (Tokyo region); <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code> on Render.</td></tr>
@@ -919,7 +949,7 @@ INSERT INTO users (email, name, role) VALUES ('you@gmail.com', 'You', 'SUPER_ADM
 <div class="section" style="page-break-before:auto;margin-top:18px">
   <h2>30. Testing &amp; Quality Assurance</h2>
   <ul>
-    <li><b>Backend</b>: vitest + supertest, 338 test cases in 37 files across every module (auth, rate limits, lead verification, statutory deductions, VAT classes, till-access bridge, tier middleware, trial, checkout, refunds, shifts, audit, stock ledger, finance reports, reorder, forecast, payroll processor, timecards, HR, CRM, manufacturing, procurement, admin, billing, health, payment QRs, theme config, e-mails). Validation seams are tested without a database.</li>
+    <li><b>Backend</b>: vitest + supertest, 362 test cases in 40 files across every module (auth, CSRF guard, password policy, rate limits, lead verification, statutory deductions, VAT classes, till-access bridge, tier middleware, trial, checkout, refunds, shifts, audit, stock ledger, finance reports, reorder, forecast, payroll processor, timecards, HR, CRM, manufacturing, procurement, admin, billing, health, payment QRs, theme config, e-mails). Validation seams are tested without a database.</li>
     <li><b>Pure cores</b>: <code>finance.reports</code>, <code>procurement.reorder</code>, <code>forecast</code>, <code>payroll.processor</code>, <code>theme.config</code>, <code>tiers</code> are IO-free and fully unit-tested.</li>
     <li><b>Static checks</b>: <code>tsc --noEmit</code> (backend and frontend), ESLint, <code>next build</code> prerenders all routes.</li>
     <li><b>Visual</b>: Playwright screenshot scripts (<code>frontend/__shots</code>) for light/dark modals, POS and customer display.</li>
@@ -963,6 +993,7 @@ npm run validate:reports</pre>
     <li>Balance Sheet and Cash Flow (A1), barcode scan-to-cart (A3), low-stock → draft PO reorder (A4).</li>
     <li>Immutable stock ledger, contra-entry voids/returns, gap-free BIR invoicing, Z-Read variance flags.</li>
     <li>Philippine statutory payroll deductions, per-product VAT classes, HR ↔ cashier till-access bridge, lead e-mail verification, rate limiting, same-origin deployment.</li>
+    <li>Database-backed uploads, CSRF and clickjacking protection, verified DB TLS, password policy, mandatory refund reasons with owner review, Super Admin watchlist / broadcasts / audit trail, SEO.</li>
     <li>Billing/MRR, trials, health telemetry, notifications, revocable sessions, login audit, Theme Studio, thermal printing, customer display.</li>
   </ul>
   <h3>Open items</h3>
@@ -971,9 +1002,10 @@ npm run validate:reports</pre>
     <tr><td>A2</td><td>Batch / lot tracking + expiry (FIFO)</td><td>Deferred — proposed <code>product_batches</code> table, receiving stamps batch + expiry, near-expiry alerts</td></tr>
     <tr><td>B1</td><td>Sales commissions in payroll</td><td>Needs decision — opt-in separate payroll line</td></tr>
     <tr><td>B2</td><td>Multi-location / inter-branch transfers</td><td>Invasive (<code>location_id</code> across stock and sales); separate effort. Feature key <code>multi_location</code> is declared</td></tr>
-    <tr><td>—</td><td>Offline register mode</td><td>Feature key <code>offline_mode</code> is declared and marketed; no offline queue/sync is implemented yet</td></tr>
+    <tr><td>—</td><td>Offline register mode</td><td>Feature key <code>offline_mode</code> is declared and marketed (including in a testimonial); no offline queue/sync is implemented yet — align the marketing copy or build it</td></tr>
     <tr><td>—</td><td>Subscription payment collection</td><td>MRR is reported; charging is not yet wired. Recommended: PayMongo (GCash, Maya, QR Ph, cards) with monthly invoice + pay link, card auto-renew, webhook activation and grace-period suspension</td></tr>
-    <tr><td>—</td><td>Cloud object storage</td><td>Uploads use local disk (<code>UPLOADS_DIR</code>); on Render's free plan they are lost on each deploy — attach a disk (Starter) or move to S3 / Supabase / Cloudinary</td></tr>
+    <tr><td>—</td><td>Object storage at scale</td><td>Images now live in Postgres (solves Render's ephemeral disk); move to S3 / Supabase / Cloudinary if media volume grows large</td></tr>
+    <tr><td>—</td><td>Security follow-ups</td><td>Validate the legacy upload sandbox on staging; decide on session revocation during DB outages</td></tr>
     <tr><td>—</td><td>BIR accreditation of VendoPOS as POS software</td><td>Merchants need a PTU for their POS; confirm software accreditation requirements with BIR / an accountant</td></tr>
     <tr><td>—</td><td>Statutory rate tables</td><td>2025 schedules are code constants; DB-editable tables are a possible follow-up</td></tr>
     <tr><td>C</td><td>Biometric attendance, controlled-substance register, weight pricing, promotions engine, wholesale tiers</td><td>Vertical-specific; not core</td></tr>
