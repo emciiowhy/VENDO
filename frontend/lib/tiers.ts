@@ -33,7 +33,6 @@ export type Feature =
   | "inventory_basic"
   | "bir_receipts"
   | "digital_payments_qrph"
-  | "offline_mode"
   // BUSINESS
   | "procurement_supply_chain"
   | "customer_relationship_crm"
@@ -53,7 +52,6 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   inventory_basic: "STARTER",
   bir_receipts: "STARTER",
   digital_payments_qrph: "STARTER",
-  offline_mode: "STARTER",
   procurement_supply_chain: "BUSINESS",
   customer_relationship_crm: "BUSINESS",
   finance_accounting: "BUSINESS",

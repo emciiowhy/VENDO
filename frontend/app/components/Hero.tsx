@@ -1,7 +1,7 @@
 import { Icon } from "./Icon";
 import { HeroPosDemo } from "./HeroPosDemo";
 
-const benefits = ["BIR-ready receipts", "GCash · Maya · QRPH", "Works offline", "Peso-first"];
+const benefits = ["BIR-ready receipts", "GCash · Maya · QRPH", "Senior / PWD discounts", "Peso-first"];
 
 export function Hero() {
   return (

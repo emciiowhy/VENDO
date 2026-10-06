@@ -45,7 +45,6 @@ const FEATURE_PITCH: Record<
   inventory_basic: { icon: "box", title: "Inventory", description: "Items, prices and stock." },
   bir_receipts: { icon: "receipt", title: "BIR receipts", description: "Compliant receipts with gap-free serial invoicing." },
   digital_payments_qrph: { icon: "wallet", title: "Digital payments", description: "Accept QRPH and e-wallet payments." },
-  offline_mode: { icon: "wifi-off", title: "Offline mode", description: "Keep ringing up sales without a connection." },
   // BUSINESS
   procurement_supply_chain: {
     icon: "truck",

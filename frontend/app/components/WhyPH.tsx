@@ -22,10 +22,10 @@ const advantages: Advantage[] = [
     tags: ["GCash", "Maya", "QRPH"],
   },
   {
-    icon: "wifi-off",
-    title: "Works offline, syncs later",
-    body: "When the internet drops, the POS keeps selling. Transactions sync automatically the moment you’re back online — you never lose a sale.",
-    tags: ["Offline-first", "Auto-sync"],
+    icon: "tag",
+    title: "Senior & PWD discounts, built in",
+    body: "Apply the mandated 20% Senior Citizen and PWD discounts in a tap — logged correctly for your BIR reporting, with no manual math at the counter.",
+    tags: ["Senior 20%", "PWD", "BIR-logged"],
   },
   {
     glyph: "₱",

@@ -41,7 +41,7 @@ const LINKS: { icon: IconName; title: string; body: string; href: string; cta: s
   {
     icon: "search",
     title: "FAQ",
-    body: "Quick answers on pricing, hardware, onboarding, offline mode, and compliance.",
+    body: "Quick answers on pricing, hardware, onboarding, payments, and compliance.",
     href: "/#faq",
     cta: "Browse FAQ",
   },

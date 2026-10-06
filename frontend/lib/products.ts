@@ -41,7 +41,7 @@ export const PRODUCTS: ProductPage[] = [
     name: "Point of Sale (POS)",
     tagline: "A checkout your cashiers actually enjoy using.",
     intro:
-      "Ring up sales in seconds on any device, with a fast touch layout, offline-safe drawers, and a receipt that's BIR-ready out of the box.",
+      "Ring up sales in seconds on any device, with a fast touch layout, shift drawers that balance to the centavo, and a receipt that's BIR-ready out of the box.",
     features: [
       {
         icon: "bolt",

@@ -48,7 +48,6 @@ export type Feature =
   | "inventory_basic" // Basic inventory / catalogue management
   | "bir_receipts" // BIR-compliant receipts + serial invoicing
   | "digital_payments_qrph" // QRPH / e-wallet digital payments
-  | "offline_mode" // Offline-capable register
   // BUSINESS — Starter PLUS the back-office ERP pillars.
   | "procurement_supply_chain" // Suppliers + purchase orders
   | "customer_relationship_crm" // Customers + loyalty
@@ -73,7 +72,6 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   inventory_basic: "STARTER",
   bir_receipts: "STARTER",
   digital_payments_qrph: "STARTER",
-  offline_mode: "STARTER",
   // BUSINESS — Starter PLUS:
   procurement_supply_chain: "BUSINESS",
   customer_relationship_crm: "BUSINESS",

@@ -11,8 +11,8 @@ const faqs = [
     a: "No long lock-in. We start with a demo and onboard you hands-on. Plans are month-to-month, and we’ll walk you through exactly what’s included before you commit.",
   },
   {
-    q: "What happens when the internet goes down?",
-    a: "Your POS keeps working. Sales are recorded locally and sync automatically the moment your connection is back — so you never miss a transaction during a brownout or a dropped line.",
+    q: "Can I apply Senior Citizen and PWD discounts?",
+    a: "Yes. The mandated 20% Senior Citizen and PWD discounts apply at the tap of a button — no manual math at the counter — and they’re logged correctly for your BIR reporting.",
   },
   {
     q: "Are the receipts and reports BIR-compliant?",

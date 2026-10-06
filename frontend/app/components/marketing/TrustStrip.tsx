@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "@/app/components/Icon";
 
 /**
- * Platform-level proof strip (BIR / e-wallets / offline / peso) shared across
+ * Platform-level proof strip (BIR / e-wallets / Senior-PWD / peso) shared across
  * the marketing detail pages. Kept separate from page-specific content so it
  * never overlaps or repeats a page's own feature claims.
  *
@@ -16,7 +16,7 @@ import { Icon, type IconName } from "@/app/components/Icon";
 const TRUST: { icon: IconName; label: string }[] = [
   { icon: "receipt", label: "BIR-ready receipts" },
   { icon: "card", label: "GCash · Maya · QRPH" },
-  { icon: "wifi-off", label: "Works offline" },
+  { icon: "tag", label: "Senior & PWD discounts" },
   { icon: "peso", label: "Peso-first" },
 ];
 

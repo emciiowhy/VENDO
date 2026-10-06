@@ -14,7 +14,7 @@ const COLUMNS = ["VendoPOS", "Square", "Lightspeed"] as const;
 const ROWS: { feature: string; marks: [Mark, Mark, Mark] }[] = [
   { feature: "BIR-ready receipts & reports", marks: ["yes", "no", "no"] },
   { feature: "GCash · Maya · QRPH built in", marks: ["yes", "no", "partial"] },
-  { feature: "Keeps selling offline", marks: ["yes", "partial", "no"] },
+  { feature: "Senior / PWD discounts built in", marks: ["yes", "no", "no"] },
   { feature: "Peso-first, end to end", marks: ["yes", "no", "no"] },
   { feature: "Per-tenant data isolation", marks: ["yes", "partial", "partial"] },
   { feature: "Local PH onboarding & support", marks: ["yes", "no", "no"] },
