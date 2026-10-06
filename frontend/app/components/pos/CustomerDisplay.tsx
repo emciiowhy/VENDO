@@ -87,7 +87,7 @@ function DisplayLogo({ logoUrl, className }: { logoUrl: string | null; className
         // eslint-disable-next-line @next/next/no-img-element -- cross-origin tenant upload URL; next/image remote config isn't wired for the customer display
         <img
           src={logoUrl}
-          alt=""
+          alt="Store logo"
           className="w-full h-full object-contain p-2"
           onError={() => setBroken(true)}
         />

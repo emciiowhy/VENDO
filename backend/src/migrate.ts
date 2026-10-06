@@ -1009,13 +1009,51 @@ UPDATE sales
    AND vatable_sales_cents = 0
    AND vat_exempt_cents = 0
    AND zero_rated_cents = 0;
+
+-- Durable uploaded images (product photos, payment QRs, logos, avatars). The
+-- host disk is ephemeral on Render's free tier, so bytes live here instead and
+-- are served at /uploads/<path>. Uploads are capped at 2 MB each.
+CREATE TABLE IF NOT EXISTS media_objects (
+  path         TEXT PRIMARY KEY,
+  content_type TEXT NOT NULL,
+  bytes        BYTEA NOT NULL,
+  size_bytes   INTEGER NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
+-- Super-Admin audit trail — accountability for privileged platform actions.
+--
+-- Where \`pos_audit_logs\` records a cashier's pre-commit floor actions WITHIN a
+-- store, THIS table records the platform operator's control-plane actions ABOVE
+-- every store: moving a tenant's plan, suspending/reinstating a workspace, or
+-- firing a platform-wide broadcast. The actor's name is SNAPSHOT at event time
+-- so the ledger stays truthful even if the admin is later renamed, and the
+-- actor FK is SET NULL on delete so history survives the account. \`target_tenant_id\`
+-- is the store acted upon (null for platform-scope actions like a broadcast).
+-- Platform-scoped: not tenant-fenced, SUPER_ADMIN-gated at the route.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_user_id   UUID        REFERENCES users (id) ON DELETE SET NULL,
+  actor_name      TEXT        NOT NULL,                 -- snapshot at event time
+  action          TEXT        NOT NULL CHECK (action IN
+                    ('tenant_plan_change', 'tenant_status_change', 'broadcast', 'profile_update')),
+  target_tenant_id UUID       REFERENCES tenants (id) ON DELETE SET NULL,
+  target_name     TEXT,                                 -- store / audience label snapshot
+  detail          TEXT,                                 -- human summary of the change
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS admin_audit_logs_created_idx ON admin_audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS admin_audit_logs_actor_idx   ON admin_audit_logs (actor_user_id, created_at DESC);
 `;
 
 async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs ready.",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs ready.",
   );
 }
 

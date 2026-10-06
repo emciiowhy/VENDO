@@ -1,21 +1,20 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { Icon, IconSprite, type IconName } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
 import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "About Us — VendoPOS",
   description:
     "VendoPOS builds the software that runs local commerce — a multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and offline-capable resiliency for Filipino businesses.",
-  openGraph: {
-    title: "About VendoPOS — We build the software that runs local commerce",
-    description:
-      "A multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and offline-capable resiliency for Filipino businesses.",
-    type: "website",
-  },
-};
+  path: "/about",
+  ogTitle: "About VendoPOS — We build the software that runs local commerce",
+  ogDescription:
+    "A multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and offline-capable resiliency for Filipino businesses.",
+});
 
 /** Core engineering pillars — the heart of the bento grid. */
 const PILLARS: {

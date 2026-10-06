@@ -37,8 +37,10 @@ export function Footer() {
         <div className="grid md:grid-cols-[1.5fr_1fr_1fr_1fr] gap-10">
           <div>
             <div className="flex items-center gap-2.5 text-white">
-              <BrandMark className="w-8 h-8" />
-              <span className="font-extrabold text-[18px] tracking-tightest">VendoPOS</span>
+              <BrandMark className="w-8 h-8" alt="VendoPOS" />
+              <span className="font-extrabold text-[18px] tracking-tightest" aria-hidden="true">
+                VendoPOS
+              </span>
             </div>
             <p className="mt-4 text-[0.92rem] leading-relaxed max-w-[34ch]">
               One multi-tenant POS + ERP platform built for how Filipino businesses actually

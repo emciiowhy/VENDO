@@ -231,6 +231,39 @@ details[open] .faq-plus {
   }
 }
 
+/* ---- Marketing proof strip (TrustStrip) ----
+   Each proof chip rises in sequence the first time the strip scrolls into view
+   (JS toggles `.is-in`; the per-chip stagger is an inline animation-delay). An
+   entrance *animation* — not a transition — is used deliberately: it releases
+   the element afterwards (no forwards fill) so the chip's own hover transition
+   on transform/shadow stays snappy and un-delayed. GPU transforms + opacity
+   only; fully stilled under reduced-motion. */
+@keyframes vp-chip-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.trust-chip {
+  opacity: 0;
+}
+.trust-chip.is-in {
+  opacity: 1;
+  animation: vp-chip-rise 0.55s var(--ease-snap) backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .trust-chip {
+    opacity: 1;
+  }
+  .trust-chip.is-in {
+    animation: none;
+  }
+}
+
 /* ---- Slide-over drawer (right-anchored action panels) ---- */
 @keyframes vp-slide-in {
   from {
@@ -727,6 +760,14 @@ details[open] .faq-plus {
   transition:
     opacity 0.45s ease,
     transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Hide the scrollbar on the testimonial carousel while keeping it scroll/swipe-able. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .vp-hero-float {

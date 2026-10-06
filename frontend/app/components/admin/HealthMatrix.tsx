@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
 import { useToast } from "../Toast";
+import { NotificationDetail, type DetailView } from "../NotificationDetail";
 import { formatCents } from "@/lib/format";
 import {
   HEALTH_STREAM_URL,
@@ -34,6 +35,7 @@ export function HealthMatrix() {
   const [latency, setLatency] = useState<number[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [flags, setFlags] = useState<VarianceAlert[]>([]);
+  const [detail, setDetail] = useState<DetailView | null>(null);
   // Guards against duplicate event ids across the initial backfill + ticks.
   const seen = useRef<Set<string>>(new Set());
   const seenFlags = useRef<Set<string>>(new Set());
@@ -96,7 +98,7 @@ export function HealthMatrix() {
               cross-tenant
             </span>
           </div>
-          <ActivityTicker events={activity} status={status} />
+          <ActivityTicker events={activity} status={status} onSelect={(ev) => setDetail(activityToDetail(ev))} />
         </div>
 
         {/* Infrastructure vitals */}
@@ -105,8 +107,29 @@ export function HealthMatrix() {
           <LatencyPanel samples={latency} current={metrics?.latencyMs ?? null} />
         </div>
       </div>
+
+      {detail && <NotificationDetail view={detail} onClose={() => setDetail(null)} />}
     </div>
   );
+}
+
+/** Map a live-activity event onto the shared detail-popup shape. */
+function activityToDetail(ev: ActivityEvent): DetailView {
+  if (ev.kind === "health") {
+    return { severity: ev.severity ?? "info", title: ev.tenant, body: ev.detail, at: ev.at, link: null };
+  }
+  const verb = ev.kind === "sale" ? "processed an order" : "added a product";
+  const body =
+    ev.kind === "sale"
+      ? `Reference ${ev.detail}` + (ev.amountCents !== null ? ` · ${formatCents(ev.amountCents)}` : "")
+      : `New product: “${ev.detail}”`;
+  return {
+    severity: ev.kind === "sale" ? "success" : "info",
+    title: `${ev.tenant} ${verb}`,
+    body,
+    at: ev.at,
+    link: null,
+  };
 }
 
 function VarianceFlags({ flags }: { flags: VarianceAlert[] }) {
@@ -178,46 +201,83 @@ function StatusBar({ status, latencyMs }: { status: Status; latencyMs: number | 
   );
 }
 
-function ActivityTicker({ events, status }: { events: ActivityEvent[]; status: Status }) {
+/** Icon-tile tint per health-condition severity. */
+const SEV_TILE: Record<NonNullable<ActivityEvent["severity"]>, string> = {
+  info: "bg-brand-50 text-brand-600",
+  success: "bg-accent-50 text-accent-600",
+  warning: "bg-amber-50 text-amber-600",
+  danger: "bg-rose-50 text-rose-600",
+};
+
+function ActivityTicker({
+  events,
+  status,
+  onSelect,
+}: {
+  events: ActivityEvent[];
+  status: Status;
+  onSelect: (ev: ActivityEvent) => void;
+}) {
   if (events.length === 0) {
     return (
       <p className="px-6 py-12 text-center text-[13.5px] text-ink-soft">
         {status === "connecting"
           ? "Waiting for the first events…"
-          : "Quiet across the platform right now — new sales and product changes will stream in here."}
+          : "Quiet across the platform right now — new sales, product changes and system conditions will stream in here."}
       </p>
     );
   }
   return (
     <ul className="divide-y divide-[rgba(11,18,32,0.06)] dark:divide-[rgba(255,255,255,0.07)] max-h-[420px] overflow-y-auto">
-      {events.map((ev) => (
-        <li key={ev.id} className="step-in flex items-center gap-3 px-5 sm:px-6 py-3">
-          <span
-            className={
-              "grid place-items-center w-9 h-9 rounded-[10px] shrink-0 " +
-              (ev.kind === "sale" ? "bg-accent-50 text-accent-600" : "bg-brand-50 text-brand-600")
-            }
-          >
-            <Icon name={ev.kind === "sale" ? "receipt" : "box"} className="w-[18px] h-[18px]" strokeWidth={1.7} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[13.5px] leading-tight">
-              <span className="font-bold tracking-tight">{ev.tenant}</span>{" "}
-              <span className="text-ink-soft">
-                {ev.kind === "sale" ? "processed an order" : "added a product"}
+      {events.map((ev) => {
+        const health = ev.kind === "health";
+        const tile = health
+          ? SEV_TILE[ev.severity ?? "info"]
+          : ev.kind === "sale"
+            ? "bg-accent-50 text-accent-600"
+            : "bg-brand-50 text-brand-600";
+        const iconName = health ? "activity" : ev.kind === "sale" ? "receipt" : "box";
+        return (
+          <li key={ev.id} className="step-in">
+            <button
+              type="button"
+              onClick={() => onSelect(ev)}
+              className="flex w-full items-center gap-3 px-5 sm:px-6 py-3 text-left hover:bg-paper/70 transition duration-150"
+            >
+              <span className={"grid place-items-center w-9 h-9 rounded-[10px] shrink-0 " + tile}>
+                <Icon name={iconName} className="w-[18px] h-[18px]" strokeWidth={1.7} />
               </span>
-            </div>
-            <div className="text-[12px] text-ink-faint truncate">
-              {ev.kind === "sale" ? ev.detail : `“${ev.detail}”`} · {timeAgo(ev.at)}
-            </div>
-          </div>
-          {ev.amountCents !== null && (
-            <span className="text-[13.5px] font-bold tracking-tight tabular-nums shrink-0">
-              {formatCents(ev.amountCents)}
-            </span>
-          )}
-        </li>
-      ))}
+              <div className="min-w-0 flex-1">
+                {health ? (
+                  <>
+                    <div className="text-[13.5px] leading-tight font-bold tracking-tight">{ev.tenant}</div>
+                    <div className="text-[12px] text-ink-faint truncate">
+                      {ev.detail} · {timeAgo(ev.at)}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[13.5px] leading-tight">
+                      <span className="font-bold tracking-tight">{ev.tenant}</span>{" "}
+                      <span className="text-ink-soft">
+                        {ev.kind === "sale" ? "processed an order" : "added a product"}
+                      </span>
+                    </div>
+                    <div className="text-[12px] text-ink-faint truncate">
+                      {ev.kind === "sale" ? ev.detail : `“${ev.detail}”`} · {timeAgo(ev.at)}
+                    </div>
+                  </>
+                )}
+              </div>
+              {ev.amountCents !== null && (
+                <span className="text-[13.5px] font-bold tracking-tight tabular-nums shrink-0">
+                  {formatCents(ev.amountCents)}
+                </span>
+              )}
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }

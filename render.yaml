@@ -44,17 +44,8 @@ services:
       - key: ADMIN_ALERT_EMAIL
         sync: false
 
-# ── Persisting uploaded images (product photos + payment QRs) ─────────────────
-# The free instance disk is EPHEMERAL: uploads vanish on every deploy/restart.
-# To keep them, do all three:
-#   1. change `plan: free` above to `plan: starter` (or higher),
-#   2. add this env var to the list above:  - key: UPLOADS_DIR  value: /data/uploads
-#   3. add this block to the service (same indent level as envVars):
-#
-#        disk:
-#          name: uploads
-#          mountPath: /data/uploads
-#          sizeGB: 1
-#
-# (Alternatively, swap the bodies of products.storage.ts / paymentQr.storage.ts
-#  for an object-store client — S3 / Supabase Storage / Cloudinary.)
+# ── Uploaded images ─────────────────────────────────────────────────────────
+# The free instance disk is EPHEMERAL, so uploaded images (product photos,
+# payment QRs, logos, avatars) are stored in Postgres (`media_objects`) and
+# served at /uploads by the API — no disk or bucket needed. UPLOADS_DIR only
+# matters for legacy files written to disk before that change.

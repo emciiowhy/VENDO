@@ -23,6 +23,7 @@ import { TierCaption } from "./TierBadge";
 import { logout, type SessionUser } from "@/lib/auth";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { resolveAssetUrl } from "@/lib/images";
+import { FallbackImg } from "../FallbackImg";
 import { asTier, featureAllowed, type Feature } from "@/lib/tiers";
 
 export interface NavItem {
@@ -250,30 +251,26 @@ export function DashShell({
                 )}
               </div>
 
-              <div className="ml-auto flex items-center gap-3">
+              <div className="ml-auto flex items-center gap-2 sm:gap-3">
                 <ThemeToggle />
                 <NotificationBell />
-                <div className="flex items-center gap-2.5 pl-1">
+                <div className="flex items-center gap-2.5 sm:pl-1">
                   <div className="hidden sm:block text-right leading-tight">
                     <div className="text-note font-bold tracking-tight">{user.name}</div>
                     <div className="text-cap font-semibold text-ink-faint">
                       {ROLE_LABEL[user.role]}
                     </div>
                   </div>
-                  {avatarUrl ? (
-                    // The user's own uploaded photo (cross-origin uploads URL);
-                    // plain <img> sidesteps next/image remote config.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={avatarUrl}
-                      alt={user.name}
-                      className="w-9 h-9 rounded-full object-cover hairline"
-                    />
-                  ) : (
-                    <span className="w-9 h-9 rounded-full bg-ink text-paper grid place-items-center font-bold text-[13px] tracking-tight">
-                      {initials || "U"}
-                    </span>
-                  )}
+                  <FallbackImg
+                    src={avatarUrl}
+                    alt={user.name}
+                    className="w-11 h-11 sm:w-9 sm:h-9 rounded-full object-cover hairline"
+                    fallback={
+                      <span className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-ink text-paper grid place-items-center font-bold text-[15px] sm:text-[13px] tracking-tight">
+                        {initials || "U"}
+                      </span>
+                    }
+                  />
                 </div>
               </div>
             </div>
@@ -351,19 +348,16 @@ function StoreBrand({ user, brandSub }: { user: SessionUser; brandSub: string })
 
   return (
     <>
-      {user.tenantLogoUrl ? (
-        // Tenant logo is a cross-origin uploads URL; plain <img> avoids Image config.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={user.tenantLogoUrl}
-          alt={storeName}
-          className="w-8 h-8 rounded-[8px] object-cover hairline"
-        />
-      ) : (
-        <span className="grid place-items-center w-8 h-8 rounded-[8px] bg-brand-500 text-white font-extrabold text-[13px] tracking-tight">
-          {monogram || "S"}
-        </span>
-      )}
+      <FallbackImg
+        src={resolveAssetUrl(user.tenantLogoUrl)}
+        alt={storeName}
+        className="w-8 h-8 rounded-[8px] object-cover hairline"
+        fallback={
+          <span className="grid place-items-center w-8 h-8 rounded-[8px] bg-brand-500 text-white font-extrabold text-[13px] tracking-tight">
+            {monogram || "S"}
+          </span>
+        }
+      />
       <div className="leading-tight min-w-0">
         <div className="font-extrabold text-[16px] tracking-tightest truncate">{storeName}</div>
         <div className="text-[11px] font-semibold text-ink-faint">{brandSub}</div>

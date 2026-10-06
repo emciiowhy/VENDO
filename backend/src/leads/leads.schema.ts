@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validatePassword } from "../auth/password.policy.js";
 
 /**
  * A Lead is a visitor who submitted the "Request a Demo" form but is not yet
@@ -33,10 +34,15 @@ export const leadSchema = z.object({
   // treated as "not set" (the field is genuinely optional). Stored hashed.
   password: z
     .string()
-    .min(8, "Use at least 8 characters.")
-    .max(100, "Keep your password under 100 characters.")
     .optional()
-    .or(z.literal("")),
+    .or(z.literal(""))
+    .superRefine((value, ctx) => {
+      // Optional: an empty/absent password just provisions a Google-only owner.
+      // A supplied one must clear the same strength bar as every other account.
+      if (!value) return;
+      const err = validatePassword(value);
+      if (err) ctx.addIssue({ code: z.ZodIssueCode.custom, message: err });
+    }),
 });
 
 export type LeadInput = z.infer<typeof leadSchema>;

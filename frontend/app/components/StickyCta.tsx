@@ -9,19 +9,56 @@ import { Icon } from "./Icon";
  * view we slide a bottom bar up. Observes the hero section (the first
  * `<section>` in `<main>`) instead of a hard scroll threshold, mirroring the
  * ScrollReveal IntersectionObserver pattern. Hidden entirely at `lg`.
+ *
+ * It also retracts once the footer enters view: the footer has its own "Request
+ * a Demo" link, so keeping the floating bar there is both redundant and would
+ * overlap the last footer links (Legal). So show = hero gone AND footer not yet
+ * visible.
  */
 export function StickyCta() {
-  const [show, setShow] = useState(false);
+  const [heroGone, setHeroGone] = useState(false);
+  const [footerIn, setFooterIn] = useState(false);
+  const [demoIn, setDemoIn] = useState(false);
+  // Retract over the footer AND the #demo form: both already have a Request-a-Demo
+  // action, so the floating bar there is redundant and would overlap the content.
+  const show = heroGone && !footerIn && !demoIn;
 
   useEffect(() => {
+    if (!("IntersectionObserver" in window)) return;
+    const observers: IntersectionObserver[] = [];
+
     const hero = document.querySelector("main > section");
-    if (!hero || !("IntersectionObserver" in window)) return;
-    const io = new IntersectionObserver(
-      ([entry]) => setShow(!entry.isIntersecting),
-      { rootMargin: "-45% 0px 0px 0px" },
-    );
-    io.observe(hero);
-    return () => io.disconnect();
+    if (hero) {
+      const io = new IntersectionObserver(([e]) => setHeroGone(!e.isIntersecting), {
+        rootMargin: "-45% 0px 0px 0px",
+      });
+      io.observe(hero);
+      observers.push(io);
+    }
+
+    const footer = document.querySelector("footer");
+    if (footer) {
+      // Retract a little before the footer fully lands so the bar never clips
+      // the footer's top content on the way in.
+      const io = new IntersectionObserver(([e]) => setFooterIn(e.isIntersecting), {
+        rootMargin: "0px 0px -10% 0px",
+      });
+      io.observe(footer);
+      observers.push(io);
+    }
+
+    // The #demo form is where the CTA points — retract once it's on screen so the
+    // bar never sits on top of the form's own "Request my demo" button.
+    const demo = document.getElementById("demo");
+    if (demo) {
+      const io = new IntersectionObserver(([e]) => setDemoIn(e.isIntersecting), {
+        rootMargin: "0px 0px -25% 0px",
+      });
+      io.observe(demo);
+      observers.push(io);
+    }
+
+    return () => observers.forEach((io) => io.disconnect());
   }, []);
 
   return (

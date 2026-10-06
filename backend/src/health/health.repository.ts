@@ -14,17 +14,22 @@ import { pool, query } from "../db.js";
  * a peso amount, never another Tenant's catalog internals.
  */
 
+export type ActivitySeverity = "info" | "success" | "warning" | "danger";
+
 export interface ActivityEvent {
   /** Stable id so the client can de-dupe / key the row. */
   id: string;
-  kind: "sale" | "product";
+  kind: "sale" | "product" | "health";
+  /** For sale/product: the store name. For health: the condition headline. */
   tenant: string;
   /** ISO timestamp the event occurred. */
   at: string;
-  /** For sales: the settled total in centavos. null for product events. */
+  /** For sales: the settled total in centavos. null otherwise. */
   amountCents: number | null;
-  /** For sales: the BIR reference; for products: the new item's name. */
+  /** For sales: the BIR reference; for products: the item name; for health: the detail line. */
   detail: string;
+  /** Present on `health` condition events; drives the ticker colour. */
+  severity?: ActivitySeverity;
 }
 
 interface ActivityRow {
@@ -161,5 +166,104 @@ export async function sampleServerMetrics(): Promise<ServerMetrics> {
       max: POOL_MAX,
     },
     latencyMs: Math.round(latencyMs * 10) / 10,
+  };
+}
+
+// ── Platform-condition events (infra health as live activity) ─────────────────
+
+/**
+ * A DB round-trip slower than this reads as degraded latency. Mirrors the
+ * threshold the bell's maybeCheckPlatformHealth uses, so the two agree.
+ */
+const LATENCY_WARN_MS = 750;
+
+/**
+ * The last-known condition of each infra signal, carried across stream ticks.
+ * We only emit an activity line on a TRANSITION (healthy→bad or bad→healthy),
+ * never every tick — so a sustained problem is one "saturated" line, not a flood,
+ * and its clearing is one "recovered" line.
+ */
+export interface ConditionState {
+  poolSaturated: boolean;
+  latencyHigh: boolean;
+}
+
+export const INITIAL_CONDITION_STATE: ConditionState = {
+  poolSaturated: false,
+  latencyHigh: false,
+};
+
+/**
+ * Compare a fresh metrics sample against the prior condition state and return
+ * any transition events (plus the new state to carry forward). Pure — all the
+ * stream router does is thread the state through.
+ */
+export function detectConditionEvents(
+  m: ServerMetrics,
+  prev: ConditionState,
+): { events: ActivityEvent[]; state: ConditionState } {
+  const events: ActivityEvent[] = [];
+  const nowSaturated = m.pool.waiting > 0 || m.pool.active >= m.pool.max;
+  const nowLatencyHigh = m.latencyMs > LATENCY_WARN_MS;
+
+  if (nowSaturated && !prev.poolSaturated) {
+    events.push(
+      conditionEvent(
+        "pool",
+        "danger",
+        "Connection pool saturated",
+        `${m.pool.active}/${m.pool.max} connections in use` +
+          (m.pool.waiting > 0 ? `, ${m.pool.waiting} request(s) waiting.` : "."),
+      ),
+    );
+  } else if (!nowSaturated && prev.poolSaturated) {
+    events.push(
+      conditionEvent(
+        "pool",
+        "success",
+        "Connection pool recovered",
+        `Back to ${m.pool.active}/${m.pool.max} connections in use.`,
+      ),
+    );
+  }
+
+  if (nowLatencyHigh && !prev.latencyHigh) {
+    events.push(
+      conditionEvent(
+        "latency",
+        "warning",
+        "Database latency high",
+        `Query round-trip is ${Math.round(m.latencyMs)} ms.`,
+      ),
+    );
+  } else if (!nowLatencyHigh && prev.latencyHigh) {
+    events.push(
+      conditionEvent(
+        "latency",
+        "success",
+        "Database latency back to normal",
+        `Query round-trip is ${Math.round(m.latencyMs)} ms.`,
+      ),
+    );
+  }
+
+  return { events, state: { poolSaturated: nowSaturated, latencyHigh: nowLatencyHigh } };
+}
+
+/** Build a synthetic `health` activity event. The id is unique per transition. */
+function conditionEvent(
+  signal: "pool" | "latency",
+  severity: ActivitySeverity,
+  headline: string,
+  detail: string,
+): ActivityEvent {
+  return {
+    id: `health:${signal}:${severity}:${Date.now()}`,
+    kind: "health",
+    tenant: headline,
+    at: new Date().toISOString(),
+    amountCents: null,
+    detail,
+    severity,
   };
 }

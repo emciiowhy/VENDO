@@ -1,21 +1,19 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { Icon, IconSprite, type IconName } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
 import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Privacy Policy — VendoPOS",
   description:
     "How VendoPOS protects merchant datasets and customer information under the Data Privacy Act of 2012 (RA 10173). We process multi-tenant retail records strictly as a Data Processor.",
-  openGraph: {
-    title: "Privacy Policy — VendoPOS",
-    description:
-      "Our role as a Data Processor for multi-tenant retail records, and the strict non-disclosure of consumer transaction histories captured at the register.",
-    type: "website",
-  },
-};
+  path: "/privacy",
+  ogDescription:
+    "Our role as a Data Processor for multi-tenant retail records, and the strict non-disclosure of consumer transaction histories captured at the register.",
+});
 
 const EFFECTIVE_DATE = "June 14, 2026";
 const DPO_EMAIL = "privacy@vendopos.shop";

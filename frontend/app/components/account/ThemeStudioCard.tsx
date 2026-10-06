@@ -409,7 +409,7 @@ function StorefrontPreview({
       </div>
       {hero && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={hero} alt="" className="h-20 w-full object-cover" />
+        <img src={hero} alt="Store theme hero preview" className="h-20 w-full object-cover" />
       )}
       {/* Product grid */}
       <div className="grid grid-cols-3 gap-2.5 bg-paper p-3.5">

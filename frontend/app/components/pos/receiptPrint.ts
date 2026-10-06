@@ -35,7 +35,7 @@ function fmtDate(iso: string): string {
 function header(store: StoreBrand): string {
   const lines: string[] = [];
   if (store.logoUrl) {
-    lines.push(`<img class="logo" src="${esc(store.logoUrl)}" alt="" />`);
+    lines.push(`<img class="logo" src="${esc(store.logoUrl)}" alt="${esc(store.name)} logo" />`);
   }
   lines.push(`<div class="store">${esc(store.name)}</div>`);
   if (store.receiptHeader) lines.push(`<div class="muted">${esc(store.receiptHeader)}</div>`);

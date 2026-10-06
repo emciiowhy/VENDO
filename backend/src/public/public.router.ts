@@ -11,7 +11,8 @@ export const publicRouter = Router();
 
 /**
  * GET /api/v1/public/tenants — the live "Trusted by" roster for the landing
- * page: the 12 newest active stores as `{ id, businessName, initials }`.
+ * page: the 12 newest genuinely-live stores (paid, or on trial with a real
+ * sale) as `{ id, businessName, initials, logoUrl }`.
  */
 publicRouter.get("/tenants", async (_req, res) => {
   try {

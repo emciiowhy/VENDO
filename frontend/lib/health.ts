@@ -26,13 +26,18 @@ export async function getServerMetrics(): Promise<Result<{ metrics: ServerMetric
   }
 }
 
+export type ActivitySeverity = "info" | "success" | "warning" | "danger";
+
 export interface ActivityEvent {
   id: string;
-  kind: "sale" | "product";
+  kind: "sale" | "product" | "health";
+  /** For sale/product: the store name. For health: the condition headline. */
   tenant: string;
   at: string;
   amountCents: number | null;
   detail: string;
+  /** Present on `health` condition events; drives the ticker colour. */
+  severity?: ActivitySeverity;
 }
 
 export interface VarianceAlert {

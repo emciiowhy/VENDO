@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { Icon, IconSprite } from "@/app/components/Icon";
 import { Nav } from "@/app/components/Nav";
@@ -9,17 +10,13 @@ import { blogPhoto } from "@/lib/marketingMedia";
 import { listPosts, formatPostDate } from "@/lib/blog";
 
 /** Resources → Blog index. Static list of posts, newest-first. */
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Blog — VendoPOS",
   description:
     "Practical guides on BIR compliance, payments, inventory, and running a Filipino business on one platform.",
-  openGraph: {
-    title: "VendoPOS Blog",
-    description:
-      "Practical guides on BIR compliance, payments, inventory, and running a Filipino business on one platform.",
-    type: "website",
-  },
-};
+  path: "/blog",
+  ogTitle: "VendoPOS Blog",
+});
 
 export default function BlogIndex() {
   const posts = listPosts();

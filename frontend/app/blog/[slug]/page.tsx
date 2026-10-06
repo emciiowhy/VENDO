@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon, IconSprite } from "@/app/components/Icon";
@@ -22,11 +23,7 @@ export async function generateMetadata({
   const post = getPost(slug);
   if (!post) return { title: "Post not found — VendoPOS" };
   const title = `${post.title} — VendoPOS`;
-  return {
-    title,
-    description: post.excerpt,
-    openGraph: { title, description: post.excerpt, type: "article" },
-  };
+  return pageMetadata({ title, description: post.excerpt, path: `/blog/${slug}`, type: "article" });
 }
 
 export default async function BlogPostPage({
