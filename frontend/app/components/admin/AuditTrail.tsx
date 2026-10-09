@@ -19,12 +19,33 @@ type State =
   | { status: "error"; message: string }
   | { status: "ready"; rows: AuditRow[] };
 
-const ACTION: Record<AuditAction, { label: string; icon: IconName; tone: string }> = {
+type ActionMeta = { label: string; icon: IconName; tone: string };
+
+const ACTION: Record<AuditAction, ActionMeta> = {
   tenant_plan_change: { label: "Plan change", icon: "tag", tone: "bg-brand-50 text-brand-600" },
   tenant_status_change: { label: "Status change", icon: "ban", tone: "bg-amber-50 text-amber-600" },
   broadcast: { label: "Broadcast", icon: "bolt", tone: "bg-accent-50 text-accent-600" },
   profile_update: { label: "Profile", icon: "gear", tone: "bg-paper text-ink-soft" },
+  owner_password_reset: { label: "Password reset", icon: "lock", tone: "bg-brand-50 text-brand-600" },
+  onboarding_resend: { label: "Onboarding resent", icon: "refresh", tone: "bg-accent-50 text-accent-600" },
+  shift_force_close: { label: "Shift force-closed", icon: "clock", tone: "bg-amber-50 text-amber-600" },
+  lead_edit: { label: "Lead edited", icon: "pencil", tone: "bg-paper text-ink-soft" },
+  lead_delete: { label: "Lead deleted", icon: "trash", tone: "bg-rose-50 text-rose-600" },
 };
+
+/**
+ * Resolve an action's display meta, tolerating an action the client doesn't yet
+ * know about (e.g. a newer backend). A missing entry must degrade to a neutral
+ * chip, never crash the whole trail — this page reading `.tone`/`.icon` off an
+ * unmapped action is exactly what broke it before.
+ */
+function actionMeta(action: string): ActionMeta {
+  return (ACTION as Record<string, ActionMeta>)[action] ?? {
+    label: action.replace(/_/g, " "),
+    icon: "activity",
+    tone: "bg-paper text-ink-soft",
+  };
+}
 
 export function AuditTrail() {
   const [state, setState] = useState<State>({ status: "loading" });
@@ -83,15 +104,17 @@ export function AuditTrail() {
 
       {state.status === "ready" && state.rows.length > 0 && (
         <ul className="divide-y divide-[rgba(11,18,32,0.07)] dark:divide-[rgba(255,255,255,0.09)]">
-          {state.rows.map((r) => (
+          {state.rows.map((r) => {
+            const meta = actionMeta(r.action);
+            return (
             <li key={r.id} className="flex items-center gap-4 px-5 sm:px-6 py-3.5">
-              <span className={"grid place-items-center w-9 h-9 rounded-[10px] shrink-0 " + ACTION[r.action].tone}>
-                <Icon name={ACTION[r.action].icon} className="w-[18px] h-[18px]" strokeWidth={1.6} />
+              <span className={"grid place-items-center w-9 h-9 rounded-[10px] shrink-0 " + meta.tone}>
+                <Icon name={meta.icon} className="w-[18px] h-[18px]" strokeWidth={1.6} />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="text-note">
                   <span className="font-bold tracking-tight">{r.actorName}</span>
-                  <span className="text-ink-soft"> · {ACTION[r.action].label}</span>
+                  <span className="text-ink-soft"> · {meta.label}</span>
                   {r.targetName && (
                     <span className="text-ink-soft">
                       {" → "}
@@ -105,7 +128,8 @@ export function AuditTrail() {
                 {formatWhen(r.createdAt)}
               </time>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </section>
