@@ -587,15 +587,20 @@ export function PosTerminal() {
   //  • MERCHANT_OWNER / MANAGER — they closed the drawer themselves, they're not
   //    bound to this register; return them straight to the back office.
   const isCashier = user.role === "CASHIER";
-  const endShiftExit = () => {
+  const endShiftExit = async () => {
     // Ending the shift also closes the labor clock — one action, no separate
     // "clock out" tap. The outgoing cashier's session is still active here, so
     // the punch lands on the right worker; it's a safe no-op if already off the
     // clock (e.g. an owner who rang up without clocking in).
-    void apiClockOut();
+    //
+    // AWAIT the punch before any handover/navigation: both paths below tear the
+    // page down (the incoming cashier's PIN switch reloads /pos; owners go to
+    // /dashboard). A fire-and-forget fetch would be aborted mid-flight by that
+    // teardown, leaving the outgoing worker still on the clock.
+    setCloseShiftOpen(false);
+    await apiClockOut();
     setClockedIn(false);
     if (isCashier) {
-      setCloseShiftOpen(false);
       setShift(null);
       setNextCashierOpen(true);
     } else {
@@ -979,7 +984,7 @@ export function PosTerminal() {
         <ShiftCloseModal
           shift={shift}
           onCancel={() => setCloseShiftOpen(false)}
-          onClosed={endShiftExit}
+          onClosed={() => void endShiftExit()}
           finishLabel={isCashier ? "Finish & hand over" : "Finish & return to dashboard"}
           finishIcon={isCashier ? "users" : "arrow"}
         />
