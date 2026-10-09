@@ -147,7 +147,7 @@ export function ClockWidget({
         title="Shift clock — clock in / out"
         aria-label="Shift clock"
         className={
-          "inline-flex items-center gap-1.5 rounded-[10px] hairline px-3 py-2 text-[13px] font-semibold transition duration-150 " +
+          "inline-flex items-center gap-1.5 rounded-[10px] hairline h-9 px-3 text-[13px] font-semibold transition duration-150 " +
           (active
             ? "bg-accent-50 text-accent-600 hover:border-accent-200"
             : "bg-surface text-ink-soft hover:text-brand-600 hover:border-brand-200")

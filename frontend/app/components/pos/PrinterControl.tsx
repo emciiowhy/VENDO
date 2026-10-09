@@ -58,7 +58,7 @@ export function PrinterControl({
         title={connected ? `Printer · ${thermal.deviceName}` : "Thermal printer"}
         aria-label="Thermal printer"
         aria-expanded={open}
-        className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
+        className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline h-9 px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200 transition-colors"
       >
         <span className="relative inline-flex">
           <Icon name="receipt" className="w-[18px] h-[18px]" strokeWidth={1.7} />

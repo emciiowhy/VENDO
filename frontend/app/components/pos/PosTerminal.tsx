@@ -125,6 +125,15 @@ function useDismiss(onClose: () => void) {
   return { closing, dismiss };
 }
 
+/**
+ * A quiet vertical hairline that separates the lock-bar into zones (tools ·
+ * who-holds-the-till · my controls). Uses the hairline token's own rgba so it
+ * reads as structure, not a drawn line — you feel the grouping before you see it.
+ */
+function HeaderDivider() {
+  return <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-black/[0.07] dark:bg-white/[0.09]" />;
+}
+
 export function PosTerminal() {
   const session = useSession(["CASHIER", "MANAGER", "MERCHANT_OWNER"]);
   const { theme } = useTheme();
@@ -175,9 +184,6 @@ export function PosTerminal() {
   // Owner-set default opening float for this operator, pre-filling the X-Read gate.
   const [defaultFloatCents, setDefaultFloatCents] = useState(0);
   const [closeShiftOpen, setCloseShiftOpen] = useState(false);
-  // After a cashier closes their drawer we stay on the till and prompt for the
-  // next cashier (no full sign-out), so handover is a PIN away.
-  const [nextCashierOpen, setNextCashierOpen] = useState(false);
   // Confirmation for sign-out / terminal-lock / drawer actions.
   const [confirm, setConfirm] = useState<{
     title: string;
@@ -207,8 +213,7 @@ export function PosTerminal() {
     session.user.role === "CASHIER" &&
     !shiftLoading &&
     clockedIn !== null &&
-    !(clockedIn && shift) &&
-    !nextCashierOpen;
+    !(clockedIn && shift);
 
   // ── Hardware peripherals ───────────────────────────────────────────────────
   // Thermal printer (WebUSB / Web Bluetooth) connection controller. Capability
@@ -218,7 +223,7 @@ export function PosTerminal() {
   // anywhere on the floor, not only the search box. Suspended while an overlay
   // owns the screen so a stray scan can't mutate a cart the cashier can't see.
   const scanOverlayOpen =
-    checkoutOpen || discountOpen || voidOpen || salesOpen || closeShiftOpen || nextCashierOpen || clockOpen || !!confirm || !!receipt || terminalLocked;
+    checkoutOpen || discountOpen || voidOpen || salesOpen || closeShiftOpen || clockOpen || !!confirm || !!receipt || terminalLocked;
   useBarcodeScanner({
     onScan: (code) => addByScan(code),
     enabled: session.status === "authed" && !loading && !scanOverlayOpen,
@@ -580,10 +585,10 @@ export function PosTerminal() {
   const exitLabel = user.role === "CASHIER" ? "Lock terminal" : "Exit to dashboard";
 
   // After a Z-Read the shift is reconciled. The role decides what "done" means:
-  //  • CASHIER — a terminal operator: keep the till on screen and immediately ask
-  //    "who's next?" via the cashier switcher, so the incoming cashier takes over
-  //    with a PIN (no full Store ID re-login between shifts). Their PIN switch
-  //    reloads the page as themselves and the X-Read gate prompts a fresh shift.
+  //  • CASHIER — a terminal operator: close the labor clock, sign the till out,
+  //    and return to the Store ID / PIN screen. A clean sign-out (not an in-place
+  //    "who's next?" handover) means the next cashier always starts from login —
+  //    no half-torn session state left behind on the terminal.
   //  • MERCHANT_OWNER / MANAGER — they closed the drawer themselves, they're not
   //    bound to this register; return them straight to the back office.
   const isCashier = user.role === "CASHIER";
@@ -593,19 +598,21 @@ export function PosTerminal() {
     // the punch lands on the right worker; it's a safe no-op if already off the
     // clock (e.g. an owner who rang up without clocking in).
     //
-    // AWAIT the punch before any handover/navigation: both paths below tear the
-    // page down (the incoming cashier's PIN switch reloads /pos; owners go to
-    // /dashboard). A fire-and-forget fetch would be aborted mid-flight by that
-    // teardown, leaving the outgoing worker still on the clock.
+    // AWAIT the punch before any navigation: both paths below tear the page down
+    // (the cashier logs out → /login; owners go to /dashboard). A fire-and-forget
+    // fetch would be aborted mid-flight, leaving the outgoing worker on the clock.
     setCloseShiftOpen(false);
     await apiClockOut();
-    setClockedIn(false);
     if (isCashier) {
-      setShift(null);
-      setNextCashierOpen(true);
-    } else {
-      window.location.href = "/dashboard";
+      // Sign out and land on login. We don't clear shift/clockedIn here: the page
+      // is navigating away, and leaving them set keeps the activation gate from
+      // flashing in the gap before the redirect lands.
+      await logout();
+      window.location.href = "/login";
+      return;
     }
+    setClockedIn(false);
+    window.location.href = "/dashboard";
   };
 
   const cartProps = {
@@ -682,7 +689,11 @@ export function PosTerminal() {
             </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-2.5">
+          <div className="ml-auto flex items-center gap-1.5">
+            {/* ── The till's tools ──────────────────────────────────────────
+                Low-frequency register utilities, icon-only so they recede
+                behind the cart. The printer keeps its label — its connection
+                state is worth seeing at a glance. */}
             <button
               type="button"
               onClick={() =>
@@ -701,44 +712,38 @@ export function PosTerminal() {
               }
               title="Open cash drawer (No Sale)"
               aria-label="Open cash drawer"
-              className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
+              className="tap press grid place-items-center w-9 h-9 rounded-[10px] bg-surface hairline text-ink-soft hover:text-brand-600 hover:border-brand-200 transition-colors"
             >
               <Icon name="wallet" className="w-[18px] h-[18px]" strokeWidth={1.7} />
-              <span className="hidden lg:inline">Open drawer</span>
             </button>
             <button
               type="button"
               onClick={() => setSalesOpen(true)}
               title="Sales & returns"
               aria-label="Sales and returns"
-              className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
+              className="tap press grid place-items-center w-9 h-9 rounded-[10px] bg-surface hairline text-ink-soft hover:text-brand-600 hover:border-brand-200 transition-colors"
             >
               <Icon name="refresh" className="w-[18px] h-[18px]" strokeWidth={1.7} />
-              <span className="hidden lg:inline">Returns</span>
             </button>
             <button
               type="button"
               onClick={() => window.open("/pos/customer-display", "vendopos-customer-display", "noopener")}
               title="Open customer display"
               aria-label="Open customer display"
-              className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
+              className="tap press grid place-items-center w-9 h-9 rounded-[10px] bg-surface hairline text-ink-soft hover:text-brand-600 hover:border-brand-200 transition-colors"
             >
               <Icon name="monitor" className="w-[18px] h-[18px]" strokeWidth={1.7} />
-              <span className="hidden lg:inline">Customer display</span>
             </button>
             <PrinterControl thermal={thermal} store={store} />
-            <ClockWidget open={clockOpen} onOpenChange={setClockOpen} clockOutViaEndShift={isCashier} />
-            <Link
-              href="/me"
-              title="My record — hours, PTO & paystubs"
-              aria-label="My record"
-              className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
-            >
-              <Icon name="clock" className="w-[18px] h-[18px]" strokeWidth={1.7} />
-              <span className="hidden lg:inline">My record</span>
-            </Link>
-            <ThemeToggle />
-            <div className="hidden sm:flex items-center gap-2.5 rounded-[10px] bg-surface hairline px-3 py-1.5">
+
+            <HeaderDivider />
+
+            {/* ── Who holds the till ────────────────────────────────────────
+                The lock-bar's anchor: the live shift clock (emerald pulse) and
+                the cashier + drawer float, read as one unit. It carries
+                hairline-strong so status stays legible at a glance. */}
+            <ClockWidget open={clockOpen} onOpenChange={setClockOpen} />
+            <div className="hidden sm:flex items-center gap-2.5 rounded-[10px] bg-surface hairline-strong px-3 h-9">
               <span className="w-7 h-7 rounded-full bg-accent-500 text-white grid place-items-center font-bold text-[12px]">
                 {(user.name[0] ?? "C").toUpperCase()}
               </span>
@@ -755,13 +760,30 @@ export function PosTerminal() {
                 </div>
               </div>
             </div>
+
+            <HeaderDivider />
+
+            {/* ── My controls ──────────────────────────────────────────────
+                The cashier's own actions: personal record, theme, and the
+                session lifecycle. End shift is the one deliberate action that
+                earns weight (hairline-strong, ink text); Switch & sign-out
+                stay quiet. */}
+            <Link
+              href="/me"
+              title="My record — hours, PTO & paystubs"
+              aria-label="My record"
+              className="tap press grid place-items-center w-9 h-9 rounded-[10px] bg-surface hairline text-ink-soft hover:text-brand-600 hover:border-brand-200 transition-colors"
+            >
+              <Icon name="file" className="w-[18px] h-[18px]" strokeWidth={1.7} />
+            </Link>
+            <ThemeToggle />
             {shift && (
               <button
                 type="button"
                 onClick={() => void refreshShift().then(() => setCloseShiftOpen(true))}
                 title="End shift (Z-Read)"
                 aria-label="End shift"
-                className="tap press inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[13px] font-semibold text-ink-soft hover:text-rose-600 hover:border-rose-200"
+                className="tap press inline-flex items-center gap-1.5 h-9 rounded-[10px] bg-surface hairline-strong px-3 text-[13px] font-semibold text-ink hover:text-rose-600 hover:border-rose-200 transition-colors"
               >
                 <Icon name="receipt" className="w-[18px] h-[18px]" strokeWidth={1.8} />
                 <span className="hidden sm:inline">End shift</span>
@@ -769,15 +791,16 @@ export function PosTerminal() {
             )}
             <PinSwitcher
               triggerLabel="Switch"
-              triggerClassName="tap press inline-flex items-center gap-1.5 bg-surface hairline rounded-[10px] px-3 text-[13px] font-semibold hover:border-brand-200 hover:text-brand-600"
+              triggerClassName="tap press inline-flex items-center gap-1.5 h-9 bg-surface hairline rounded-[10px] px-3 text-[13px] font-semibold text-ink-soft hover:border-brand-200 hover:text-brand-600 transition-colors"
               openShift={shift ? { expectedCashCents: shift.expectedCashCents } : null}
               onCloseShift={() => void refreshShift().then(() => setCloseShiftOpen(true))}
             />
             <button
               type="button"
               onClick={requestSignOut}
+              title="Sign out"
               aria-label="Sign out"
-              className="tap press grid place-items-center rounded-[10px] bg-surface hairline text-ink-soft hover:text-rose-600 hover:border-rose-200"
+              className="tap press grid place-items-center w-9 h-9 rounded-[10px] bg-surface hairline text-ink-soft hover:text-rose-600 hover:border-rose-200 transition-colors"
             >
               <Icon name="logout" className="w-[18px] h-[18px]" />
             </button>
@@ -985,22 +1008,8 @@ export function PosTerminal() {
           shift={shift}
           onCancel={() => setCloseShiftOpen(false)}
           onClosed={() => void endShiftExit()}
-          finishLabel={isCashier ? "Finish & hand over" : "Finish & return to dashboard"}
-          finishIcon={isCashier ? "users" : "arrow"}
-        />
-      )}
-
-      {/* Cashier handover: after a Z-Read, ask who takes the till next. The
-          incoming cashier picks their profile + PIN; the switch reloads /pos as
-          them and the X-Read gate prompts a fresh shift. */}
-      {nextCashierOpen && (
-        <PinSwitcher
-          autoOpen
-          hideTrigger
-          openShift={null}
-          selectTitle="Next cashier"
-          selectSubtitle="Select the cashier taking over the till."
-          onClose={() => setNextCashierOpen(false)}
+          finishLabel={isCashier ? "Finish & lock terminal" : "Finish & return to dashboard"}
+          finishIcon={isCashier ? "lock" : "arrow"}
         />
       )}
 
