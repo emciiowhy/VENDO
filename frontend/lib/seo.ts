@@ -15,17 +15,24 @@ export const SITE_URL = (
 ).replace(/\/+$/, "");
 
 /**
- * Shared social-card image. A 1024×1024 brand mark in /public that resolves
- * absolutely against `metadataBase` (set in the root layout), guaranteeing a
- * valid og:image / twitter:image on every route. Swap for a dedicated
- * 1200×630 banner when one exists.
+ * Shared social-card image: a real 1200×630 screenshot of the landing-page hero
+ * (captured by scripts/capture-og.mjs → /public/og-landing.png). 1200×630 is the
+ * canonical large-card ratio, so cards use `summary_large_image` to show it full
+ * width rather than a cramped square. Re-run the capture script after a hero
+ * redesign to refresh it. Resolves absolutely against `metadataBase`.
  */
 export const OG_IMAGE = {
-  url: "/vendo-logo.png",
-  width: 1024,
-  height: 1024,
+  url: "/og-landing.png",
+  width: 1200,
+  height: 630,
   alt: "VendoPOS — one platform to run your whole business",
 };
+
+/**
+ * The square brand mark — used for the schema.org Organization logo and the
+ * browser/app icons, where a 1:1 logo (not the wide hero shot) is what's wanted.
+ */
+export const LOGO_IMAGE = "/vendo-logo.png";
 
 export interface PageMetaInput {
   /** Document <title> for the page. */
@@ -75,7 +82,7 @@ export function pageMetadata({
       images: [OG_IMAGE],
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title: socialTitle,
       description: socialDescription,
       images: [OG_IMAGE.url],

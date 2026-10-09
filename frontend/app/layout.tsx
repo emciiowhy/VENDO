@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./components/theme/ThemeProvider";
-import { OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/seo";
+import { OG_IMAGE, LOGO_IMAGE, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -26,8 +26,8 @@ export const metadata: Metadata = {
     "VendoPOS is one multi-tenant POS + ERP built for Filipino businesses. BIR-ready receipts, GCash/Maya/QRPH payments, Senior/PWD discounts, peso-first. Request a demo.",
   alternates: { canonical: "/" },
   icons: {
-    icon: "/vendo-logo.png",
-    apple: "/vendo-logo.png",
+    icon: LOGO_IMAGE,
+    apple: LOGO_IMAGE,
   },
   openGraph: {
     title: "VendoPOS — POS + ERP built for the Philippines",
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     images: [OG_IMAGE],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "VendoPOS — POS + ERP built for the Philippines",
     description:
       "Run sales, stock, suppliers, finances, and staff in one system. BIR-ready, GCash/Maya/QRPH, Senior/PWD discounts, peso-first.",
@@ -59,7 +59,7 @@ const STRUCTURED_DATA = {
       "@id": `${SITE_URL}/#organization`,
       name: SITE_NAME,
       url: SITE_URL,
-      logo: `${SITE_URL}${OG_IMAGE.url}`,
+      logo: `${SITE_URL}${LOGO_IMAGE}`,
     },
     {
       "@type": "WebSite",
