@@ -115,3 +115,38 @@ export async function rejectLead(id: string): Promise<Result<{ lead: Lead }>> {
     return NETWORK_ERR;
   }
 }
+
+/** Fields a Super Admin may correct on a PENDING lead (all optional). */
+export interface LeadEdit {
+  businessName?: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  businessType?: string;
+  message?: string;
+}
+
+/** PATCH a PENDING lead's contact/business fields. */
+export async function editLead(id: string, patch: LeadEdit): Promise<Result<{ lead: Lead }>> {
+  try {
+    const res = await fetch(`${BASE}/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(patch),
+    });
+    return await readJson(res);
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** DELETE a pending or rejected lead (an approved lead is preserved server-side). */
+export async function deleteLead(id: string): Promise<Result<Record<string, never>>> {
+  try {
+    const res = await fetch(`${BASE}/${id}`, { method: "DELETE", credentials: "include" });
+    return await readJson(res);
+  } catch {
+    return NETWORK_ERR;
+  }
+}

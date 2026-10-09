@@ -8,6 +8,8 @@ import {
   approveLead,
   listLeads,
   rejectLead,
+  editLead,
+  deleteLead,
   slugify,
   type Lead,
   type LeadStatus,
@@ -33,6 +35,8 @@ export function LeadsMatrix() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | LeadStatus>("all");
   const [active, setActive] = useState<Lead | null>(null);
+  const [editing, setEditing] = useState<Lead | null>(null);
+  const [deleting, setDeleting] = useState<Lead | null>(null);
   // `success` is the normal green confirmation; `warning` (amber) flags a store
   // that provisioned fine but whose onboarding email didn't go out.
   const [toast, setToast] = useState<{ msg: string; tone: "success" | "warning" } | null>(null);
@@ -216,7 +220,12 @@ export function LeadsMatrix() {
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex justify-end">
-                      <LeadActionCell status={l.status} onProvision={() => setActive(l)} />
+                      <LeadActionCell
+                        status={l.status}
+                        onProvision={() => setActive(l)}
+                        onEdit={() => setEditing(l)}
+                        onDelete={() => setDeleting(l)}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -248,6 +257,31 @@ export function LeadsMatrix() {
             patchLead(active.id, "REJECTED");
             setActive(null);
             flash(`Declined “${active.businessName}”.`);
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditLeadDrawer
+          lead={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+            setEditing(null);
+            flash(`Updated “${updated.businessName}”.`);
+          }}
+        />
+      )}
+
+      {deleting && (
+        <DeleteLeadDialog
+          lead={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            const name = deleting.businessName;
+            setLeads((prev) => prev.filter((l) => l.id !== deleting.id));
+            setDeleting(null);
+            flash(`Deleted “${name}”.`);
           }}
         />
       )}
@@ -364,33 +398,58 @@ function PipelineChip({
 function LeadActionCell({
   status,
   onProvision,
+  onEdit,
+  onDelete,
 }: {
   status: LeadStatus;
   onProvision: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
+  // A small icon button for the secondary row actions (edit / delete).
+  const iconBtn =
+    "grid place-items-center w-8 h-8 rounded-[9px] hairline text-ink-faint transition duration-150";
+
   if (status === "PENDING_DEMO") {
     return (
-      <button
-        type="button"
-        onClick={onProvision}
-        className="inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-[10px] px-3 py-1.5 text-[13px] font-semibold shadow-btn transition duration-150"
-      >
-        <Icon name="bolt" className="w-[15px] h-[15px]" strokeWidth={1.8} />
-        Provision Tenant
-      </button>
+      <div className="inline-flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onProvision}
+          className="inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-[10px] px-3 py-1.5 text-[13px] font-semibold shadow-btn transition duration-150"
+        >
+          <Icon name="bolt" className="w-[15px] h-[15px]" strokeWidth={1.8} />
+          Provision Tenant
+        </button>
+        <button type="button" onClick={onEdit} aria-label="Edit lead" title="Edit lead" className={iconBtn + " hover:text-ink hover:bg-paper"}>
+          <Icon name="pencil" className="w-[15px] h-[15px]" strokeWidth={1.8} />
+        </button>
+        <button type="button" onClick={onDelete} aria-label="Delete lead" title="Delete lead" className={iconBtn + " hover:text-rose-600 hover:bg-rose-50"}>
+          <Icon name="trash" className="w-[15px] h-[15px]" strokeWidth={1.8} />
+        </button>
+      </div>
     );
   }
+
   const provisioned = status === "APPROVED";
   return (
-    <span
-      className={
-        "inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-1 text-[12px] font-semibold " +
-        (provisioned ? "bg-accent-50 text-accent-600" : "bg-rose-50 text-rose-600")
-      }
-    >
-      <Icon name={provisioned ? "check" : "x"} className="w-[14px] h-[14px]" strokeWidth={2.2} />
-      {provisioned ? "Provisioned" : "Declined"}
-    </span>
+    <div className="inline-flex items-center gap-1.5">
+      <span
+        className={
+          "inline-flex items-center gap-1.5 rounded-[10px] px-2.5 py-1 text-[12px] font-semibold " +
+          (provisioned ? "bg-accent-50 text-accent-600" : "bg-rose-50 text-rose-600")
+        }
+      >
+        <Icon name={provisioned ? "check" : "x"} className="w-[14px] h-[14px]" strokeWidth={2.2} />
+        {provisioned ? "Provisioned" : "Declined"}
+      </span>
+      {/* Approved leads are the provenance of a live tenant — never deletable. */}
+      {!provisioned && (
+        <button type="button" onClick={onDelete} aria-label="Delete lead" title="Delete lead" className={iconBtn + " hover:text-rose-600 hover:bg-rose-50"}>
+          <Icon name="trash" className="w-[15px] h-[15px]" strokeWidth={1.8} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -666,5 +725,186 @@ function Field({
         <span className="block mt-1 text-[12px] text-ink-faint">{hint}</span>
       ) : null}
     </label>
+  );
+}
+
+/* ----------------------------- edit lead drawer ---------------------------- */
+
+/**
+ * Correct a PENDING lead's contact details before provisioning — fix a mistyped
+ * owner email that would otherwise fail approval, tidy a business name, etc.
+ * Only reachable for PENDING_DEMO leads (the server enforces the same guard).
+ */
+function EditLeadDrawer({
+  lead,
+  onClose,
+  onSaved,
+}: {
+  lead: Lead;
+  onClose: () => void;
+  onSaved: (lead: Lead) => void;
+}) {
+  const [businessName, setBusinessName] = useState(lead.businessName);
+  const [contactName, setContactName] = useState(lead.contactName);
+  const [email, setEmail] = useState(lead.email);
+  const [phone, setPhone] = useState(lead.phone);
+  const [businessType, setBusinessType] = useState(lead.businessType ?? "");
+  const [message, setMessage] = useState(lead.message ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    setFieldErrors({});
+    const res = await editLead(lead.id, {
+      businessName,
+      contactName,
+      email,
+      phone,
+      businessType,
+      message,
+    });
+    if (res.ok) {
+      onSaved(res.lead);
+      return;
+    }
+    setBusy(false);
+    if (res.errors) setFieldErrors(res.errors);
+    setError(res.error ?? (res.errors ? "Please fix the highlighted fields." : "Could not save."));
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="Edit lead">
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm overlay-backdrop" />
+      <aside className="slide-over absolute inset-y-0 right-0 w-full max-w-[440px] bg-surface hairline-l shadow-soft flex flex-col">
+        <div className="flex items-start justify-between gap-4 px-6 py-5 hairline-b">
+          <div className="flex items-start gap-3">
+            <span className="grid place-items-center w-11 h-11 rounded-[12px] bg-brand-50 text-brand-600 shrink-0">
+              <Icon name="pencil" className="w-5 h-5" strokeWidth={1.6} />
+            </span>
+            <div>
+              <h3 className="text-[1.15rem] font-extrabold tracking-tightest leading-tight">Edit Lead</h3>
+              <p className="mt-0.5 text-[12.5px] text-ink-soft">Correct the details before provisioning</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-ink-faint hover:text-ink transition p-1 -mt-1 -mr-1">
+            <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          <Field label="Business name" error={fieldErrors.businessName}>
+            <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} className={FIELD} />
+          </Field>
+          <Field label="Contact name" error={fieldErrors.contactName}>
+            <input value={contactName} onChange={(e) => setContactName(e.target.value)} className={FIELD} />
+          </Field>
+          <Field label="Email" error={fieldErrors.email}>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} className={FIELD} inputMode="email" autoCapitalize="none" spellCheck={false} />
+          </Field>
+          <Field label="Phone" error={fieldErrors.phone}>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className={FIELD} inputMode="tel" />
+          </Field>
+          <Field label="Business type" error={fieldErrors.businessType}>
+            <input value={businessType} onChange={(e) => setBusinessType(e.target.value)} className={FIELD} />
+          </Field>
+          <Field label="Message" error={fieldErrors.message}>
+            <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} className={FIELD + " resize-none"} />
+          </Field>
+
+          {error && (
+            <p className="text-[13px] font-semibold text-rose-600 bg-rose-50 rounded-[10px] px-3.5 py-2.5">{error}</p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 px-6 py-4 hairline-t">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="px-4 py-2.5 rounded-[10px] text-[14px] font-semibold text-ink-soft hover:text-ink transition duration-150 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={busy}
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn transition duration-150 disabled:opacity-60"
+          >
+            <Icon name="check" className="w-[18px] h-[18px]" strokeWidth={2} />
+            {busy ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+/* ---------------------------- delete lead dialog --------------------------- */
+
+function DeleteLeadDialog({
+  lead,
+  onClose,
+  onDeleted,
+}: {
+  lead: Lead;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirm() {
+    setBusy(true);
+    setError(null);
+    const res = await deleteLead(lead.id);
+    if (res.ok) {
+      onDeleted();
+      return;
+    }
+    setBusy(false);
+    setError(res.error ?? "Could not delete the lead.");
+  }
+
+  return (
+    <div className="fixed inset-0 z-[110] grid place-items-center px-5 py-8" role="dialog" aria-modal="true" aria-label="Delete lead">
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm overlay-backdrop" />
+      <div className="relative w-full max-w-[420px] rounded-xl2 bg-surface hairline shadow-soft overlay-card px-6 py-5">
+        <div className="flex items-center gap-2.5 mb-2">
+          <span className="grid place-items-center w-10 h-10 rounded-[11px] bg-rose-50 text-rose-600 shrink-0">
+            <Icon name="trash" className="w-5 h-5" strokeWidth={1.7} />
+          </span>
+          <h3 className="text-[1.1rem] font-extrabold tracking-tight">Delete this lead?</h3>
+        </div>
+        <p className="text-[13.5px] text-ink-soft leading-relaxed">
+          Permanently remove <strong className="text-ink">{lead.businessName}</strong> from the pipeline.
+          This can&apos;t be undone.
+        </p>
+        {error && (
+          <p className="mt-3 text-[13px] font-semibold text-rose-600 bg-rose-50 rounded-[10px] px-3.5 py-2.5">{error}</p>
+        )}
+        <div className="mt-5 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="flex-1 rounded-[10px] hairline bg-surface py-2.5 font-semibold text-[14px] text-ink-soft hover:text-ink transition duration-150 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void confirm()}
+            disabled={busy}
+            className="flex-1 rounded-[10px] bg-rose-600 hover:bg-rose-700 py-2.5 font-semibold text-[14px] text-white shadow-btn transition duration-150 disabled:opacity-60"
+          >
+            {busy ? "Deleting…" : "Delete lead"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

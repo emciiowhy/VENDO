@@ -10,6 +10,7 @@ import { productsRouter } from "./products/products.router.js";
 import { UPLOADS_ROOT, serveMedia } from "./media/media.store.js";
 import { adminLeadsRouter } from "./admin/adminLeads.router.js";
 import { adminTenantsRouter } from "./admin/adminTenants.router.js";
+import { adminSupportRouter } from "./admin/adminSupport.router.js";
 import { adminRiskRouter } from "./admin/adminRisk.router.js";
 import { adminBroadcastRouter } from "./admin/adminBroadcast.router.js";
 import { adminAuditRouter } from "./admin/adminAudit.router.js";
@@ -119,6 +120,10 @@ export function createApp() {
   app.use("/api/inventory", productsRouter);
   app.use("/api/v1/admin/leads", adminLeadsRouter);
   app.use("/api/v1/admin/tenants", adminTenantsRouter);
+  // Support/operate actions on a subscriber (A1 credentials, A2 timeline, A3
+  // force-close) share the tenants base path; two routers on one mount is fine
+  // and keeps the support surface in its own file.
+  app.use("/api/v1/admin/tenants", adminSupportRouter);
   app.use("/api/v1/admin/at-risk", adminRiskRouter);
   app.use("/api/v1/admin/broadcast", adminBroadcastRouter);
   app.use("/api/v1/admin/audit", adminAuditRouter);

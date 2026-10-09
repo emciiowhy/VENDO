@@ -9,7 +9,12 @@ export type AuditAction =
   | "tenant_plan_change"
   | "tenant_status_change"
   | "broadcast"
-  | "profile_update";
+  | "profile_update"
+  | "owner_password_reset"
+  | "onboarding_resend"
+  | "shift_force_close"
+  | "lead_edit"
+  | "lead_delete";
 
 export interface AuditRow {
   id: string;
