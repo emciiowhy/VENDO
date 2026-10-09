@@ -3,7 +3,7 @@ import { hashPassword } from "../auth/auth.crypto.js";
 import { notifyNewTenant } from "../notifications/notifications.repository.js";
 import { sendOwnerOnboardingEmail } from "../notifications/onboardingEmail.js";
 import { tierFromPlan } from "../lib/tiers.js";
-import type { AdminLead, LeadStatus, ProvisionInput } from "./adminLeads.schema.js";
+import type { AdminLead, LeadEditInput, LeadStatus, ProvisionInput } from "./adminLeads.schema.js";
 
 /**
  * Data access for the Super Admin Leads pipeline, including the atomic
@@ -192,4 +192,82 @@ export async function rejectLead(leadId: string): Promise<AdminLead | null> {
     [leadId],
   );
   return rows[0] ? toAdminLead(rows[0]) : null;
+}
+
+/** Why an edit/delete couldn't proceed — the router maps these to clean codes. */
+export type LeadMutateError =
+  | { code: "NOT_FOUND" }
+  | { code: "WRONG_STATUS"; status: LeadStatus };
+
+/**
+ * Correct a PENDING lead's contact/business fields. Only PENDING_DEMO leads are
+ * editable — once APPROVED the owner/tenant live in their own tables and editing
+ * the lead would change nothing useful. Returns the updated lead, or a typed
+ * error (not found / not pending). `message` accepts "" to clear it.
+ */
+export async function editLead(
+  leadId: string,
+  input: LeadEditInput,
+): Promise<{ ok: true; lead: AdminLead } | { ok: false; error: LeadMutateError }> {
+  // Map API field names → columns. `contactName` is the `name` column.
+  const columns: Record<string, string> = {
+    businessName: "business_name",
+    contactName: "name",
+    email: "email",
+    phone: "phone",
+    businessType: "business_type",
+    message: "message",
+  };
+  const sets: string[] = [];
+  const vals: unknown[] = [leadId];
+  for (const [field, column] of Object.entries(columns)) {
+    const value = (input as Record<string, unknown>)[field];
+    if (value !== undefined) {
+      vals.push(field === "message" && value === "" ? null : value);
+      sets.push(`${column} = $${vals.length}`);
+    }
+  }
+  if (sets.length === 0) return { ok: false, error: { code: "NOT_FOUND" } };
+
+  // Guard the status in the UPDATE itself so an approve can't race the edit.
+  const { rows } = await query<LeadRow>(
+    `UPDATE leads SET ${sets.join(", ")}
+      WHERE id = $1 AND status = 'PENDING_DEMO'
+      RETURNING ${SELECT}`,
+    vals,
+  );
+  if (rows[0]) return { ok: true, lead: toAdminLead(rows[0]) };
+
+  // No row updated → either the lead is gone or it isn't PENDING. Disambiguate
+  // for a precise error (404 vs 409).
+  const { rows: existing } = await query<{ status: LeadStatus }>(
+    `SELECT status FROM leads WHERE id = $1`,
+    [leadId],
+  );
+  if (!existing[0]) return { ok: false, error: { code: "NOT_FOUND" } };
+  return { ok: false, error: { code: "WRONG_STATUS", status: existing[0].status } };
+}
+
+/**
+ * Hard-delete a lead. Allowed for PENDING_DEMO and REJECTED only — an APPROVED
+ * lead is the provenance of a live tenant and is preserved. Returns the deleted
+ * lead's identity for the audit snapshot, or a typed error.
+ */
+export async function deleteLead(
+  leadId: string,
+): Promise<{ ok: true; businessName: string } | { ok: false; error: LeadMutateError }> {
+  const { rows } = await query<{ business_name: string }>(
+    `DELETE FROM leads
+      WHERE id = $1 AND status IN ('PENDING_DEMO', 'REJECTED')
+      RETURNING business_name`,
+    [leadId],
+  );
+  if (rows[0]) return { ok: true, businessName: rows[0].business_name };
+
+  const { rows: existing } = await query<{ status: LeadStatus }>(
+    `SELECT status FROM leads WHERE id = $1`,
+    [leadId],
+  );
+  if (!existing[0]) return { ok: false, error: { code: "NOT_FOUND" } };
+  return { ok: false, error: { code: "WRONG_STATUS", status: existing[0].status } };
 }

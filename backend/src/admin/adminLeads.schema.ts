@@ -48,6 +48,28 @@ export const provisionSchema = z.object({
 
 export type ProvisionInput = z.infer<typeof provisionSchema>;
 
+/**
+ * Fields a Super Admin may correct on a PENDING lead before provisioning (e.g. a
+ * mistyped owner email that would otherwise fail approval). Lifecycle `status`
+ * is deliberately NOT editable here — it moves only via approve/reject — and the
+ * owner password hash is never touched. Every field is optional; the router
+ * requires at least one and only applies to PENDING_DEMO leads.
+ */
+export const leadEditSchema = z
+  .object({
+    businessName: z.string().trim().min(1, "Business name is required.").max(160).optional(),
+    contactName: z.string().trim().min(1, "Contact name is required.").max(120).optional(),
+    email: z.string().trim().toLowerCase().email("Enter a valid email.").max(200).optional(),
+    phone: z.string().trim().min(1, "Phone is required.").max(40).optional(),
+    businessType: z.string().trim().max(80).optional(),
+    message: z.string().trim().max(2000).optional().or(z.literal("")),
+  })
+  .refine((b) => Object.values(b).some((v) => v !== undefined), {
+    message: "Change at least one field.",
+  });
+
+export type LeadEditInput = z.infer<typeof leadEditSchema>;
+
 /** API-facing lead shape (camelCase, with the spec's field names). */
 export interface AdminLead {
   id: string;

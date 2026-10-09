@@ -1038,7 +1038,9 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
   actor_user_id   UUID        REFERENCES users (id) ON DELETE SET NULL,
   actor_name      TEXT        NOT NULL,                 -- snapshot at event time
   action          TEXT        NOT NULL CHECK (action IN
-                    ('tenant_plan_change', 'tenant_status_change', 'broadcast', 'profile_update')),
+                    ('tenant_plan_change', 'tenant_status_change', 'broadcast', 'profile_update',
+                     'owner_password_reset', 'onboarding_resend', 'shift_force_close',
+                     'lead_edit', 'lead_delete')),
   target_tenant_id UUID       REFERENCES tenants (id) ON DELETE SET NULL,
   target_name     TEXT,                                 -- store / audience label snapshot
   detail          TEXT,                                 -- human summary of the change
@@ -1047,13 +1049,45 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
 
 CREATE INDEX IF NOT EXISTS admin_audit_logs_created_idx ON admin_audit_logs (created_at DESC);
 CREATE INDEX IF NOT EXISTS admin_audit_logs_actor_idx   ON admin_audit_logs (actor_user_id, created_at DESC);
+-- Widen the action CHECK on pre-existing databases (the CREATE TABLE above only
+-- applies on a fresh install; an existing table keeps its old, narrower CHECK).
+-- Drop-and-recreate the named constraint so support actions (password reset,
+-- onboarding resend, force-close) and lead edit/delete can be recorded.
+ALTER TABLE admin_audit_logs DROP CONSTRAINT IF EXISTS admin_audit_logs_action_check;
+ALTER TABLE admin_audit_logs ADD CONSTRAINT admin_audit_logs_action_check CHECK (action IN
+  ('tenant_plan_change', 'tenant_status_change', 'broadcast', 'profile_update',
+   'owner_password_reset', 'onboarding_resend', 'shift_force_close',
+   'lead_edit', 'lead_delete'));
+
+-- ---------------------------------------------------------------------------
+-- Super-Admin support narrative — editable notes an operator keeps against a
+-- Tenant (e.g. "called owner, switching banks, follow up Friday"). DISTINCT
+-- from admin_audit_logs: that is the immutable system ledger of actions taken;
+-- this is a mutable human timeline. The per-tenant support view in the console
+-- UNIONs the two — manual notes interleaved with the audit events that target
+-- the same tenant — into one chronological story. SUPER_ADMIN-only (the router
+-- is role-gated); not tenant-fenced, because the platform operator sits above
+-- every Tenant.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS tenant_support_notes (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      UUID        NOT NULL REFERENCES tenants (id) ON DELETE CASCADE,
+  author_user_id UUID        REFERENCES users (id) ON DELETE SET NULL,
+  author_name    TEXT        NOT NULL,                  -- snapshot at write time
+  body           TEXT        NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()     -- bumped on edit
+);
+
+CREATE INDEX IF NOT EXISTS tenant_support_notes_tenant_idx
+  ON tenant_support_notes (tenant_id, created_at DESC);
 `;
 
 async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs ready.",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs, tenant_support_notes ready.",
   );
 }
 

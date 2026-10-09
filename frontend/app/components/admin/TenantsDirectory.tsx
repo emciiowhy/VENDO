@@ -4,7 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon, type IconName } from "../Icon";
 import { formatDate, formatPeso } from "@/lib/format";
 import { impersonateTenant } from "@/lib/auth";
-import { getTenants, updateTenant, type Plan, type Tenant, type TenantStatus } from "@/lib/adminTenants";
+import {
+  getTenants,
+  updateTenant,
+  resetOwnerPassword,
+  resendOnboarding,
+  getOpenShifts,
+  forceCloseShift,
+  getTimeline,
+  createNote,
+  updateNote,
+  deleteNote,
+  type Plan,
+  type Tenant,
+  type TenantStatus,
+  type OpenShift,
+  type TimelineEntry,
+} from "@/lib/adminTenants";
 import { PLAN_LABEL, PLAN_PRICE } from "./tenants.data";
 
 /**
@@ -267,7 +283,13 @@ export function StatusBadge({ status }: { status: string }) {
 
 /* ------------------------------ manage modal ------------------------------ */
 
-type View = { kind: "menu" } | { kind: "editPlan" } | { kind: "confirmStatus"; next: TenantStatus };
+type View =
+  | { kind: "menu" }
+  | { kind: "editPlan" }
+  | { kind: "confirmStatus"; next: TenantStatus }
+  | { kind: "credentials" } // A1 — reset owner password / resend onboarding
+  | { kind: "shifts" } // A3 — force-close a stuck cashier shift
+  | { kind: "timeline" }; // A2 — per-tenant support timeline
 
 function TenantManageModal({
   tenant,
@@ -370,6 +392,25 @@ function TenantManageModal({
                   hint={tenant.ownerEmail ? "Sign in as the owner to help them set up" : "No owner provisioned yet"}
                   onClick={() => void openOwnerDashboard()}
                   disabled={opening || !tenant.ownerEmail}
+                />
+                <ActionBtn
+                  icon="lock"
+                  label="Recover Owner Access"
+                  hint={tenant.ownerEmail ? "Reset password or re-send the sign-in email" : "No owner provisioned yet"}
+                  onClick={() => setView({ kind: "credentials" })}
+                  disabled={!tenant.ownerEmail}
+                />
+                <ActionBtn
+                  icon="clock"
+                  label="Force-Close a Shift"
+                  hint="Z-Read a cashier's drawer left open"
+                  onClick={() => setView({ kind: "shifts" })}
+                />
+                <ActionBtn
+                  icon="file"
+                  label="Support Timeline"
+                  hint="Notes & the audit trail for this store"
+                  onClick={() => setView({ kind: "timeline" })}
                 />
               </Group>
 
@@ -475,6 +516,24 @@ function TenantManageModal({
                   {busy ? "Working…" : view.next === "suspended" ? "Suspend workspace" : "Reinstate workspace"}
                 </button>
               </div>
+            </Panel>
+          )}
+
+          {view.kind === "credentials" && (
+            <Panel title="Recover Owner Access" icon="lock" onBack={() => setView({ kind: "menu" })}>
+              <CredentialsPanel tenant={tenant} toast={toast} />
+            </Panel>
+          )}
+
+          {view.kind === "shifts" && (
+            <Panel title="Force-Close a Shift" icon="clock" onBack={() => setView({ kind: "menu" })}>
+              <ShiftsPanel tenantId={tenant.id} toast={toast} />
+            </Panel>
+          )}
+
+          {view.kind === "timeline" && (
+            <Panel title="Support Timeline" icon="file" onBack={() => setView({ kind: "menu" })}>
+              <TimelinePanel tenantId={tenant.id} toast={toast} />
             </Panel>
           )}
         </div>
@@ -584,5 +643,385 @@ function PrimaryBtn({
     >
       {busy ? "Working…" : children}
     </button>
+  );
+}
+
+/* --------------------------- A1: credential recovery ----------------------- */
+
+function CredentialsPanel({ tenant, toast }: { tenant: Tenant; toast: (msg: string) => void }) {
+  const [busy, setBusy] = useState<null | "reset" | "resend">(null);
+  const [error, setError] = useState<string | null>(null);
+  // The one-time temp password, held only in this closed panel's memory.
+  const [temp, setTemp] = useState<{ password: string; email: string; mailed: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function reset() {
+    setBusy("reset");
+    setError(null);
+    const res = await resetOwnerPassword(tenant.id);
+    setBusy(null);
+    if (res.ok) {
+      setTemp({ password: res.tempPassword, email: res.ownerEmail, mailed: res.mailDelivered });
+    } else {
+      setError(res.error ?? "Could not reset the password.");
+    }
+  }
+
+  async function resend() {
+    setBusy("resend");
+    setError(null);
+    const res = await resendOnboarding(tenant.id);
+    setBusy(null);
+    if (res.ok) {
+      toast(
+        res.mailDelivered
+          ? `Onboarding email re-sent to ${res.ownerEmail}.`
+          : `Re-send attempted, but delivery failed — check the Resend config or server logs.`,
+      );
+    } else {
+      setError(res.error ?? "Could not re-send the onboarding email.");
+    }
+  }
+
+  async function copy() {
+    if (!temp) return;
+    try {
+      await navigator.clipboard.writeText(temp.password);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* clipboard blocked — the password is visible to read out anyway */
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-4">
+      {!temp ? (
+        <>
+          <p className="text-[13.5px] text-ink-soft leading-relaxed">
+            Help an owner who can&apos;t sign in. Resetting generates a one-time temporary password
+            (shown once here and emailed to them); re-sending re-delivers their original sign-in steps.
+          </p>
+          <div className="space-y-2.5">
+            <button
+              type="button"
+              onClick={() => void reset()}
+              disabled={busy !== null}
+              className="flex w-full items-center gap-3 rounded-[12px] hairline px-4 py-3 text-left hover:bg-paper transition duration-150 disabled:opacity-50"
+            >
+              <span className="grid place-items-center w-9 h-9 rounded-[10px] bg-paper text-ink-soft shrink-0">
+                <Icon name="lock" className="w-[18px] h-[18px]" strokeWidth={1.5} />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-bold tracking-tight">
+                  {busy === "reset" ? "Resetting…" : "Reset owner password"}
+                </span>
+                <span className="block text-[12px] text-ink-faint">Mint a temporary password for {tenant.ownerEmail}</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void resend()}
+              disabled={busy !== null}
+              className="flex w-full items-center gap-3 rounded-[12px] hairline px-4 py-3 text-left hover:bg-paper transition duration-150 disabled:opacity-50"
+            >
+              <span className="grid place-items-center w-9 h-9 rounded-[10px] bg-paper text-ink-soft shrink-0">
+                <Icon name="refresh" className="w-[18px] h-[18px]" strokeWidth={1.5} />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-bold tracking-tight">
+                  {busy === "resend" ? "Sending…" : "Re-send onboarding email"}
+                </span>
+                <span className="block text-[12px] text-ink-faint">Re-deliver the welcome / sign-in steps</span>
+              </span>
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="space-y-3">
+          <div className="rounded-[12px] bg-brand-50 ring-2 ring-brand-200 px-4 py-3.5">
+            <div className="text-[11px] font-bold tracking-wide text-brand-700 uppercase">Temporary password</div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <code className="flex-1 font-mono text-[15px] font-bold tracking-tight text-ink break-all">
+                {temp.password}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copy()}
+                className="shrink-0 rounded-[8px] bg-surface hairline px-2.5 py-1.5 text-[12px] font-semibold text-ink-soft hover:text-ink transition"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+          <p className="text-[13px] text-ink-soft leading-relaxed">
+            Shown once — read it to the owner now. {temp.mailed
+              ? `It was also emailed to ${temp.email}.`
+              : `Email delivery to ${temp.email} failed, so share it directly.`}{" "}
+            They should change it from Account → Security after signing in.
+          </p>
+        </div>
+      )}
+      {error && (
+        <p className="text-[13px] font-semibold text-rose-600 bg-rose-50 rounded-[10px] px-3.5 py-2.5">{error}</p>
+      )}
+    </div>
+  );
+}
+
+/* --------------------------- A3: force-close shifts ------------------------ */
+
+function ShiftsPanel({ tenantId, toast }: { tenantId: string; toast: (msg: string) => void }) {
+  const [shifts, setShifts] = useState<OpenShift[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
+
+  async function load() {
+    const res = await getOpenShifts(tenantId);
+    if (res.ok) setShifts(res.shifts);
+    else setError(res.error ?? "Could not load open shifts.");
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
+
+  async function close(shift: OpenShift) {
+    setClosingId(shift.cashierUserId);
+    setError(null);
+    const res = await forceCloseShift(tenantId, shift.cashierUserId);
+    setClosingId(null);
+    if (res.ok) {
+      toast(`Force-closed ${shift.cashierName}'s shift.`);
+      setShifts((prev) => (prev ?? []).filter((s) => s.cashierUserId !== shift.cashierUserId));
+    } else {
+      setError(res.error ?? "Could not force-close the shift.");
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-3">
+      <p className="text-[13.5px] text-ink-soft leading-relaxed">
+        Z-Read a drawer a cashier left open. The shift closes against its expected cash (no physical
+        count — recorded as zero variance) and the Z-Read is stamped with your name.
+      </p>
+      {error && (
+        <p className="text-[13px] font-semibold text-rose-600 bg-rose-50 rounded-[10px] px-3.5 py-2.5">{error}</p>
+      )}
+      {shifts === null ? (
+        <p className="py-6 text-center text-[13px] text-ink-soft">Loading open shifts…</p>
+      ) : shifts.length === 0 ? (
+        <p className="py-6 text-center text-[13px] text-ink-soft">No open shifts — every drawer is reconciled.</p>
+      ) : (
+        <div className="space-y-2">
+          {shifts.map((s) => (
+            <div key={s.cashierUserId} className="flex items-center gap-3 rounded-[12px] hairline px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-bold tracking-tight truncate">{s.cashierName}</div>
+                <div className="text-[12px] text-ink-faint">
+                  Opened {formatDate(s.openedAt)} · {formatPeso(s.salesCents / 100)} sales
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void close(s)}
+                disabled={closingId !== null}
+                className="shrink-0 rounded-[9px] bg-rose-600 hover:bg-rose-700 px-3 py-1.5 text-[13px] font-semibold text-white shadow-btn transition disabled:opacity-60"
+              >
+                {closingId === s.cashierUserId ? "Closing…" : "Force close"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --------------------------- A2: support timeline -------------------------- */
+
+const AUDIT_LABEL: Record<string, string> = {
+  tenant_plan_change: "Plan changed",
+  tenant_status_change: "Status changed",
+  broadcast: "Broadcast sent",
+  profile_update: "Admin profile updated",
+  owner_password_reset: "Owner password reset",
+  onboarding_resend: "Onboarding email re-sent",
+  shift_force_close: "Shift force-closed",
+  lead_edit: "Lead edited",
+  lead_delete: "Lead deleted",
+};
+
+function TimelinePanel({ tenantId, toast }: { tenantId: string; toast: (msg: string) => void }) {
+  const [timeline, setTimeline] = useState<TimelineEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
+
+  async function load() {
+    const res = await getTimeline(tenantId);
+    if (res.ok) setTimeline(res.timeline);
+    else setError(res.error ?? "Could not load the timeline.");
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId]);
+
+  async function add() {
+    const text = body.trim();
+    if (!text) return;
+    setSaving(true);
+    setError(null);
+    const res = await createNote(tenantId, text);
+    setSaving(false);
+    if (res.ok) {
+      setBody("");
+      void load();
+    } else {
+      setError(res.error ?? "Could not save the note.");
+    }
+  }
+
+  async function saveEdit(noteId: string) {
+    const text = editBody.trim();
+    if (!text) return;
+    const res = await updateNote(tenantId, noteId, text);
+    if (res.ok) {
+      setEditingId(null);
+      void load();
+    } else {
+      setError(res.error ?? "Could not update the note.");
+    }
+  }
+
+  async function remove(noteId: string) {
+    const res = await deleteNote(tenantId, noteId);
+    if (res.ok) {
+      toast("Note deleted.");
+      setTimeline((prev) => (prev ?? []).filter((e) => !(e.kind === "note" && e.id === noteId)));
+    } else {
+      setError(res.error ?? "Could not delete the note.");
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-4">
+      {/* Add note */}
+      <div className="rounded-[12px] hairline bg-paper px-3.5 py-3">
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={2}
+          placeholder="Add a support note — a call summary, a follow-up, context for the next operator…"
+          className="field-input w-full rounded-[10px] px-3 py-2 text-[13.5px] text-ink resize-none"
+        />
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => void add()}
+            disabled={saving || !body.trim()}
+            className="rounded-[9px] bg-brand-500 hover:bg-brand-600 px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-btn transition disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Add note"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="text-[13px] font-semibold text-rose-600 bg-rose-50 rounded-[10px] px-3.5 py-2.5">{error}</p>
+      )}
+
+      {/* Timeline */}
+      {timeline === null ? (
+        <p className="py-6 text-center text-[13px] text-ink-soft">Loading the timeline…</p>
+      ) : timeline.length === 0 ? (
+        <p className="py-6 text-center text-[13px] text-ink-soft">Nothing recorded yet — add the first note.</p>
+      ) : (
+        <ol className="space-y-3">
+          {timeline.map((e) => (
+            <li key={`${e.kind}-${e.id}`} className="flex gap-3">
+              <span
+                className={
+                  "mt-1 grid place-items-center w-7 h-7 rounded-full shrink-0 " +
+                  (e.kind === "note" ? "bg-brand-50 text-brand-600" : "bg-paper text-ink-faint")
+                }
+              >
+                <Icon name={e.kind === "note" ? "file" : "activity"} className="w-3.5 h-3.5" strokeWidth={1.8} />
+              </span>
+              <div className="min-w-0 flex-1">
+                {e.kind === "note" && editingId === e.id ? (
+                  <div className="rounded-[10px] hairline bg-paper px-3 py-2.5">
+                    <textarea
+                      value={editBody}
+                      onChange={(ev) => setEditBody(ev.target.value)}
+                      rows={2}
+                      className="field-input w-full rounded-[8px] px-2.5 py-1.5 text-[13px] text-ink resize-none"
+                    />
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="rounded-[8px] px-2.5 py-1 text-[12px] font-semibold text-ink-soft hover:text-ink transition"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void saveEdit(e.id)}
+                        disabled={!editBody.trim()}
+                        className="rounded-[8px] bg-brand-500 hover:bg-brand-600 px-2.5 py-1 text-[12px] font-semibold text-white transition disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[13px] font-bold tracking-tight">
+                        {e.kind === "note" ? e.authorName : AUDIT_LABEL[e.action] ?? e.action}
+                      </span>
+                      <span className="text-[11.5px] text-ink-faint shrink-0">{formatDate(e.at)}</span>
+                    </div>
+                    <p className="text-[13px] text-ink-soft leading-relaxed break-words">
+                      {e.kind === "note" ? e.body : e.detail ?? `by ${e.authorName}`}
+                      {e.kind === "note" && e.edited && (
+                        <span className="ml-1 text-[11px] text-ink-faint">(edited)</span>
+                      )}
+                    </p>
+                    {e.kind === "note" && (
+                      <div className="mt-1 flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingId(e.id);
+                            setEditBody(e.body);
+                          }}
+                          className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-faint hover:text-ink transition"
+                        >
+                          <Icon name="pencil" className="w-3 h-3" strokeWidth={1.8} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void remove(e.id)}
+                          className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-faint hover:text-rose-600 transition"
+                        >
+                          <Icon name="trash" className="w-3 h-3" strokeWidth={1.8} /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }

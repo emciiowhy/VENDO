@@ -63,6 +63,18 @@ export function randomState(): string {
 }
 
 /**
+ * A fresh, random temporary password for Super-Admin credential recovery
+ * (see the admin "reset owner password" support action). 12 base64url chars
+ * (~72 bits) — well past the 8-char minimum and strong enough to email, while
+ * the owner is expected to replace it from /dashboard/account afterwards. This
+ * is the ONLY place a raw credential is ever generated server-side; it's
+ * returned once to the admin + mailed to the owner, never stored in the clear.
+ */
+export function generateTempPassword(): string {
+  return randomBytes(9).toString("base64url");
+}
+
+/**
  * Sign a value with the JWT secret so a cookie can't be forged. Used to bind
  * the OAuth `state` nonce to a tamper-evident cookie value.
  */
