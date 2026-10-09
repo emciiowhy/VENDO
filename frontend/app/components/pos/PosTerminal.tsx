@@ -35,6 +35,7 @@ import { SalesReturnsModal } from "./SalesReturnsModal";
 import { printSaleReceipt, type TicketItem } from "./receiptPrint";
 import { buildSaleReceipt } from "@/lib/escpos";
 import { useThermalPrinter, type UseThermalPrinter } from "./useThermalPrinter";
+import { PrinterControl } from "./PrinterControl";
 import { useBarcodeScanner } from "./useBarcodeScanner";
 import { ClockWidget } from "./ClockWidget";
 import { ActivationWizard } from "./ActivationWizard";
@@ -527,7 +528,7 @@ export function PosTerminal() {
     // best-effort, and the HTML receipt stays available as a fallback.
     if (thermal.status === "connected") {
       const cashierName = session.status === "authed" ? session.user.name : null;
-      void thermal.print(buildSaleReceipt({ store, sale, items, cashierName, kickDrawer: true }));
+      void thermal.print(buildSaleReceipt({ store, sale, items, cashierName, kickDrawer: true, width: thermal.width }));
     }
   }
   function newSale() {
@@ -720,6 +721,7 @@ export function PosTerminal() {
               <Icon name="monitor" className="w-[18px] h-[18px]" strokeWidth={1.7} />
               <span className="hidden lg:inline">Customer display</span>
             </button>
+            <PrinterControl thermal={thermal} store={store} />
             <ClockWidget open={clockOpen} onOpenChange={setClockOpen} clockOutViaEndShift={isCashier} />
             <Link
               href="/me"
@@ -1593,7 +1595,7 @@ function ReceiptOverlay({
   const { closing, dismiss } = useDismiss(onClose);
   const storeName = store.name;
   const sendThermal = () =>
-    void thermal.print(buildSaleReceipt({ store, sale, items, cashierName, kickDrawer: true }));
+    void thermal.print(buildSaleReceipt({ store, sale, items, cashierName, kickDrawer: true, width: thermal.width }));
   return (
     <div className="fixed inset-0 z-[110] grid place-items-center px-5" role="dialog" aria-modal="true" aria-label="Receipt">
       <div className={"absolute inset-0 glass overlay-backdrop " + (closing ? "closing" : "")} />

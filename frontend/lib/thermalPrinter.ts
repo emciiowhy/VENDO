@@ -61,17 +61,11 @@ function findBulkOutEndpoint(
 }
 
 /**
- * Prompt the user to pick a USB printer and open a writable bulk pipe to it.
- * Must be called from a user gesture (browsers gate the chooser on one).
+ * Open a writable bulk pipe to an already-chosen USB device and wrap it as a
+ * {@link ThermalPrinter}. Shared by the chooser path ({@link connectUsbPrinter})
+ * and the silent reconnect path ({@link getGrantedUsbPrinter}).
  */
-export async function connectUsbPrinter(): Promise<ThermalPrinter> {
-  if (!isWebUsbSupported()) {
-    throw new Error("USB printing isn’t supported in this browser. Try Chrome or Edge.");
-  }
-  // Empty filter list lets the user pick any device — thermal heads enumerate
-  // under varied classes (printer class 7, or vendor-specific), so we don't
-  // pre-filter and hide a perfectly good unit.
-  const device = await navigator.usb!.requestDevice({ filters: [] });
+async function openUsbPrinter(device: USBDevice): Promise<ThermalPrinter> {
   await device.open();
   if (device.configuration === null) await device.selectConfiguration(1);
   const endpoint = findBulkOutEndpoint(device);
@@ -105,6 +99,45 @@ export async function connectUsbPrinter(): Promise<ThermalPrinter> {
   };
 }
 
+/**
+ * Prompt the user to pick a USB printer and open a writable bulk pipe to it.
+ * Must be called from a user gesture (browsers gate the chooser on one).
+ */
+export async function connectUsbPrinter(): Promise<ThermalPrinter> {
+  if (!isWebUsbSupported()) {
+    throw new Error("USB printing isn’t supported in this browser. Try Chrome or Edge.");
+  }
+  // Empty filter list lets the user pick any device — thermal heads enumerate
+  // under varied classes (printer class 7, or vendor-specific), so we don't
+  // pre-filter and hide a perfectly good unit.
+  const device = await navigator.usb!.requestDevice({ filters: [] });
+  return openUsbPrinter(device);
+}
+
+/**
+ * Silently reopen a USB printer the user already granted in a prior session —
+ * no chooser, no user gesture. `getDevices()` returns only devices this origin
+ * was previously permitted to use. Returns null when none can be opened, so the
+ * caller can fall back to the HTML receipt without surfacing an error.
+ */
+export async function getGrantedUsbPrinter(): Promise<ThermalPrinter | null> {
+  if (!isWebUsbSupported()) return null;
+  try {
+    const devices = await navigator.usb!.getDevices();
+    for (const device of devices) {
+      try {
+        const printer = await openUsbPrinter(device);
+        return printer;
+      } catch {
+        // Claimed by the OS driver, or no print interface — try the next one.
+      }
+    }
+  } catch {
+    /* getDevices unavailable or rejected */
+  }
+  return null;
+}
+
 // ── Web Bluetooth ─────────────────────────────────────────────────────────────
 
 /**
@@ -135,17 +168,12 @@ async function findWritableCharacteristic(
 }
 
 /**
- * Prompt the user to pick a Bluetooth printer and resolve a writable
- * characteristic. Must be called from a user gesture.
+ * Connect a chosen Bluetooth device's GATT server and wrap its writable
+ * characteristic as a {@link ThermalPrinter}. Shared by the chooser path
+ * ({@link connectBluetoothPrinter}) and silent reconnect
+ * ({@link getGrantedBluetoothPrinter}).
  */
-export async function connectBluetoothPrinter(): Promise<ThermalPrinter> {
-  if (!isWebBluetoothSupported()) {
-    throw new Error("Bluetooth printing isn’t supported in this browser. Try Chrome on Android/desktop.");
-  }
-  const device = await navigator.bluetooth!.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: KNOWN_PRINTER_SERVICES,
-  });
+async function openBluetoothPrinter(device: BluetoothDevice): Promise<ThermalPrinter> {
   const gatt = device.gatt;
   if (!gatt) throw new Error("That Bluetooth device exposes no GATT server.");
   await gatt.connect();
@@ -179,4 +207,48 @@ export async function connectBluetoothPrinter(): Promise<ThermalPrinter> {
       device.addEventListener("gattserverdisconnected", cb);
     },
   };
+}
+
+/**
+ * Prompt the user to pick a Bluetooth printer and resolve a writable
+ * characteristic. Must be called from a user gesture.
+ */
+export async function connectBluetoothPrinter(): Promise<ThermalPrinter> {
+  if (!isWebBluetoothSupported()) {
+    throw new Error("Bluetooth printing isn’t supported in this browser. Try Chrome on Android/desktop.");
+  }
+  const device = await navigator.bluetooth!.requestDevice({
+    acceptAllDevices: true,
+    optionalServices: KNOWN_PRINTER_SERVICES,
+  });
+  return openBluetoothPrinter(device);
+}
+
+/**
+ * Silently reconnect to a Bluetooth printer the user already paired — no
+ * chooser. `getDevices()` is newer than the chooser API (and gated behind a
+ * flag in some Chrome builds), and re-establishing a GATT link outside a user
+ * gesture can be refused, so every failure mode resolves to null and the caller
+ * falls back to the HTML receipt rather than erroring.
+ */
+export async function getGrantedBluetoothPrinter(): Promise<ThermalPrinter | null> {
+  // getDevices() is newer than the chooser API and absent from the TS DOM lib,
+  // so reach it through a narrow structural cast and feature-detect at runtime.
+  const bt = navigator.bluetooth as (Bluetooth & { getDevices?: () => Promise<BluetoothDevice[]> }) | undefined;
+  if (!isWebBluetoothSupported() || typeof bt?.getDevices !== "function") {
+    return null;
+  }
+  try {
+    const devices = await bt.getDevices();
+    for (const device of devices) {
+      try {
+        return await openBluetoothPrinter(device);
+      } catch {
+        // Out of range, powered off, or gesture-gated reconnect — try the next.
+      }
+    }
+  } catch {
+    /* getDevices unavailable or rejected */
+  }
+  return null;
 }

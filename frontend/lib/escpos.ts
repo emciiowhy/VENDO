@@ -189,3 +189,27 @@ export function buildSaleReceipt(args: BuildReceiptArgs): Uint8Array {
   b.cut();
   return b.build();
 }
+
+/**
+ * A short diagnostic ticket for the "Test print" button — proves the link,
+ * paper width, and head alignment without ringing a sale. The column ruler
+ * (`123…`) and the full-width rule make a 58mm-vs-80mm misconfig obvious at a
+ * glance: on the wrong width the ruler wraps or stops short of the edge.
+ */
+export function buildTestReceipt(store: StoreBrand, width = 32): Uint8Array {
+  const b = new EscPosBuilder(width);
+  b.init().align("center");
+  b.doubleSize(true).bold(true).line(store.name || "VendoPOS").bold(false).doubleSize(false);
+  b.line("PRINTER TEST").feed(1).align("left");
+  b.rule();
+  b.row("Paper width", `${width} cols (${width === 48 ? "80mm" : "58mm"})`);
+  b.row("Alignment", "OK");
+  b.line("Column ruler:");
+  // Repeating 1..0 across the full width — any wrap/short-fall exposes a bad width.
+  b.line(Array.from({ length: width }, (_, i) => String((i + 1) % 10)).join(""));
+  b.rule();
+  b.align("center").line("If this looks aligned,").line("you're ready to sell.");
+  b.feed(1).line("Powered by VendoPOS");
+  b.cut();
+  return b.build();
+}

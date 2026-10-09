@@ -68,7 +68,7 @@ function itemRows(items: TicketItem[]): string {
 
 const STYLE = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { width: 80mm; padding: 4mm 5mm; font-family: "Menlo","Consolas",monospace; color: #000; font-size: 12px; line-height: 1.45; }
+  body { width: 80mm; margin: 0 auto; padding: 4mm 5mm; font-family: "Menlo","Consolas",monospace; color: #000; font-size: 12px; line-height: 1.45; }
   .center { text-align: center; }
   .logo { width: 64px; height: 64px; object-fit: contain; margin: 0 auto 4px; display: block; }
   .store { font-size: 15px; font-weight: 800; letter-spacing: -0.2px; }

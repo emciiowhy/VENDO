@@ -28,7 +28,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
         aria-label={label}
         title={title}
         className={
-          "press tap sm:hidden grid place-items-center w-11 h-11 rounded-[12px] hairline bg-surface " +
+          "press tap sm:hidden shrink-0 grid place-items-center w-11 h-11 rounded-[12px] hairline bg-surface " +
           "text-ink-soft hover:text-ink active:text-ink transition-colors duration-150 " +
           className
         }
@@ -49,15 +49,19 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
         aria-label={label}
         title={title}
         className={
-          "press hidden sm:inline-flex relative items-center w-[58px] h-9 rounded-full hairline bg-paper " +
+          "press hidden sm:inline-flex relative shrink-0 items-center w-[58px] h-9 rounded-full hairline bg-paper " +
           "transition-colors duration-200 ease-in-out " +
           className
         }
       >
-        {/* sliding knob */}
+        {/* sliding knob — elevated fill + a hairline edge so it reads as a
+            distinct knob even in dark mode, where bg-surface and bg-paper are
+            near-identical near-blacks and shadow-card is invisible. */}
         <span
           className={
-            "absolute top-1/2 -translate-y-1/2 grid place-items-center w-7 h-7 rounded-full bg-surface shadow-card transition-transform duration-200 ease-in-out " +
+            "absolute top-1/2 -translate-y-1/2 grid place-items-center w-7 h-7 rounded-full " +
+            "bg-surface dark:bg-surface-2 shadow-card ring-1 ring-black/5 dark:ring-white/10 " +
+            "transition-transform duration-200 ease-in-out " +
             (dark ? "translate-x-[26px]" : "translate-x-[3px]")
           }
         >
