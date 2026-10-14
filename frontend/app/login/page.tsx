@@ -63,7 +63,7 @@ export default function LoginPage() {
             <span className="font-extrabold text-[19px] tracking-tightest">VendoPOS</span>
           </Link>
 
-          <div className="relative">
+          <div className="relative flex-1 flex flex-col justify-center py-6">
             <h2 className="text-[2rem] xl:text-[2.35rem] font-extrabold tracking-tightest leading-[1.1]">
               One terminal.
               <br />
