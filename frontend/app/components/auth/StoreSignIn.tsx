@@ -345,9 +345,7 @@ export function StoreSignIn() {
                 aria-label="Close"
                 className="text-ink-faint hover:text-ink transition -mt-2.5 -mr-2.5 grid place-items-center w-11 h-11 rounded-[8px]"
               >
-                <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-                  <path d="M6 6l12 12M18 6 6 18" />
-                </svg>
+                <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
               </button>
             </div>
 
@@ -438,9 +436,7 @@ export function StoreSignIn() {
                 aria-label="Close"
                 className="text-ink-faint hover:text-ink transition -mt-2.5 -mr-2.5 grid place-items-center w-11 h-11 rounded-[8px]"
               >
-                <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-                  <path d="M6 6l12 12M18 6 6 18" />
-                </svg>
+                <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
               </button>
             </div>
 
@@ -586,9 +582,7 @@ export function StoreSignIn() {
                 aria-label="Close"
                 className="text-ink-faint hover:text-ink transition -mt-2.5 -mr-2.5 grid place-items-center w-11 h-11 rounded-[8px]"
               >
-                <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-                  <path d="M6 6l12 12M18 6 6 18" />
-                </svg>
+                <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
               </button>
             </div>
 
@@ -731,9 +725,7 @@ export function StoreSignIn() {
                 aria-label="Close"
                 className="text-ink-faint hover:text-ink transition -mt-2.5 -mr-2.5 grid place-items-center w-11 h-11 rounded-[8px]"
               >
-                <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-                  <path d="M6 6l12 12M18 6 6 18" />
-                </svg>
+                <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
               </button>
             </div>
 

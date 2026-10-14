@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { LOGIN_ERRORS } from "@/lib/auth";
+import { Icon } from "../Icon";
 
 /**
  * Surfaces the `?error=<code>` the backend redirects to /login with when an
@@ -20,10 +21,7 @@ export function LoginNotice() {
       role="alert"
       className="mb-5 flex items-start gap-2.5 rounded-[12px] bg-rose-50 border border-rose-200/70 px-4 py-3 text-[13px] text-rose-700 leading-relaxed"
     >
-      <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] mt-px shrink-0" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 8v5M12 16h.01" />
-      </svg>
+      <Icon name="warning" className="w-[18px] h-[18px] mt-px shrink-0" strokeWidth={1.7} />
       <span>{message}</span>
     </div>
   );

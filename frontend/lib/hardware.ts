@@ -24,7 +24,7 @@ export const HARDWARE: MarketingEntry[] = [
   {
     slug: "receipt-printer",
     eyebrow: "Hardware",
-    icon: "receipt",
+    icon: "printer",
     name: "Receipt Printer",
     tagline: "Crisp, BIR-ready receipts in a snap.",
     intro:
@@ -38,12 +38,12 @@ export const HARDWARE: MarketingEntry[] = [
   {
     slug: "barcode-scanner",
     eyebrow: "Hardware",
-    icon: "search",
+    icon: "barcode",
     name: "Barcode Scanner",
     tagline: "Ring items in a beep.",
     intro: "Scan products straight into the cart for faster, error-free checkout.",
     cards: [
-      { icon: "search", title: "Instant lookup", body: "Scan a barcode to add the right item immediately." },
+      { icon: "barcode", title: "Instant lookup", body: "Scan a barcode to add the right item immediately." },
       { icon: "bolt", title: "Faster checkout", body: "No more hunting through the catalog by hand." },
       { icon: "check", title: "Fewer mistakes", body: "Scanning the code means the right product, every time." },
     ],
@@ -103,7 +103,7 @@ export const HARDWARE: MarketingEntry[] = [
   {
     slug: "label-printer",
     eyebrow: "Hardware",
-    icon: "tag",
+    icon: "printer",
     name: "Label & Sticker Printer",
     tagline: "Price and label in seconds.",
     intro: "Print product labels, barcodes, and price tags on demand.",

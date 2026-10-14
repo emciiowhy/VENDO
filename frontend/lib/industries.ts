@@ -160,7 +160,7 @@ export const INDUSTRIES: Industry[] = [
     intro:
       "Ring items by barcode, keep shelves stocked with low-stock alerts, and reconcile high-volume cash days without the headache.",
     highlights: [
-      { icon: "search", title: "Scan-fast checkout", body: "Barcode scanning rings the right item every time, even at high volume." },
+      { icon: "barcode", title: "Scan-fast checkout", body: "Barcode scanning rings the right item every time, even at high volume." },
       { icon: "box", title: "Unit-level inventory", body: "Stock moves as you sell and receive — no manual counts to keep up." },
       { icon: "bell", title: "Low-stock alerts", body: "Get notified before a fast mover runs out so reorders happen in time." },
     ],

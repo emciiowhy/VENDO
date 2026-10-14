@@ -5,6 +5,7 @@ import { formatPesoExact } from "@/lib/format";
 import { resolveAssetUrl } from "@/lib/images";
 import { MockQr } from "./MockQr";
 import { BrandMark } from "../BrandMark";
+import { Icon } from "../Icon";
 import { TenantTheme } from "../theme/TenantTheme";
 import {
   DISPLAY_CHANNEL,
@@ -490,17 +491,7 @@ function PaidScreen({
         <div className="relative mx-auto w-28 h-28">
           <span className="absolute inset-0 rounded-full bg-accent-500/20 cd-ring" />
           <span className="absolute inset-0 rounded-full bg-accent-500/15 grid place-items-center ring-1 ring-accent-500/30">
-            <svg
-              viewBox="0 0 24 24"
-              className="w-14 h-14 text-accent-500"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.4}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
+            <Icon name="check" className="w-14 h-14 text-accent-500" strokeWidth={2.4} />
           </span>
         </div>
         <p className="mt-6 text-[12px] font-bold tracking-[0.2em] uppercase text-white/40">
