@@ -5,6 +5,7 @@ import { IconSprite, Icon } from "../components/Icon";
 import { StoreSignIn } from "../components/auth/StoreSignIn";
 import { OwnerPasswordSignIn } from "../components/auth/OwnerPasswordSignIn";
 import { LoginNotice } from "../components/auth/LoginNotice";
+import { AuthRailVideo } from "../components/auth/AuthRailVideo";
 import { BrandMark } from "../components/BrandMark";
 import { GOOGLE_SIGN_IN_URL } from "@/lib/auth";
 
@@ -72,6 +73,8 @@ export default function LoginPage() {
               The multi-tenant POS &amp; ERP built for Philippine retail. Sign in to your store
               dashboard, or open a shared register on the floor.
             </p>
+            <AuthRailVideo />
+
             <ul className="mt-8 space-y-4">
               {HIGHLIGHTS.map((h) => (
                 <li key={h.icon} className="flex items-start gap-3">
