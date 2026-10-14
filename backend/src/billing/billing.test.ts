@@ -16,6 +16,12 @@ describe("Billing analytics is SUPER_ADMIN-only", () => {
     const res = await request(app).get("/api/v1/admin/analytics/subscribers");
     expect(res.status).toBe(401);
   });
+
+  it("blocks growth metrics unauthenticated with 401", async () => {
+    const res = await request(app).get("/api/v1/admin/analytics/growth");
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
 });
 
 describe("Plan catalogue", () => {

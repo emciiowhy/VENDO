@@ -20,6 +20,7 @@ export type NotificationType =
   | "new_lead"
   | "new_tenant"
   | "health"
+  | "trial_reminder"
   | "broadcast";
 
 export type Severity = "info" | "success" | "warning" | "danger";
@@ -222,6 +223,37 @@ export async function notifyNewTenant(tenant: { id: string; name: string }): Pro
     });
   } catch (err) {
     console.error("[notifications] notifyNewTenant failed:", err);
+  }
+}
+
+/**
+ * A store's trial is approaching its end (7 / 3 / 1 days out). Sent to every
+ * active owner/manager regardless of their low-stock/variance preferences —
+ * this is a lifecycle alert about losing the workspace, not an opt-in operational
+ * nudge (same reasoning as the PIN-reset notice). Urgency escalates with the
+ * milestone, and the per-(user, dedupeKey) unique index plus the caller's
+ * milestone claim keep each day's reminder to exactly one bell row.
+ */
+export async function notifyTrialEnding(input: {
+  tenantId: string;
+  day: 7 | 3 | 1;
+  trialEndsAt: Date;
+}): Promise<void> {
+  try {
+    const targets = (await tenantManagers(input.tenantId)).map((t) => t.id);
+    if (targets.length === 0) return;
+    const severity: Severity = input.day <= 1 ? "danger" : input.day <= 3 ? "warning" : "info";
+    const dayLabel = input.day === 1 ? "tomorrow" : `in ${input.day} days`;
+    await createForUsers(targets, input.tenantId, {
+      type: "trial_reminder",
+      severity,
+      title: `Your free trial ends ${dayLabel}`,
+      body: "Choose a plan to keep your store active — your data stays exactly as it is.",
+      link: "/#pricing",
+      dedupeKey: `trial_reminder:${input.tenantId}:${input.day}`,
+    });
+  } catch (err) {
+    console.error("[notifications] notifyTrialEnding failed:", err);
   }
 }
 
