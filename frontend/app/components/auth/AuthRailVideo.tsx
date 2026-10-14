@@ -31,7 +31,7 @@ export function AuthRailVideo() {
   return (
     <div
       aria-hidden="true"
-      className="relative mt-6 aspect-[4/3] w-full max-w-[340px] overflow-hidden rounded-xl2 border border-white/15 bg-brand-700/40 shadow-xl ring-1 ring-white/10"
+      className="relative mt-6 aspect-[4/3] w-full max-w-[400px] overflow-hidden rounded-xl2 border border-white/15 bg-brand-700/40 shadow-2xl ring-1 ring-white/10"
     >
       {reduceMotion ? (
         // eslint-disable-next-line @next/next/no-img-element
