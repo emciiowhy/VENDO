@@ -89,14 +89,14 @@ export const PRODUCTS: ProductPage[] = [
   {
     slug: "qr-order-and-pay",
     category: "Run your store smoothly",
-    icon: "grid",
+    icon: "qr",
     name: "QR Order & Pay",
     tagline: "Let guests order from the table — no app, no queue.",
     intro:
       "Customers scan a QR, browse your live menu, and pay from their phone. Orders land straight on your POS and kitchen screen.",
     features: [
       {
-        icon: "grid",
+        icon: "qr",
         title: "Scan to order",
         body: "A table QR opens your live catalog instantly — prices and availability always match the POS.",
       },

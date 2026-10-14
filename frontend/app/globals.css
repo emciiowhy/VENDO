@@ -437,6 +437,42 @@ details[open] .faq-plus {
   }
 }
 
+/* ---- Icon hover micro-interaction -----------------------------------------
+   Every Solar icon renders with a `.solar` class, so one rule gives all icons a
+   subtle "pop" whenever the control they sit in is hovered — buttons, links,
+   role=button tiles, menu rows, labels and summaries. A one-shot keyframe
+   (not a held transform) is used deliberately so it never clobbers the
+   deliberate `group-hover:translate-x` nudges on a few arrow icons: the pop
+   plays on hover-in and releases, settling back to whatever transform the
+   utility classes define. GPU transform only; fully stilled under
+   reduced-motion and on touch (no hover). */
+@keyframes vp-icon-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@media (hover: hover) {
+  a:hover .solar,
+  button:hover .solar,
+  [role="button"]:hover .solar,
+  label:hover .solar,
+  summary:hover .solar,
+  .vp-icon-pop-on-hover:hover .solar {
+    animation: vp-icon-pop 0.3s var(--ease-snap);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .solar {
+    animation: none !important;
+  }
+}
+
 /* Loading skeleton — a token-tinted shimmer for async lists (auth duty roster,
    cashier switcher). Uses the same low-alpha ink wash as .hairline; dark shells
    re-tint to a white wash. Pure presentation, disabled under reduced-motion. */

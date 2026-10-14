@@ -1,5 +1,7 @@
 "use client";
 
+import { Icon } from "../Icon";
+
 /**
  * The presentational 4-digit PIN pad — progress dots, an error line, and the
  * 10-key grid with a backspace. Parents own the PIN string and the submit
@@ -74,10 +76,7 @@ export function PinPad({
           aria-label="Delete"
           className="press h-14 rounded-[12px] grid place-items-center text-ink-soft hover:text-ink hover:bg-paper disabled:opacity-30"
         >
-          <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 5H8.5L3 12l5.5 7H21a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z" />
-            <path d="M12.5 9.5l5 5M17.5 9.5l-5 5" />
-          </svg>
+          <Icon name="backspace" className="w-6 h-6" strokeWidth={1.7} />
         </button>
       </div>
     </>

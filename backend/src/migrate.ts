@@ -58,6 +58,15 @@ CREATE TABLE IF NOT EXISTS tenants (
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_starts_at TIMESTAMPTZ;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_ends_at   TIMESTAMPTZ;
 
+-- Which trial-ending reminders have already fired for this store, as a small
+-- bitmask (bit 0 = the 7-day nudge, bit 1 = the 3-day, bit 2 = the 1-day). A
+-- reminder is claimed by atomically OR-ing its bit in only when still unset, so
+-- exactly one request wins each milestone — whether it rides the owner's own
+-- poll or the daily cron sweep — and the 7/3/1-day email + bell each go out once.
+-- See billing/trialReminders.ts. Resets are never needed: a store leaves 'trial'
+-- (to active or trial_expired) for good, so the mask is write-once per milestone.
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_reminders_sent SMALLINT NOT NULL DEFAULT 0;
+
 -- Widen the status CHECK on already-provisioned databases (a fresh DB gets the
 -- four-value CHECK inline above; an existing one still carries the old two-value
 -- constraint, which would reject a 'trial' / 'trial_expired' write). Drop + re-add
@@ -831,7 +840,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   tenant_id   UUID        REFERENCES tenants (id) ON DELETE CASCADE,
-  type        TEXT        NOT NULL,   -- low_stock | variance | pin_request | new_lead | new_tenant | health
+  type        TEXT        NOT NULL,   -- low_stock | variance | pin_request | new_lead | new_tenant | health | trial_reminder | broadcast
   severity    TEXT        NOT NULL DEFAULT 'info'
                           CHECK (severity IN ('info', 'success', 'warning', 'danger')),
   title       TEXT        NOT NULL,

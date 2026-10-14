@@ -1,5 +1,6 @@
 import { query } from "../db.js";
 import { sendTrialExpiredEmail } from "../notifications/trialExpiredEmail.js";
+import { runTrialReminders } from "./trialReminders.js";
 
 /**
  * Trial lifecycle — the self-service expiration engine.
@@ -30,6 +31,7 @@ export interface TenantStatusResult {
 interface TrialSnapshotRow {
   status: TenantLifecycle;
   trial_ends_at: Date | null;
+  trial_reminders_sent: number;
   store_name: string;
   plan: string;
   owner_name: string | null;
@@ -46,6 +48,7 @@ async function loadTrialSnapshot(tenantId: string): Promise<TrialSnapshotRow | n
   const { rows } = await query<TrialSnapshotRow>(
     `SELECT t.status,
             t.trial_ends_at,
+            t.trial_reminders_sent,
             t.name        AS store_name,
             t.plan        AS plan,
             u.name        AS owner_name,
@@ -115,6 +118,22 @@ export async function evaluateTenantStatus(
       });
     }
     return { status: "trial_expired", trialEndsAt };
+  }
+
+  // Still inside the window: nudge the owner at the 7/3/1-day marks. Best-effort
+  // and fire-and-forget (never awaited into the caller's path, exactly like the
+  // recovery email) — the milestone claim inside makes it safe to run on every
+  // poll, as a no-op once each mark has fired.
+  if (snap.status === "trial" && snap.trial_ends_at) {
+    void runTrialReminders({
+      tenantId,
+      trialEndsAt: snap.trial_ends_at,
+      sentMask: snap.trial_reminders_sent ?? 0,
+      storeName: snap.store_name,
+      plan: snap.plan,
+      ownerName: snap.owner_name,
+      ownerEmail: snap.owner_email,
+    });
   }
 
   return { status: snap.status, trialEndsAt };

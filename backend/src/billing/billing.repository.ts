@@ -7,6 +7,12 @@ import {
   productLimitFor,
   type Plan,
 } from "./plans.js";
+import {
+  computeGrowthMetrics,
+  type GrowthMetrics,
+  type GrowthTenantRow,
+  type TenantStatus,
+} from "./growth.js";
 
 /**
  * Billing & MRR analytics for the Super Admin console, plus the small per-Tenant
@@ -228,6 +234,28 @@ export async function getSubscribers(): Promise<Subscriber[]> {
     ownerName: r.owner_name,
     ownerEmail: r.owner_email,
   }));
+}
+
+// ── Growth & churn analytics ──────────────────────────────────────────────────
+
+/**
+ * Pull the whole tenant register (status + trial start + onboarding date) and
+ * reduce it to the conversion / churn / signup-cohort figures. Platform-wide, so
+ * not tenant-fenced — the Super Admin sits above every store. The derivation is
+ * pure (see growth.ts); this is just the single scan that feeds it.
+ */
+export async function getGrowthMetrics(): Promise<GrowthMetrics> {
+  const { rows } = await query<{
+    status: string;
+    trial_starts_at: Date | null;
+    created_at: Date;
+  }>(`SELECT status, trial_starts_at, created_at FROM tenants`);
+  const tenants: GrowthTenantRow[] = rows.map((r) => ({
+    status: r.status as TenantStatus,
+    trialStartsAt: r.trial_starts_at,
+    createdAt: r.created_at,
+  }));
+  return computeGrowthMetrics(tenants, new Date());
 }
 
 /** A Tenant approaching/over its plan's product cap, for the guardrail message. */

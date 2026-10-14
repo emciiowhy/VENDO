@@ -41,6 +41,31 @@ export interface BillingAnalytics {
   feeRatePct: number;
 }
 
+export interface ConversionMetric {
+  trialsStarted: number;
+  converted: number;
+  ratePct: number | null;
+}
+
+export interface ChurnMetric {
+  activeStores: number;
+  churnedStores: number;
+  ratePct: number | null;
+}
+
+export interface CohortPoint {
+  month: string; // YYYY-MM-01
+  signups: number;
+  retained: number;
+  retentionPct: number | null;
+}
+
+export interface GrowthMetrics {
+  conversion: ConversionMetric;
+  churn: ChurnMetric;
+  cohorts: CohortPoint[];
+}
+
 export interface Subscriber {
   id: string;
   name: string;
@@ -75,6 +100,14 @@ export async function getBillingAnalytics(): Promise<Result<{ analytics: Billing
 export async function getSubscribers(): Promise<Result<{ subscribers: Subscriber[] }>> {
   try {
     return await readJson(await fetch(`${BASE}/subscribers`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function getGrowthMetrics(): Promise<Result<{ metrics: GrowthMetrics }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/growth`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }

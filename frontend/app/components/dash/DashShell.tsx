@@ -18,6 +18,7 @@ import { ToastProvider } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { NotificationBell } from "./NotificationBell";
 import { TrialRecovery } from "./TrialRecovery";
+import { TrialCountdownBanner } from "./TrialCountdownBanner";
 import { BrandMark } from "../BrandMark";
 import { TierCaption } from "./TierBadge";
 import { logout, type SessionUser } from "@/lib/auth";
@@ -276,7 +277,10 @@ export function DashShell({
             </div>
           </header>
 
-          <main className="flex-1 px-5 sm:px-8 py-7">{children}</main>
+          <main className="flex-1 px-5 sm:px-8 py-7">
+            <TrialCountdownBanner user={user} />
+            {children}
+          </main>
         </div>
       </div>
 

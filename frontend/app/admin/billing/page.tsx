@@ -3,6 +3,7 @@
 import { DashShell } from "../../components/dash/DashShell";
 import { ADMIN_NAV } from "../../components/admin/adminNav";
 import { BillingMatrix } from "../../components/admin/BillingMatrix";
+import { GrowthMatrix } from "../../components/admin/GrowthMatrix";
 
 /**
  * Super Admin — Billing & MRR Engine. Platform-wide recurring-revenue metrics
@@ -18,7 +19,10 @@ export default function AdminBillingPage() {
       nav={ADMIN_NAV}
       allow={["SUPER_ADMIN"]}
     >
-      <BillingMatrix />
+      <div className="space-y-10">
+        <BillingMatrix />
+        <GrowthMatrix />
+      </div>
     </DashShell>
   );
 }

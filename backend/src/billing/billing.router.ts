@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireRole } from "../auth/auth.middleware.js";
-import { getBillingAnalytics, getSubscribers } from "./billing.repository.js";
+import { getBillingAnalytics, getGrowthMetrics, getSubscribers } from "./billing.repository.js";
 
 /**
  * Super Admin billing analytics. Mounted at /api/v1/admin/analytics and fenced
@@ -28,5 +28,15 @@ adminAnalyticsRouter.get("/subscribers", async (_req, res) => {
   } catch (err) {
     console.error("[admin/analytics] subscribers failed:", err);
     res.status(500).json({ ok: false, error: "Could not load subscribers." });
+  }
+});
+
+/** GET /api/v1/admin/analytics/growth — trial→paid conversion, churn & cohorts. */
+adminAnalyticsRouter.get("/growth", async (_req, res) => {
+  try {
+    res.json({ ok: true, metrics: await getGrowthMetrics() });
+  } catch (err) {
+    console.error("[admin/analytics] growth failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load growth metrics." });
   }
 });
