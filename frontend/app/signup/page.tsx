@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { IconSprite, Icon } from "../components/Icon";
 import { BrandMark } from "../components/BrandMark";
 import { SignupForm } from "../components/auth/SignupForm";
+import { AuthRailVideo } from "../components/auth/AuthRailVideo";
 
 export const metadata: Metadata = {
   title: "Start your free trial — VendoPOS",
@@ -60,6 +61,8 @@ export default function SignupPage() {
               Spin up your own VendoPOS store and explore the POS, inventory and reports with sample
               data already in place. No card, no commitment.
             </p>
+            <AuthRailVideo />
+
             <ul className="mt-8 space-y-3.5">
               {HIGHLIGHTS.map((h) => (
                 <li key={h.icon} className="flex items-start gap-3">
