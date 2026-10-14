@@ -18,6 +18,7 @@ import {
   getActiveShift,
   getCatalog,
   recordAudit,
+  seniorPwdDiscountCents,
   submitOrder,
   type ActiveShift,
   type CatalogProduct,
@@ -93,15 +94,21 @@ const EMPTY_STORE: StoreBrand = {
 /** centavos → "₱1,234.50" */
 const peso = (cents: number) => formatPesoExact(cents / 100);
 
-/** Resolve a cart discount to centavos against the gross. */
+/**
+ * Resolve a cart discount to centavos against the gross. The Senior/PWD benefit
+ * can't be resolved from the gross alone (it strips VAT per line first), so it
+ * is computed from the cart lines in the terminal and returns 0 here.
+ */
 function computeDiscountCents(d: Discount | null, gross: number): number {
   if (!d) return 0;
+  if (d.type === "senior_pwd") return 0;
   if (d.type === "percent") return Math.round((gross * Math.min(100, Math.max(0, d.value))) / 100);
   return Math.min(gross, Math.max(0, Math.round(d.value)));
 }
 function discountText(d: Discount | null): string | null {
   if (!d) return null;
   if (d.label) return d.label;
+  if (d.type === "senior_pwd") return "Senior/PWD (20% + VAT-exempt)";
   return d.type === "percent" ? `${d.value}% off` : `${peso(d.value)} off`;
 }
 
@@ -292,9 +299,20 @@ export function PosTerminal() {
 
   const lines = Object.values(cart);
   const grossCents = useMemo(() => lines.reduce((s, l) => s + l.product.priceCents * l.qty, 0), [lines]);
-  const discountCents = useMemo(() => computeDiscountCents(discount, grossCents), [discount, grossCents]);
+  // Senior/PWD is resolved from the lines (VAT stripped per class, then 20%);
+  // every other discount resolves against the gross.
+  const discountCents = useMemo(
+    () =>
+      discount?.type === "senior_pwd"
+        ? seniorPwdDiscountCents(
+            lines.map((l) => ({ vatClass: l.product.vatClass, lineCents: l.product.priceCents * l.qty })),
+          )
+        : computeDiscountCents(discount, grossCents),
+    [discount, grossCents, lines],
+  );
   const netCents = Math.max(0, grossCents - discountCents);
-  const vatCents = Math.round((netCents * 12) / 112);
+  // A Senior/PWD sale is VAT-exempt — no output VAT on the ticket.
+  const vatCents = discount?.type === "senior_pwd" ? 0 : Math.round((netCents * 12) / 112);
   const count = lines.reduce((s, l) => s + l.qty, 0);
 
   // ── Customer-facing display sync (terminal-local BroadcastChannel) ─────────
@@ -934,6 +952,9 @@ export function PosTerminal() {
       {discountOpen && (
         <DiscountModal
           grossCents={grossCents}
+          seniorPwdCents={seniorPwdDiscountCents(
+            lines.map((l) => ({ vatClass: l.product.vatClass, lineCents: l.product.priceCents * l.qty })),
+          )}
           current={discount}
           onClose={() => setDiscountOpen(false)}
           onApply={(d) => {
@@ -1330,7 +1351,8 @@ function CheckoutOverlay({
   const redeemPoints = redeem ? maxRedeemablePoints : 0;
   const redeemCents = redeemPoints * 100;
   const dueCents = Math.max(0, netCents - redeemCents);
-  const dueVatCents = Math.round((dueCents * 12) / 112);
+  // A Senior/PWD sale is VAT-exempt, so no output VAT is shown on the ticket.
+  const dueVatCents = discount?.type === "senior_pwd" ? 0 : Math.round((dueCents * 12) / 112);
 
   const tenderedCents = Math.round((Number(tendered) || 0) * 100);
   const cashShort = method === "Cash" && tenderedCents < dueCents;
@@ -1626,6 +1648,12 @@ function ReceiptOverlay({
 
         <div className="mt-4 rounded-[12px] bg-paper hairline divide-y divide-[rgba(11,18,32,0.07)] text-[13px] text-left">
           <RcptRow label="Invoice ref" value={sale.reference} mono />
+          {sale.scPwdIdNumber && (
+            <>
+              <RcptRow label="SC/PWD ID" value={sale.scPwdIdNumber} mono />
+              {sale.scPwdName && <RcptRow label="SC/PWD name" value={sale.scPwdName} />}
+            </>
+          )}
           {sale.discountCents > 0 && (
             <RcptRow label={sale.discountLabel ?? "Discount"} value={`−${peso(sale.discountCents)}`} />
           )}
@@ -1729,19 +1757,32 @@ function RcptRow({ label, value, mono, strong }: { label: string; value: string;
 
 function DiscountModal({
   grossCents,
+  seniorPwdCents,
   current,
   onClose,
   onApply,
 }: {
   grossCents: number;
+  /** Server-mirrored preview of the Senior/PWD benefit (VAT-exempt + 20%). */
+  seniorPwdCents: number;
   current: Discount | null;
   onClose: () => void;
   onApply: (d: Discount | null) => void;
 }) {
   const { closing, dismiss } = useDismiss(onClose);
-  const [mode, setMode] = useState<"percent" | "fixed">(current?.type ?? "percent");
+  const [mode, setMode] = useState<"percent" | "fixed">(
+    current?.type === "fixed" ? "fixed" : "percent",
+  );
   const [value, setValue] = useState(
-    current ? String(current.type === "fixed" ? current.value / 100 : current.value) : "",
+    current && current.type !== "senior_pwd"
+      ? String(current.type === "fixed" ? current.value / 100 : current.value)
+      : "",
+  );
+  // Senior/PWD sub-view: collect the BIR-required ID number + cardholder name.
+  const [scPwd, setScPwd] = useState(current?.type === "senior_pwd");
+  const [idNumber, setIdNumber] = useState(current?.type === "senior_pwd" ? current.idNumber : "");
+  const [holderName, setHolderName] = useState(
+    current?.type === "senior_pwd" ? current.holderName : "",
   );
   const num = Number(value) || 0;
   const previewCents =
@@ -1760,17 +1801,77 @@ function DiscountModal({
     }
   }
 
+  const scPwdReady = idNumber.trim().length > 0 && holderName.trim().length > 0;
+  function applySeniorPwd() {
+    if (!scPwdReady) return;
+    onApply({ type: "senior_pwd", idNumber: idNumber.trim(), holderName: holderName.trim() });
+  }
+
   return (
     <div className="fixed inset-0 z-[110] grid place-items-center px-5" role="dialog" aria-modal="true" aria-label="Apply discount">
       <button type="button" aria-label="Close" onClick={dismiss} className={"absolute inset-0 glass overlay-backdrop " + (closing ? "closing" : "")} />
       <div className={"relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft overlay-card " + (closing ? "closing" : "")}>
         <div className="flex items-center justify-between px-6 py-4 hairline-b">
-          <h3 className="text-[1.1rem] font-extrabold tracking-tight">Apply discount</h3>
+          <h3 className="text-[1.1rem] font-extrabold tracking-tight">
+            {scPwd ? "Senior / PWD" : "Apply discount"}
+          </h3>
           <button type="button" onClick={dismiss} aria-label="Close" className="tap press grid place-items-center text-ink-faint hover:text-ink">
             <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
           </button>
         </div>
 
+        {scPwd ? (
+          /* BIR Senior Citizen / PWD benefit: VAT-exempt, then 20% off the net.
+             The ID number + cardholder name are mandatory and print on the receipt. */
+          <div className="px-6 py-5 space-y-4">
+            <div className="rounded-[10px] bg-brand-50 px-3.5 py-2.5 text-[12.5px] text-ink-soft leading-snug">
+              VAT is removed first, then 20% is taken off. The ID number and name are
+              required and appear on the receipt.
+            </div>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-bold text-ink-soft">Senior/PWD ID No.</span>
+              <input
+                value={idNumber}
+                onChange={(e) => setIdNumber(e.target.value)}
+                placeholder="e.g. OSCA-12345"
+                className="field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14px] transition duration-150 ease-in-out"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-bold text-ink-soft">Cardholder name</span>
+              <input
+                value={holderName}
+                onChange={(e) => setHolderName(e.target.value)}
+                placeholder="Full name on the ID"
+                className="field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14px] transition duration-150 ease-in-out"
+              />
+            </label>
+            {seniorPwdCents > 0 && (
+              <div className="flex items-center justify-between rounded-[10px] bg-accent-50 px-3.5 py-2 text-[13.5px] font-bold text-accent-600">
+                <span>Discount (VAT-exempt + 20%)</span>
+                <span className="tabular-nums">−{peso(seniorPwdCents)}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setScPwd(false)}
+                className="press px-4 py-2.5 rounded-[10px] text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-paper"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={applySeniorPwd}
+                disabled={!scPwdReady}
+                className="tap press flex-1 rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3 font-semibold text-[14px] text-white shadow-btn tracking-tight disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Apply Senior/PWD
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="px-6 py-5 space-y-4">
           {/* Presets */}
           <div className="grid grid-cols-2 gap-2.5">
@@ -1784,11 +1885,11 @@ function DiscountModal({
             </button>
             <button
               type="button"
-              onClick={() => onApply({ type: "percent", value: 20, label: "Senior/PWD 20%" })}
+              onClick={() => setScPwd(true)}
               className="press rounded-[12px] bg-paper hairline px-3 py-3 text-left hover:border-brand-200 hover:bg-brand-50"
             >
-              <div className="text-[15px] font-extrabold tracking-tight">20%</div>
-              <div className="text-[12px] text-ink-soft">Senior / PWD</div>
+              <div className="text-[15px] font-extrabold tracking-tight">Senior / PWD</div>
+              <div className="text-[12px] text-ink-soft">VAT-exempt + 20%</div>
             </button>
           </div>
 
@@ -1850,6 +1951,8 @@ function DiscountModal({
             Apply discount
           </button>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

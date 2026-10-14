@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { Icon } from "./Icon";
 
+/** A plan feature. `soon` marks a roadmap item that isn't shipped yet. */
+type Feature = string | { label: string; soon?: boolean };
+
 type Plan = {
   name: string;
   forWho: string;
   price: string;
   per?: string;
   indicative: boolean;
-  features: string[];
+  features: Feature[];
   featured?: boolean;
   /** Self-service trial tier → routes to signup. Enterprise stays contact-sales. */
   signupPlan?: "starter" | "business";
@@ -56,7 +59,7 @@ const plans: Plan[] = [
       "Everything in Business",
       "Manufacturing (recipes / BOM)",
       "Human Resources & payroll",
-      "Multi-location",
+      { label: "Multi-location", soon: true },
       "Priority support",
     ],
   },
@@ -125,21 +128,32 @@ export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean
                 </div>
               )}
               <ul className="mt-7 space-y-3.5 flex-1">
-                {plan.features.map((f, i) => (
-                  <li
-                    key={f}
-                    className={
-                      "flex gap-3 text-[0.93rem] " + (i === 0 ? "text-ink" : "text-ink-soft")
-                    }
-                  >
-                    <Icon
-                      name="check"
-                      className="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5"
-                      strokeWidth={2}
-                    />
-                    {f}
-                  </li>
-                ))}
+                {plan.features.map((f, i) => {
+                  const label = typeof f === "string" ? f : f.label;
+                  const soon = typeof f !== "string" && f.soon;
+                  return (
+                    <li
+                      key={label}
+                      className={
+                        "flex gap-3 text-[0.93rem] " + (i === 0 ? "text-ink" : "text-ink-soft")
+                      }
+                    >
+                      <Icon
+                        name="check"
+                        className="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5"
+                        strokeWidth={2}
+                      />
+                      <span className="flex items-center gap-2">
+                        {label}
+                        {soon && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                            Coming soon
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
               {plan.signupPlan ? (
                 <Link

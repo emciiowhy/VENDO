@@ -258,6 +258,11 @@ ALTER TABLE sales ADD COLUMN IF NOT EXISTS payment_ref    TEXT;
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS discount_cents INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS discount_label TEXT;
 
+-- BIR Senior Citizen / PWD benefit: the holder's ID number and name are recorded
+-- on the sale (and printed on the receipt) for a VAT-exempt + 20% benefit sale.
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS sc_pwd_id_number TEXT;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS sc_pwd_name      TEXT;
+
 -- ---------------------------------------------------------------------------
 -- BIR invoice serialization (official receipt numbering).
 --

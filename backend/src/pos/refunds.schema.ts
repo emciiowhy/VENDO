@@ -132,6 +132,10 @@ export interface SaleDetail {
   changeCents: number | null;
   cashierName: string | null;
   customerName: string | null;
+  /** BIR Senior/PWD ID number recorded on the sale (null for non-benefit sales). */
+  scPwdIdNumber: string | null;
+  /** The Senior/PWD cardholder's name recorded on the sale (else null). */
+  scPwdName: string | null;
   createdAt: string;
   lines: SaleLineDetail[];
 }

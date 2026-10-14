@@ -78,6 +78,75 @@ export function computeVatBreakdown(
   return { vatCents, vatableSalesCents, vatExemptCents, zeroRatedCents, subtotalCents, netCents };
 }
 
+/** The fully-derived Senior/PWD settlement (all integer centavos). */
+export interface SeniorPwdResult {
+  /** Per-class VAT summary of the amount actually charged (VAT is always 0). */
+  breakdown: VatBreakdown;
+  /** VAT-inclusive gross the items rang up to (unchanged by the benefit). */
+  grossInclCents: number;
+  /** The 12% output VAT stripped out because the sale is VAT-exempt. */
+  vatExemptedCents: number;
+  /** The 20% statutory discount, taken on the net-of-VAT base. */
+  seniorDiscountCents: number;
+  /**
+   * What we persist in `sales.discount_cents`: the removed VAT + the 20% (+ any
+   * extra). Bundling them keeps the system-wide invariant `gross = total +
+   * discount`, which every report and the refund engine rely on when they
+   * reconstruct gross as `total_cents + discount_cents`.
+   */
+  discountCents: number;
+  /** Net payable (grossIncl − discountCents) — what the customer pays. */
+  totalDueCents: number;
+}
+
+/**
+ * BIR Senior Citizen / PWD benefit (RA 9994 / RA 10754). The qualified purchase
+ * is VAT-EXEMPT: the 12% output VAT is first stripped from each VATable line
+ * (reclassifying it to exempt at its net-of-VAT value), and THEN a 20% discount
+ * is taken against that net-of-VAT base — never the other way round. This is the
+ * fix for the old flat "20% off the VAT-inclusive price", which both overcharged
+ * and left VAT on an exempt sale.
+ *
+ * Already-exempt and zero-rated lines keep their value (no VAT to remove) but
+ * still earn the 20% (whole-cart treatment — shared-bill proration is out of
+ * scope). `extraDiscountCents` folds in any further reduction (e.g. a loyalty
+ * redemption) on top of the 20%, clamped so the net can't fall below zero.
+ *
+ * Pure (no DB), unit-tested alongside computeVatBreakdown, which it reuses for
+ * the final per-class split so there is one tested VAT implementation.
+ */
+export function computeSeniorPwdBreakdown(
+  lines: { vatClass: VatClass; grossCents: number }[],
+  extraDiscountCents = 0,
+): SeniorPwdResult {
+  const grossInclCents = lines.reduce((s, l) => s + l.grossCents, 0);
+  // Strip 12% from each VATable line; it becomes exempt at its net-of-VAT value.
+  const netLines = lines.map((l) => {
+    if (l.vatClass !== "VATABLE") return l;
+    const vat = Math.round((l.grossCents * VAT_NUM) / VAT_DEN);
+    return { vatClass: "EXEMPT" as VatClass, grossCents: l.grossCents - vat };
+  });
+  const netBaseCents = netLines.reduce((s, l) => s + l.grossCents, 0);
+  const vatExemptedCents = grossInclCents - netBaseCents;
+  const seniorDiscountCents = Math.round((netBaseCents * 20) / 100);
+  const extra = Math.min(
+    Math.max(0, Math.round(extraDiscountCents)),
+    Math.max(0, netBaseCents - seniorDiscountCents),
+  );
+  const appliedDiscount = seniorDiscountCents + extra;
+  const breakdown = computeVatBreakdown(netLines, appliedDiscount);
+  const totalDueCents = breakdown.netCents;
+  const discountCents = vatExemptedCents + appliedDiscount; // = grossIncl − totalDue
+  return {
+    breakdown,
+    grossInclCents,
+    vatExemptedCents,
+    seniorDiscountCents,
+    discountCents,
+    totalDueCents,
+  };
+}
+
 export const orderSchema = z.object({
   items: z
     .array(
@@ -99,13 +168,28 @@ export const orderSchema = z.object({
     .regex(/^\d{1,8}$/, "Reference must be digits.")
     .optional()
     .or(z.literal("").transform(() => undefined)),
-  // Cart-level discount. `percent` → value is 0–100; `fixed` → value is centavos.
+  // Cart-level discount. `percent` → value is 0–100; `fixed` → value is centavos;
+  // `senior_pwd` carries the BIR-required ID number + cardholder name and the
+  // server derives the VAT-exempt-then-20% amount itself (no client peso figure).
   discount: z
-    .object({
-      type: z.enum(["percent", "fixed"]),
-      value: z.number().nonnegative(),
-      label: z.string().trim().max(40).optional(),
-    })
+    .discriminatedUnion("type", [
+      z.object({
+        type: z.literal("percent"),
+        value: z.number().nonnegative(),
+        label: z.string().trim().max(40).optional(),
+      }),
+      z.object({
+        type: z.literal("fixed"),
+        value: z.number().nonnegative(),
+        label: z.string().trim().max(40).optional(),
+      }),
+      z.object({
+        type: z.literal("senior_pwd"),
+        idNumber: z.string().trim().min(1, "Enter the Senior/PWD ID number.").max(40),
+        holderName: z.string().trim().min(1, "Enter the cardholder's name.").max(80),
+        label: z.string().trim().max(40).optional(),
+      }),
+    ])
     .optional(),
   // Optional CRM customer to attach to the sale (loyalty accrues to them). The
   // server verifies the id belongs to this tenant before linking.
@@ -199,6 +283,10 @@ export interface Sale {
   pointsEarned: number;
   /** Loyalty points the customer spent on this sale (1 pt = ₱1 discount). */
   pointsRedeemed: number;
+  /** BIR Senior/PWD ID number recorded for a VAT-exempt benefit sale (else null). */
+  scPwdIdNumber: string | null;
+  /** The Senior/PWD cardholder's name recorded on the sale (else null). */
+  scPwdName: string | null;
   createdAt: string;
 }
 

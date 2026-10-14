@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createApp } from "../app.js";
-import { computeVatBreakdown, orderSchema } from "./pos.schema.js";
+import { computeSeniorPwdBreakdown, computeVatBreakdown, orderSchema } from "./pos.schema.js";
 
 const app = createApp();
 
@@ -161,5 +161,92 @@ describe("computeVatBreakdown — per-class VAT summary", () => {
     );
     expect(b.netCents).toBe(0);
     expect(b.vatableSalesCents + b.vatCents + b.vatExemptCents + b.zeroRatedCents).toBe(0);
+  });
+});
+
+describe("computeSeniorPwdBreakdown — VAT-exempt first, then 20%", () => {
+  it("strips the 12% VAT before the 20% on a wholly-VATable cart", () => {
+    // ₱112.00 VAT-inclusive → net of VAT ₱100.00 → less 20% → ₱80.00 due, ₱0 VAT.
+    const r = computeSeniorPwdBreakdown([{ vatClass: "VATABLE", grossCents: 11200 }]);
+    expect(r.grossInclCents).toBe(11200);
+    expect(r.vatExemptedCents).toBe(1200);
+    expect(r.seniorDiscountCents).toBe(2000);
+    expect(r.totalDueCents).toBe(8000);
+    expect(r.breakdown.vatCents).toBe(0);
+    expect(r.breakdown.vatExemptCents).toBe(8000);
+    expect(r.breakdown.vatableSalesCents).toBe(0);
+  });
+
+  it("is NOT the old flat 20%-off-gross (which overcharged the senior)", () => {
+    const r = computeSeniorPwdBreakdown([{ vatClass: "VATABLE", grossCents: 11200 }]);
+    const oldFlat = Math.round((11200 * 80) / 100); // 8960 — the wrong amount
+    expect(r.totalDueCents).toBe(8000);
+    expect(r.totalDueCents).toBeLessThan(oldFlat);
+  });
+
+  it("preserves gross = total + discount so every report reconstructs it", () => {
+    const r = computeSeniorPwdBreakdown([{ vatClass: "VATABLE", grossCents: 11200 }]);
+    expect(r.totalDueCents + r.discountCents).toBe(r.grossInclCents);
+    expect(r.discountCents).toBe(r.vatExemptedCents + r.seniorDiscountCents);
+  });
+
+  it("only strips VAT from VATable lines; exempt lines keep their value but still earn 20%", () => {
+    // ₱112 VATable (net ₱100) + ₱50 exempt (no VAT) → base ₱150 → less 20% ₱30 → ₱120 due.
+    const r = computeSeniorPwdBreakdown([
+      { vatClass: "VATABLE", grossCents: 11200 },
+      { vatClass: "EXEMPT", grossCents: 5000 },
+    ]);
+    expect(r.vatExemptedCents).toBe(1200); // only the VATable line shed VAT
+    expect(r.seniorDiscountCents).toBe(3000); // 20% of the ₱150 net-of-VAT base
+    expect(r.totalDueCents).toBe(12000);
+    expect(r.breakdown.vatCents).toBe(0);
+  });
+
+  it("folds a loyalty redemption on top of the 20%, clamped to the net", () => {
+    // ₱80 due after the statutory 20%; redeem ₱10 more → ₱70 due.
+    const r = computeSeniorPwdBreakdown([{ vatClass: "VATABLE", grossCents: 11200 }], 1000);
+    expect(r.totalDueCents).toBe(7000);
+    expect(r.totalDueCents + r.discountCents).toBe(r.grossInclCents);
+  });
+
+  it("never leaks a centavo under exemption: parts reconstitute the net", () => {
+    const r = computeSeniorPwdBreakdown([
+      { vatClass: "VATABLE", grossCents: 9999 },
+      { vatClass: "ZERO_RATED", grossCents: 1 },
+    ]);
+    const b = r.breakdown;
+    expect(b.vatableSalesCents + b.vatCents + b.vatExemptCents + b.zeroRatedCents).toBe(b.netCents);
+    expect(b.netCents).toBe(r.totalDueCents);
+  });
+});
+
+describe("Senior/PWD discount validation", () => {
+  const base = {
+    items: [{ productId: "11111111-1111-1111-1111-111111111111", qty: 1 }],
+    paymentMethod: "Cash" as const,
+  };
+
+  it("accepts a senior_pwd discount carrying ID number + holder name", () => {
+    const parsed = orderSchema.safeParse({
+      ...base,
+      discount: { type: "senior_pwd", idNumber: "OSCA-12345", holderName: "Juan Dela Cruz" },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects a senior_pwd discount missing the ID number", () => {
+    const parsed = orderSchema.safeParse({
+      ...base,
+      discount: { type: "senior_pwd", holderName: "Juan Dela Cruz" },
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejects a senior_pwd discount with a blank holder name", () => {
+    const parsed = orderSchema.safeParse({
+      ...base,
+      discount: { type: "senior_pwd", idNumber: "OSCA-12345", holderName: "  " },
+    });
+    expect(parsed.success).toBe(false);
   });
 });

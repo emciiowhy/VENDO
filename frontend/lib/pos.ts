@@ -89,6 +89,10 @@ export interface Sale {
   pointsEarned: number;
   /** Loyalty points the customer spent on this sale (1 pt = ₱1 discount). */
   pointsRedeemed: number;
+  /** BIR Senior/PWD ID number recorded for a VAT-exempt benefit sale (else null). */
+  scPwdIdNumber?: string | null;
+  /** The Senior/PWD cardholder's name recorded on the sale (else null). */
+  scPwdName?: string | null;
   createdAt: string;
 }
 
@@ -129,11 +133,37 @@ export interface ShiftZRead extends ShiftTally {
   auditSnapshot: string;
 }
 
-/** Cart-level discount. `percent` → value 0–100; `fixed` → value in centavos. */
-export interface Discount {
-  type: "percent" | "fixed";
-  value: number;
-  label?: string;
+/**
+ * Cart-level discount. `percent` → value 0–100; `fixed` → value in centavos;
+ * `senior_pwd` is the BIR Senior Citizen / PWD benefit — it carries the ID
+ * number + cardholder name and the SERVER derives the VAT-exempt-then-20%
+ * amount (the client never sends a peso figure for it).
+ */
+export type Discount =
+  | { type: "percent"; value: number; label?: string }
+  | { type: "fixed"; value: number; label?: string }
+  | { type: "senior_pwd"; idNumber: string; holderName: string; label?: string };
+
+const SC_PWD_VAT_NUM = 12;
+const SC_PWD_VAT_DEN = 112;
+
+/**
+ * Preview-only mirror of the server's Senior/PWD math (see
+ * `computeSeniorPwdBreakdown` in the backend): strip the 12% VAT from each
+ * VATable line, then take 20% off the net-of-VAT base. Returns the combined
+ * discount in centavos (removed VAT + 20%) so the terminal can show an accurate
+ * "less" figure before checkout. The server re-derives this authoritatively.
+ */
+export function seniorPwdDiscountCents(lines: { vatClass: VatClass; lineCents: number }[]): number {
+  const grossIncl = lines.reduce((s, l) => s + l.lineCents, 0);
+  const netBase = lines.reduce((s, l) => {
+    if (l.vatClass !== "VATABLE") return s + l.lineCents;
+    const vat = Math.round((l.lineCents * SC_PWD_VAT_NUM) / SC_PWD_VAT_DEN);
+    return s + (l.lineCents - vat);
+  }, 0);
+  const vatExempted = grossIncl - netBase;
+  const seniorDiscount = Math.round((netBase * 20) / 100);
+  return vatExempted + seniorDiscount;
 }
 
 export interface OrderLine {
@@ -285,6 +315,8 @@ export interface SaleDetail {
   changeCents: number | null;
   cashierName: string | null;
   customerName: string | null;
+  scPwdIdNumber?: string | null;
+  scPwdName?: string | null;
   createdAt: string;
   lines: SaleLineDetail[];
 }

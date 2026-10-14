@@ -164,6 +164,13 @@ export function printSaleReceipt(args: {
   if (args.cashierName) parts.push(row("Cashier", args.cashierName));
   parts.push(`<div class="rule"></div>`);
   parts.push(`<div class="muted">Sold to: ${esc(args.soldTo || "Walk-in customer")}</div>`);
+  // BIR Senior Citizen / PWD identification — mandatory on a VAT-exempt benefit
+  // sale: the holder's ID number, name and a signature line.
+  if (sale.scPwdIdNumber) {
+    parts.push(`<div class="muted">SC/PWD ID No.: ${esc(sale.scPwdIdNumber)}</div>`);
+    parts.push(`<div class="muted">SC/PWD Name: ${esc(sale.scPwdName || "")}</div>`);
+    parts.push(`<div class="muted">Signature: ________________</div>`);
+  }
   parts.push(`<div class="rule"></div>`);
   parts.push(itemRows(items));
   parts.push(`<div class="rule"></div>`);

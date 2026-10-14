@@ -150,6 +150,12 @@ export function buildSaleReceipt(args: BuildReceiptArgs): Uint8Array {
   b.row("Date", fmtDate(sale.createdAt));
   if (args.cashierName) b.row("Cashier", args.cashierName);
   b.line(`Sold to: ${args.soldTo || "Walk-in customer"}`);
+  // BIR Senior/PWD identification on a VAT-exempt benefit sale.
+  if (sale.scPwdIdNumber) {
+    b.line(`SC/PWD ID No.: ${sale.scPwdIdNumber}`);
+    b.line(`SC/PWD Name: ${sale.scPwdName || ""}`);
+    b.line("Signature: ________________");
+  }
   b.rule();
 
   for (const it of items) {

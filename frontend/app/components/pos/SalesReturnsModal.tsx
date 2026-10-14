@@ -221,6 +221,8 @@ export function SalesReturnsModal({
       // money figures exactly and omits the points footer.
       pointsEarned: 0,
       pointsRedeemed: 0,
+      scPwdIdNumber: detail.scPwdIdNumber ?? null,
+      scPwdName: detail.scPwdName ?? null,
       createdAt: detail.createdAt,
     };
     printSaleReceipt({

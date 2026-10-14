@@ -63,12 +63,14 @@ export async function getSaleDetail(tenantId: string, saleId: string): Promise<S
     change_cents: number | null;
     cashier_name: string | null;
     customer_name: string | null;
+    sc_pwd_id_number: string | null;
+    sc_pwd_name: string | null;
     created_at: Date;
   }>(
     `SELECT s.id, s.reference, s.status, s.subtotal_cents, s.vat_cents,
             s.vatable_sales_cents, s.vat_exempt_cents, s.zero_rated_cents, s.discount_cents,
             s.discount_label, s.total_cents, s.payment_method, s.payment_ref,
-            s.tendered_cents, s.change_cents,
+            s.tendered_cents, s.change_cents, s.sc_pwd_id_number, s.sc_pwd_name,
             u.name AS cashier_name, c.name AS customer_name, s.created_at
        FROM sales s
        LEFT JOIN users u     ON u.id = s.cashier_user_id
@@ -132,6 +134,8 @@ export async function getSaleDetail(tenantId: string, saleId: string): Promise<S
     changeCents: h.change_cents,
     cashierName: h.cashier_name,
     customerName: h.customer_name,
+    scPwdIdNumber: h.sc_pwd_id_number,
+    scPwdName: h.sc_pwd_name,
     createdAt: h.created_at.toISOString(),
     lines: detailLines,
   };

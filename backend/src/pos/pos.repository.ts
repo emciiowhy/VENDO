@@ -2,7 +2,7 @@ import { pool, query } from "../db.js";
 import { moveStock } from "../inventory/stockLedger.js";
 import { getPaymentQrMap } from "../merchant/paymentQr.repository.js";
 import { notifyLowStock, type LowStockHit } from "../notifications/notifications.repository.js";
-import { computeVatBreakdown } from "./pos.schema.js";
+import { computeSeniorPwdBreakdown, computeVatBreakdown } from "./pos.schema.js";
 import type {
   Catalog,
   CashierProfile,
@@ -229,43 +229,85 @@ export async function createOrder(
       }
     }
 
-    // Apply a cart-level discount (server-authoritative). `percent` clamps to
-    // 0–100; `fixed` is centavos, never below zero net.
+    // Resolve the cart-level discount and the per-class VAT split together, since
+    // the Senior/PWD benefit changes both (it makes the sale VAT-exempt). Every
+    // peso figure is server-authoritative; a tampered client cannot set its own.
     const grossCents = totalCents;
+    const breakdownLines = resolved.map((it) => ({ vatClass: it.vatClass, grossCents: it.lineTotal }));
     let discountCents = 0;
     let discountLabel: string | null = null;
-    if (input.discount) {
-      if (input.discount.type === "percent") {
-        const pct = Math.min(100, Math.max(0, input.discount.value));
-        discountCents = Math.round((grossCents * pct) / 100);
-      } else {
-        discountCents = Math.min(grossCents, Math.round(input.discount.value));
-      }
-      discountLabel = input.discount.label?.trim() || null;
-    }
-
-    // Loyalty redemption (1 pt = ₱1). Clamp the requested points to the live
-    // balance AND to what's still payable after any manual discount, so points
-    // can never drive the total below zero or overdraw the account. The redeemed
-    // value folds into the cart discount — a single figure the books and the
-    // refund path already understand — and the points are deducted below, in this
-    // same transaction.
+    let scPwdIdNumber: string | null = null;
+    let scPwdName: string | null = null;
     let pointsRedeemed = 0;
-    if (customerId && input.redeemPoints && input.redeemPoints > 0) {
-      const payableAfterDiscount = Math.max(0, grossCents - discountCents);
-      pointsRedeemed = Math.min(
-        input.redeemPoints,
-        loyaltyBalance,
-        Math.floor(payableAfterDiscount / 100),
-      );
-      if (pointsRedeemed > 0) {
-        discountCents += pointsRedeemed * 100;
-        const redeemLabel = `${pointsRedeemed} pt${pointsRedeemed === 1 ? "" : "s"} redeemed`;
-        discountLabel = discountLabel ? `${discountLabel} + ${redeemLabel}` : redeemLabel;
-      }
-    }
+    let netCents: number;
+    let vatCents: number;
+    let subtotalCents: number;
+    let vatableSalesCents: number;
+    let vatExemptCents: number;
+    let zeroRatedCents: number;
 
-    const netCents = Math.max(0, grossCents - discountCents);
+    if (input.discount?.type === "senior_pwd") {
+      // BIR Senior/PWD: strip the 12% VAT first, then 20% off the net-of-VAT base.
+      // Loyalty points (if any) fold in on top, clamped to the live balance and to
+      // what's still payable after the statutory discount.
+      const base = computeSeniorPwdBreakdown(breakdownLines);
+      if (customerId && input.redeemPoints && input.redeemPoints > 0) {
+        pointsRedeemed = Math.min(
+          input.redeemPoints,
+          loyaltyBalance,
+          Math.floor(base.totalDueCents / 100),
+        );
+      }
+      const sr =
+        pointsRedeemed > 0 ? computeSeniorPwdBreakdown(breakdownLines, pointsRedeemed * 100) : base;
+      discountCents = sr.discountCents;
+      netCents = sr.totalDueCents;
+      ({ vatCents, subtotalCents, vatableSalesCents, vatExemptCents, zeroRatedCents } = sr.breakdown);
+      scPwdIdNumber = input.discount.idNumber;
+      scPwdName = input.discount.holderName;
+      discountLabel = "Senior/PWD (20% + VAT-exempt)";
+      if (pointsRedeemed > 0) {
+        discountLabel += ` + ${pointsRedeemed} pt${pointsRedeemed === 1 ? "" : "s"}`;
+      }
+    } else {
+      // `percent` clamps to 0–100; `fixed` is centavos, never below zero net.
+      if (input.discount) {
+        if (input.discount.type === "percent") {
+          const pct = Math.min(100, Math.max(0, input.discount.value));
+          discountCents = Math.round((grossCents * pct) / 100);
+        } else {
+          discountCents = Math.min(grossCents, Math.round(input.discount.value));
+        }
+        discountLabel = input.discount.label?.trim() || null;
+      }
+
+      // Loyalty redemption (1 pt = ₱1). Clamp the requested points to the live
+      // balance AND to what's still payable after any manual discount, so points
+      // can never drive the total below zero or overdraw the account. The redeemed
+      // value folds into the cart discount — a single figure the books and the
+      // refund path already understand — and the points are deducted below, in this
+      // same transaction.
+      if (customerId && input.redeemPoints && input.redeemPoints > 0) {
+        const payableAfterDiscount = Math.max(0, grossCents - discountCents);
+        pointsRedeemed = Math.min(
+          input.redeemPoints,
+          loyaltyBalance,
+          Math.floor(payableAfterDiscount / 100),
+        );
+        if (pointsRedeemed > 0) {
+          discountCents += pointsRedeemed * 100;
+          const redeemLabel = `${pointsRedeemed} pt${pointsRedeemed === 1 ? "" : "s"} redeemed`;
+          discountLabel = discountLabel ? `${discountLabel} + ${redeemLabel}` : redeemLabel;
+        }
+      }
+
+      netCents = Math.max(0, grossCents - discountCents);
+      // Split the net across VAT classes (discount allocated pro-rata by gross),
+      // then extract 12% output VAT from the VATable portion only. Exempt and
+      // zero-rated lines contribute to the net but carry no VAT.
+      ({ vatCents, subtotalCents, vatableSalesCents, vatExemptCents, zeroRatedCents } =
+        computeVatBreakdown(breakdownLines, discountCents));
+    }
 
     // Cash settlement must cover the net total.
     let tenderedCents: number | null = null;
@@ -285,14 +327,6 @@ export async function createOrder(
     // the post-commit notification.
     const lowStockHits: LowStockHit[] = [];
 
-    // Split the net across VAT classes (discount allocated pro-rata by gross),
-    // then extract 12% output VAT from the VATable portion only. Exempt and
-    // zero-rated lines contribute to the net but carry no VAT.
-    const { vatCents, subtotalCents, vatableSalesCents, vatExemptCents, zeroRatedCents } =
-      computeVatBreakdown(
-        resolved.map((it) => ({ vatClass: it.vatClass, grossCents: it.lineTotal })),
-        discountCents,
-      );
     // Points earned accrue on what was actually paid (net of every discount,
     // redemption included) — 1 point per ₱100.
     const pointsEarned = customerId ? Math.floor(netCents / 10_000) : 0;
@@ -327,8 +361,8 @@ export async function createOrder(
          (tenant_id, cashier_user_id, reference, subtotal_cents, vat_cents, total_cents,
           payment_method, tendered_cents, change_cents, payment_ref, discount_cents, discount_label,
           shift_id, customer_id, points_earned, points_redeemed,
-          vatable_sales_cents, vat_exempt_cents, zero_rated_cents)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+          vatable_sales_cents, vat_exempt_cents, zero_rated_cents, sc_pwd_id_number, sc_pwd_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING id, created_at`,
       [
         tenantId,
@@ -350,6 +384,8 @@ export async function createOrder(
         vatableSalesCents,
         vatExemptCents,
         zeroRatedCents,
+        scPwdIdNumber,
+        scPwdName,
       ],
     );
     const saleId = saleRes.rows[0].id;
@@ -422,6 +458,8 @@ export async function createOrder(
         changeCents,
         pointsEarned,
         pointsRedeemed,
+        scPwdIdNumber,
+        scPwdName,
         createdAt: saleRes.rows[0].created_at.toISOString(),
       },
     };
