@@ -3,11 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "../Icon";
-import {
-  submitEnterpriseInquiry,
-  ENTERPRISE_BOOKING_URL,
-  type EnterpriseInquiryPayload,
-} from "@/lib/api";
+import { submitEnterpriseInquiry, type EnterpriseInquiryPayload } from "@/lib/api";
 
 /**
  * The Enterprise concierge funnel — what a prospect sees when they pick the
@@ -146,15 +142,13 @@ export function EnterpriseConcierge() {
               </div>
             ))}
 
-            <a
-              href={ENTERPRISE_BOOKING_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href="/enterprise/book"
               className="inline-flex items-center gap-2 rounded-[11px] bg-brand-500 hover:bg-brand-600 px-5 py-3 text-[14.5px] font-semibold text-white shadow-btn tracking-tight transition duration-150"
             >
               <Icon name="monitor" className="w-[18px] h-[18px]" strokeWidth={1.9} />
               Book your Zoom consultation
-            </a>
+            </Link>
             <p className="text-[12.5px] text-ink-faint leading-relaxed">
               Prefer we reach out first? Share your details and we&apos;ll line up the consultation
               for you.
@@ -182,15 +176,16 @@ export function EnterpriseConcierge() {
                   Our enterprise team will reach out shortly. To move faster, book your 1-on-1 Zoom
                   consultation now — pick a time that suits you.
                 </p>
-                <a
-                  href={ENTERPRISE_BOOKING_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  href={{
+                    pathname: "/enterprise/book",
+                    query: { name: form.name.trim(), email: form.email.trim() },
+                  }}
                   className="mt-6 inline-flex items-center gap-2 rounded-[11px] bg-brand-500 hover:bg-brand-600 px-5 py-3 text-[14px] font-semibold text-white shadow-btn tracking-tight transition"
                 >
                   <Icon name="monitor" className="w-[17px] h-[17px]" strokeWidth={1.9} />
                   Book your Zoom consultation
-                </a>
+                </Link>
               </div>
             ) : (
               <form onSubmit={handleSubmit} noValidate className="px-7 sm:px-8 py-7 grid sm:grid-cols-2 gap-5">

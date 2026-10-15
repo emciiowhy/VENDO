@@ -101,11 +101,11 @@ export async function submitEnterpriseInquiry(
 }
 
 /**
- * Where the Enterprise concierge sends prospects to book their mandatory 1-on-1
- * Zoom consultation. A scheduling-link placeholder for now (swap for the real
- * Calendly/Zoom scheduler when live); surfaced as a constant so both the funnel
- * CTA and the post-submit confirmation point at the same place.
+ * The Calendly scheduling link the Enterprise concierge books the mandatory
+ * 1-on-1 Zoom consultation against. Surfaced as a constant so the in-app booking
+ * page (/enterprise/book) can read it to initialise the embedded widget; override
+ * per-environment via NEXT_PUBLIC_ENTERPRISE_BOOKING_URL.
  */
 export const ENTERPRISE_BOOKING_URL =
   process.env.NEXT_PUBLIC_ENTERPRISE_BOOKING_URL ??
-  "https://calendly.com/vendopos/enterprise-rollout";
+  "https://calendly.com/mcmcyap07/30min";
