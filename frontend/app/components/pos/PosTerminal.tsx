@@ -478,7 +478,7 @@ export function PosTerminal() {
       <div
         data-vp-theme=""
         className={
-          "theme-root grid-bg min-h-screen grid place-items-center bg-paper text-ink " +
+          "theme-root grid-bg min-h-dvh grid place-items-center bg-paper text-ink " +
           (theme === "dark" ? "dark" : "")
         }
       >
@@ -579,7 +579,7 @@ export function PosTerminal() {
     <div
       data-vp-theme=""
       className={
-        "theme-root h-screen flex flex-col bg-paper text-ink overflow-hidden " +
+        "theme-root h-dvh flex flex-col bg-paper text-ink overflow-hidden " +
         (theme === "dark" ? "dark" : "")
       }
     >
@@ -765,13 +765,14 @@ export function PosTerminal() {
                   }
                 }}
                 placeholder="Search by name or SKU…"
+                aria-label="Search products by name or SKU"
                 className="field-input tap rounded-[10px] pl-9 pr-3 py-2.5 text-[14px] w-full"
               />
             </label>
           </div>
 
           {scanMsg && (
-            <div className="relative z-10 mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-rose-600">
+            <div role="status" className="relative z-10 mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-rose-600">
               <Icon name="ban" className="w-[15px] h-[15px]" strokeWidth={1.8} />
               {scanMsg}
             </div>
@@ -825,7 +826,7 @@ export function PosTerminal() {
       <button
         type="button"
         onClick={() => setCartOpenMobile(true)}
-        className="lg:hidden shrink-0 flex items-center justify-between gap-3 px-5 py-3.5 bg-brand-500 text-white font-semibold shadow-btn"
+        className="lg:hidden shrink-0 flex items-center justify-between gap-3 px-5 pt-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-brand-500 text-white font-semibold shadow-btn"
       >
         <span className="flex items-center gap-2">
           <Icon name="cart" className="w-5 h-5" strokeWidth={1.7} />
@@ -837,7 +838,7 @@ export function PosTerminal() {
       {cartOpenMobile && (
         <div className="lg:hidden fixed inset-0 z-[100] flex flex-col justify-end">
           <button aria-label="Close" onClick={() => setCartOpenMobile(false)} className="absolute inset-0 bg-black/50" />
-          <div className="relative max-h-[88vh]">
+          <div className="relative max-h-[88dvh]">
             <CartPanel className="flex rounded-t-xl2" onClose={() => setCartOpenMobile(false)} {...cartProps} />
           </div>
         </div>

@@ -11,7 +11,7 @@
   /* Ink reads warm-charcoal, not cool navy — pen on a ledger, not a UI chrome. */
   --color-ink: #15171c;
   --color-ink-soft: #585d68;
-  --color-ink-faint: #8b8f99;
+  --color-ink-faint: #6b6f79; /* 4.6:1 on paper, 5.0:1 on surface (WCAG AA) */
 
   /* Brand blue, deepened and de-neoned: trust/ink, not a notification badge.
      It now pops against the warm ivory canvas rather than dissolving into a
@@ -82,6 +82,23 @@
 
 html {
   scroll-behavior: smooth;
+  /* iOS inflates text in landscape; Android doesn't. Keep both at authored size. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Android paints a blue flash on tap, iOS a grey one — our .press states own
+     the feedback, so suppress both for one consistent feel. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS Safari zooms the page when a focused field's text is under 16px (Android
+   Chrome doesn't), which shoved the register sideways on iPhones. On touch
+   devices every text field renders at 16px so both platforms behave the same. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 body {
   font-family: var(--font-sans);
@@ -164,7 +181,7 @@ details[open] .faq-plus {
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
 .field-input::placeholder {
-  color: #98a2b3;
+  color: #6b7280; /* 4.7:1 on the field fill (WCAG AA) */
 }
 .field-input:focus {
   outline: none;
@@ -679,7 +696,7 @@ details[open] .faq-plus {
 .dark {
   --color-ink: #ecebe6; /* primary text — warm paper-white, not cool */
   --color-ink-soft: #9b9ea7;
-  --color-ink-faint: #6e727b;
+  --color-ink-faint: #8c909a; /* 5.4:1 on surface, 5.9:1 on paper (WCAG AA) */
 
   /* Night is neutral charcoal, not blue — the dark counterpart of the ivory
      canvas, so the brand blue pops in both modes instead of blending in. */

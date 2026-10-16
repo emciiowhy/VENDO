@@ -148,7 +148,7 @@ export function CustomerDisplay() {
   return (
     <div
       data-vp-theme=""
-      className="relative min-h-screen overflow-hidden bg-[#0a0f1c] text-white flex flex-col selection:bg-brand-500/40"
+      className="relative min-h-dvh overflow-hidden bg-[#0a0f1c] text-white flex flex-col selection:bg-brand-500/40"
     >
       <TenantTheme accent={snap.accent} />
       <Ambient />

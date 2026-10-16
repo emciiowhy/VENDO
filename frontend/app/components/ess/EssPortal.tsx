@@ -81,7 +81,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
           ? { icon: "lock", title: "Paystubs aren't on this plan", body: state.message }
           : { icon: "warning", title: "Couldn't load your record", body: state.message };
     return (
-      <div className="rounded-xl2 bg-surface hairline shadow-card px-5 py-12 sm:py-16 text-center">
+      <div role="status" className="rounded-xl2 bg-surface hairline shadow-card px-5 py-12 sm:py-16 text-center">
         <span className="inline-grid place-items-center w-12 h-12 rounded-[14px] bg-brand-50 text-brand-600">
           <Icon name={copy.icon} className="w-6 h-6" strokeWidth={1.6} />
         </span>

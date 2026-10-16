@@ -21,7 +21,7 @@ export default function MyHrPage() {
 
   if (session.status !== "authed") {
     return (
-      <div className={"theme-root min-h-screen grid place-items-center bg-paper text-ink " + (theme === "dark" ? "dark" : "")}>
+      <div className={"theme-root min-h-dvh grid place-items-center bg-paper text-ink " + (theme === "dark" ? "dark" : "")}>
         <div className="flex items-center gap-3 text-ink-soft">
           <BrandMark className="w-9 h-9 animate-pulse" />
           <span className="text-[14px] font-semibold">Loading your record…</span>
@@ -33,7 +33,7 @@ export default function MyHrPage() {
   const { user } = session;
 
   return (
-    <div className={"theme-root min-h-screen bg-paper text-ink " + (theme === "dark" ? "dark" : "")}>
+    <div className={"theme-root min-h-dvh bg-paper text-ink " + (theme === "dark" ? "dark" : "")}>
       <IconSprite />
       <header className="sticky top-0 z-10 glass hairline-b">
         <div className="max-w-[1000px] mx-auto flex items-center gap-4 px-5 sm:px-8 h-[68px]">

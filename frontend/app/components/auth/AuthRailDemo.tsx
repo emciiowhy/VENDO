@@ -12,9 +12,9 @@ import { Icon } from "../Icon";
  * with VAT split out at 12/112, exactly as the POS computes it — update, Charge
  * is pressed, and a thermal receipt prints. Then it loops.
  *
- * Reduced motion renders the finished, printed state as a still. The frame
- * reserves its 4:3 ratio up front so the rail never shifts, and it's decorative
- * (aria-hidden) so it never traps focus.
+ * Reduced motion renders the finished, printed state as a still; otherwise a
+ * pause button stops the loop. The frame reserves its 4:3 ratio up front so the
+ * rail never shifts, and the mock itself is aria-hidden (decorative).
  */
 
 const ITEMS = [
@@ -47,12 +47,14 @@ export function AuthRailDemo() {
   // Server snapshot is "motion", so SSR/first paint stay deterministic.
   const reduceMotion = useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false);
   const [step, setStep] = useState(0);
+  // WCAG 2.2.2: motion lasting over 5s needs a pause control.
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion || paused) return;
     const t = window.setTimeout(() => setStep((s) => (s + 1) % STEP_MS.length), STEP_MS[step]);
     return () => window.clearTimeout(t);
-  }, [step, reduceMotion]);
+  }, [step, reduceMotion, paused]);
 
   const shown = reduceMotion ? FINAL_STEP : step;
   const lines = ITEMS.slice(0, Math.min(shown, ITEMS.length));
@@ -64,10 +66,9 @@ export function AuthRailDemo() {
 
   return (
     <div
-      aria-hidden="true"
       className="relative mt-6 aspect-[4/3] w-full max-w-[400px] overflow-hidden rounded-xl2 border border-white/15 bg-brand-700/40 shadow-2xl ring-1 ring-white/10 grid place-items-center p-3 sm:p-4"
     >
-      <div className="w-full rounded-[14px] bg-surface text-ink shadow-xl p-2.5 sm:p-3">
+      <div aria-hidden="true" className="w-full rounded-[14px] bg-surface text-ink shadow-xl p-2.5 sm:p-3">
         <div className="flex items-center gap-1.5">
           <BrandMark className="w-4 h-4" />
           <span className="text-[11px] font-extrabold tracking-tight">Register</span>
@@ -180,7 +181,20 @@ export function AuthRailDemo() {
           </div>
         </div>
       </div>
-      <div className="pointer-events-none absolute inset-0 rounded-xl2 ring-1 ring-inset ring-white/10" />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-xl2 ring-1 ring-inset ring-white/10" />
+      {!reduceMotion && (
+        <button
+          type="button"
+          onClick={() => setPaused((p) => !p)}
+          aria-label={paused ? "Play register demo" : "Pause register demo"}
+          aria-pressed={paused}
+          className="absolute bottom-2 right-2 grid place-items-center w-11 h-11 rounded-full bg-black/35 text-white backdrop-blur-sm hover:bg-black/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white transition"
+        >
+          <svg viewBox="0 0 16 16" className="w-4 h-4" fill="currentColor" aria-hidden="true">
+            {paused ? <path d="M4 2.5v11l9-5.5z" /> : <path d="M4 2.5h3v11H4zm5 0h3v11H9z" />}
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

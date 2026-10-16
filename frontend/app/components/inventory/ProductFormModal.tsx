@@ -143,26 +143,34 @@ export function ProductFormModal({
 
           <fieldset>
             <legend className="text-[13px] font-semibold text-ink-soft mb-1.5">Is this product VATable?</legend>
-            <div role="radiogroup" aria-label="VAT classification" className="grid sm:grid-cols-3 gap-2">
+            {/* Native radios: arrow keys, one tab stop, and the same announcement
+                on VoiceOver (iOS) and TalkBack (Android). The card is the label. */}
+            <div className="grid sm:grid-cols-3 gap-2">
               {(Object.keys(VAT_CLASS_LABELS) as VatClass[]).map((k) => {
                 const on = vatClass === k;
                 return (
-                  <button
+                  <label
                     key={k}
-                    type="button"
-                    role="radio"
-                    aria-checked={on}
-                    onClick={() => setVatClass(k)}
                     className={
-                      "tap min-h-[44px] rounded-[12px] px-3.5 py-2.5 text-left transition " +
+                      "tap relative flex items-start gap-2.5 min-h-[44px] rounded-[12px] px-3.5 py-2.5 cursor-pointer transition has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand-200 " +
                       (on
                         ? "bg-brand-50 border border-brand-500 text-ink"
                         : "bg-surface hairline text-ink-soft hover:border-brand-300")
                     }
                   >
-                    <span className="block text-[13.5px] font-semibold">{VAT_CLASS_LABELS[k]}</span>
-                    <span className="block text-[11.5px] text-ink-faint">{VAT_CLASS_HINTS[k]}</span>
-                  </button>
+                    <input
+                      type="radio"
+                      name="vatClass"
+                      value={k}
+                      checked={on}
+                      onChange={() => setVatClass(k)}
+                      className="mt-0.5 w-4 h-4 shrink-0 accent-brand-600"
+                    />
+                    <span>
+                      <span className="block text-[13.5px] font-semibold">{VAT_CLASS_LABELS[k]}</span>
+                      <span className="block text-[11.5px] text-ink-faint">{VAT_CLASS_HINTS[k]}</span>
+                    </span>
+                  </label>
                 );
               })}
             </div>
