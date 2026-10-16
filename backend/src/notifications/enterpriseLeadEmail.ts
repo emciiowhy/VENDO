@@ -7,7 +7,7 @@ import { sendEmail, type EmailResult } from "./email.js";
  * Unlike the owner-facing onboarding/recovery mails, this one goes to OUR ops
  * inbox (env.email.adminAlertTo, falling back to the `from` mailbox) and carries
  * the lead's operational details so a rep can prep the mandatory 1-on-1 Zoom
- * consultation and the in-person multi-location rollout mapping.
+ * consultation and the in-person rollout mapping.
  *
  * `renderEnterpriseLeadAlertEmail` is pure/deterministic for unit tests;
  * `sendEnterpriseLeadAlertEmail` is the best-effort producer the intake route
@@ -19,7 +19,7 @@ export interface EnterpriseLeadDetails {
   businessName: string;
   email: string;
   phone: string;
-  /** Free-text scale of the operation, e.g. "6–10 branches". */
+  /** Free-text scale of the operation, e.g. "25 staff, 1,200 SKUs". */
   locations: string;
   /** What they run today (optional), e.g. "Loyverse + manual spreadsheets". */
   currentSystem: string | null;
@@ -57,7 +57,7 @@ export function renderEnterpriseLeadAlertEmail(d: EnterpriseLeadDetails): Render
     ...lines.map(([k, v]) => `  ${k}: ${v}`),
     ``,
     `Next step: reach out to book their 1-on-1 Zoom consultation and scope the`,
-    `in-person rollout for mapping their multi-location configuration.`,
+    `in-person rollout for mapping their store setup.`,
   ].join("\n");
 
   const html = renderHtml({ subject, lines });
@@ -97,7 +97,7 @@ function renderHtml(d: { subject: string; lines: [string, string][] }): string {
                 <table role="presentation" cellpadding="0" cellspacing="0" width="100%">${rows}
                 </table>
                 <p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#6b7280;">
-                  Next step: book their 1-on-1 Zoom consultation and scope the in-person rollout for mapping their multi-location configuration.
+                  Next step: book their 1-on-1 Zoom consultation and scope the in-person rollout for mapping their store setup.
                 </p>
               </td>
             </tr>
