@@ -4,7 +4,6 @@ import { Nav } from "@/app/components/Nav";
 import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 import { MarketingPhoto } from "@/app/components/marketing/MarketingPhoto";
-import { RoadmapBadge } from "@/app/components/marketing/RoadmapBadge";
 import { TrustStrip } from "@/app/components/marketing/TrustStrip";
 import { media } from "@/lib/marketingMedia";
 import {
@@ -47,7 +46,6 @@ export function IndustryView({ industry }: { industry: Industry }) {
               <span className="text-[12px] font-bold tracking-widest uppercase">
                 {group?.title ?? "Industry"}
               </span>
-              <RoadmapBadge status={industry.status} className="ml-1" />
             </div>
             <h1 className="reveal mt-5 mx-auto max-w-[20ch] text-[clamp(2.3rem,5vw,3.4rem)] leading-[1.05] font-extrabold tracking-tightest text-ink">
               {industry.tagline}

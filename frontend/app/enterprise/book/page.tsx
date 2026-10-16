@@ -10,11 +10,11 @@ import { CalendlyBooking } from "@/app/components/marketing/CalendlyBooking";
 export const metadata: Metadata = pageMetadata({
   title: "Book your enterprise consultation — VendoPOS",
   description:
-    "Schedule your 1-on-1 Zoom consultation with a VendoPOS solutions lead to map your multi-location rollout. Pick a time that suits you.",
+    "Schedule your 1-on-1 Zoom consultation with a VendoPOS solutions lead to map your rollout. Pick a time that suits you.",
   path: "/enterprise/book",
   ogTitle: "Book your VendoPOS enterprise consultation",
   ogDescription:
-    "Pick a time for your 1-on-1 Zoom consultation — a VendoPOS solutions lead will scope your multi-location rollout with you.",
+    "Pick a time for your 1-on-1 Zoom consultation — a VendoPOS solutions lead will scope your rollout with you.",
 });
 
 /**

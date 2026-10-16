@@ -88,11 +88,6 @@ const FEATURE_PITCH: Record<
     description:
       "Manage your employee roster, daily attendance and gross-pay payroll runs, with employee self-service.",
   },
-  multi_location: {
-    icon: "building",
-    title: "Multi-location",
-    description: "Run and consolidate more than one store location.",
-  },
   priority_support: {
     icon: "shield",
     title: "Priority support",

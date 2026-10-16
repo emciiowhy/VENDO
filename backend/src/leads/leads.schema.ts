@@ -51,7 +51,7 @@ export type LeadInput = z.infer<typeof leadSchema>;
  * The Enterprise concierge intake (POST /api/leads/enterprise). Enterprise never
  * self-serves a trial — it's a high-touch funnel — so this captures the extra
  * operational detail a rep needs to scope the mandatory 1-on-1 consultation and
- * the in-person multi-location rollout: how large the operation is (`locations`)
+ * the in-person rollout: how large the operation is (`locations`)
  * and what they run today (`currentSystem`). Contact basics are shared with the
  * demo lead so the row still slots into the same pipeline.
  */
@@ -68,7 +68,7 @@ export const enterpriseIntakeSchema = z.object({
   locations: z
     .string()
     .trim()
-    .min(1, "Tell us roughly how many locations you run.")
+    .min(1, "Tell us roughly how big your operation is.")
     .max(120),
   currentSystem: z.string().trim().max(200).optional().or(z.literal("")),
   message: z.string().trim().max(2000).optional().or(z.literal("")),

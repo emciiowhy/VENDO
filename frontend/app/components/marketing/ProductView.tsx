@@ -5,12 +5,10 @@ import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 import { MarketingPhoto } from "@/app/components/marketing/MarketingPhoto";
 import { MarketingVisual, visualKindForIcon } from "@/app/components/marketing/MarketingVisual";
-import { RoadmapBadge } from "@/app/components/marketing/RoadmapBadge";
 import { TrustStrip } from "@/app/components/marketing/TrustStrip";
 import { media } from "@/lib/marketingMedia";
 import {
   type ProductPage,
-  productStatus,
   productPhotoKey,
   relatedProducts,
 } from "@/lib/products";
@@ -20,10 +18,9 @@ import {
  * right), three feature highlights, and a live "in the dashboard" app-mockup
  * showcase (the CSS <MarketingVisual>, which actually reflects the app). The
  * mockup keeps products visually distinct from the photo-led industry pages and
- * the bundle-led hardware pages. "Coming soon" products carry a roadmap badge.
+ * the bundle-led hardware pages.
  */
 export function ProductView({ product }: { product: ProductPage }) {
-  const status = productStatus(product.slug);
   const photo = media(productPhotoKey(product.slug));
   const related = relatedProducts(product.slug);
   const lead = product.features[0];
@@ -48,7 +45,6 @@ export function ProductView({ product }: { product: ProductPage }) {
                   <span className="text-[12px] font-bold tracking-widest uppercase">
                     {product.category}
                   </span>
-                  <RoadmapBadge status={status} className="ml-1" />
                 </div>
                 <h1 className="mt-5 max-w-[18ch] text-[clamp(2.2rem,4.6vw,3.2rem)] leading-[1.06] font-extrabold tracking-tightest text-ink">
                   {product.tagline}
@@ -162,7 +158,6 @@ export function ProductView({ product }: { product: ProductPage }) {
                     </span>
                     <span className="flex items-center gap-2 text-[14.5px] font-semibold text-ink group-hover:text-brand-600 transition">
                       {p.name}
-                      <RoadmapBadge status={productStatus(p.slug)} />
                     </span>
                   </Link>
                 ))}

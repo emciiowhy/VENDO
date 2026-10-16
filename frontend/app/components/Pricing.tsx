@@ -1,16 +1,13 @@
 import Link from "next/link";
 import { Icon } from "./Icon";
 
-/** A plan feature. `soon` marks a roadmap item that isn't shipped yet. */
-type Feature = string | { label: string; soon?: boolean };
-
 type Plan = {
   name: string;
   forWho: string;
   price: string;
   per?: string;
   indicative: boolean;
-  features: Feature[];
+  features: string[];
   featured?: boolean;
   /** Self-service trial tier → routes to signup. Enterprise stays contact-sales. */
   signupPlan?: "starter" | "business";
@@ -51,7 +48,7 @@ const plans: Plan[] = [
   },
   {
     name: "Enterprise",
-    forWho: "For large, complex, multi-location operations.",
+    forWho: "For larger operations that need manufacturing and payroll.",
     price: "₱799",
     per: "/mo",
     indicative: false,
@@ -59,7 +56,6 @@ const plans: Plan[] = [
       "Everything in Business",
       "Manufacturing (recipes / BOM)",
       "Human Resources & payroll",
-      { label: "Multi-location", soon: true },
       "Priority support",
     ],
   },
@@ -128,9 +124,7 @@ export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean
                 </div>
               )}
               <ul className="mt-7 space-y-3.5 flex-1">
-                {plan.features.map((f, i) => {
-                  const label = typeof f === "string" ? f : f.label;
-                  const soon = typeof f !== "string" && f.soon;
+                {plan.features.map((label, i) => {
                   return (
                     <li
                       key={label}
@@ -143,14 +137,7 @@ export function Pricing({ isFirstPurchase = false }: { isFirstPurchase?: boolean
                         className="w-[18px] h-[18px] shrink-0 text-accent-600 mt-0.5"
                         strokeWidth={2}
                       />
-                      <span className="flex items-center gap-2">
-                        {label}
-                        {soon && (
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                            Coming soon
-                          </span>
-                        )}
-                      </span>
+                      <span className="flex items-center gap-2">{label}</span>
                     </li>
                   );
                 })}

@@ -80,7 +80,6 @@ describe("feature → minimum-tier matrix (official product tiers)", () => {
   it("gates scale + automation modules at ENTERPRISE", () => {
     expect(minTierForFeature("manufacturing_bom")).toBe("ENTERPRISE");
     expect(minTierForFeature("human_resources_payroll")).toBe("ENTERPRISE");
-    expect(minTierForFeature("multi_location")).toBe("ENTERPRISE");
     expect(minTierForFeature("priority_support")).toBe("ENTERPRISE");
     expect(minTierForFeature("predictive_inventory")).toBe("ENTERPRISE");
   });

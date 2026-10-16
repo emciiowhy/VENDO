@@ -5,7 +5,8 @@
  * Unsplash CDN (`images.unsplash.com`, free Unsplash License). We previously
  * used LoremFlickr, but it began returning HTTP 401 for every request, so every
  * marketing photo silently fell back to the on-brand gradient panel. These are
- * fixed photo IDs — each was verified to return 200 — so the same picture renders
+ * fixed photo IDs — each was verified to return 200 and checked by eye to show
+ * its topic (the receipt printer is a real receipt printer) — so the same picture renders
  * on every build/visit, and <MarketingPhoto> still degrades to a gradient if a
  * URL ever fails, so nothing shows a broken image.
  *
@@ -24,44 +25,38 @@ export const MEDIA = {
   restaurants: unsplash("1517248135467-4c7edcad34c4"),
   "quick-serve": unsplash("1550547660-d9450f859349"),
   "fine-dining": unsplash("1414235077428-338989a2e8c0"),
-  "cloud-kitchen": unsplash("1556910103-1c02745aae4d"),
   // Industries — Retail
   "grocery-supermarket": unsplash("1542838132-92c53300491e"),
   "convenience-store": unsplash("1604719312566-8912e9227c6a"),
   "fashion-apparel": unsplash("1441986300917-64674bd600d8"),
   "specialty-store": unsplash("1472851294608-062f824d29cc"),
-  "online-store": unsplash("1563013544-824ae1b704d3"),
   // Industries — Service & Enterprise
-  service: unsplash("1560066984-138dadb4c035"),
-  enterprise: unsplash("1497366216548-37526070297c"),
-  "personal-care": unsplash("1522337360788-8b13dee7a37e"),
-  healthcare: unsplash("1587854692152-cbe660dbde88"),
+  service: unsplash("1521590832167-7bcbfaa6381f"),
+  enterprise: unsplash("1586528116311-ad8dd3c8310d"),
+  "personal-care": unsplash("1580618672591-eb180b1a973f"),
+  healthcare: unsplash("1789108978116-2763682414a4"),
   warehouse: unsplash("1553413077-190dd305871c"),
   // Group-level photos (used by the industry outcomes section)
-  fnb: unsplash("1579621970563-ebec7560ff3e"),
+  fnb: unsplash("1753351050724-511764d227e3"),
   retail: unsplash("1604719312566-8912e9227c6a"),
 
   // Products / platform
   "point-of-sale": unsplash("1556740738-b6a63e27c4df"),
-  payments: unsplash("1556742049-0cfed4f6a45d"),
+  payments: unsplash("1595079676339-1534801ad6cf"),
   inventory: unsplash("1586528116311-ad8dd3c8310d"),
   analytics: unsplash("1551288049-bebda4e38f71"),
   loyalty: unsplash("1556741533-6e6a62bd8b49"),
-  online: unsplash("1556742502-ec7c0e9f34b1"),
-  kitchen: unsplash("1565299624946-b28f40a0ae38"),
+  "cafe-counter": unsplash("1778790891354-5daafd82a619"),
   staff: unsplash("1522071820081-009f0129c71c"),
 
   // Hardware
-  "pos-terminal": unsplash("1612810806695-30f7a8258391"),
-  "receipt-printer": unsplash("1572025442646-866d16c84a54"),
-  "barcode-scanner": unsplash("1588702547923-7093a6c3ba33"),
-  "cash-drawer": unsplash("1559526324-4b87b5e36e44"),
-  "payment-reader": unsplash("1563013544-824ae1b704d3"),
-  "customer-display": unsplash("1517336714731-489689fd1ca8"),
-  "kitchen-display": unsplash("1546054454-aa26e2b734c7"),
-  "label-printer": unsplash("1611162617474-5b21e879e113"),
-  "hardware-hero": unsplash("1498050108023-c5249f4df085"),
-  "hardware-bundle": unsplash("1441986300917-64674bd600d8"),
+  "pos-terminal": unsplash("1586864030223-a918b07d357d"),
+  "receipt-printer": unsplash("1787551415585-9c3e058c26c7"),
+  "cash-drawer": unsplash("1780037190608-1d871be1fe41"),
+  "payment-reader": unsplash("1595079835357-a94a13cab10c"),
+  "customer-display": unsplash("1787209516537-a8e66a1b4360"),
+  "hardware-hero": unsplash("1649424220505-bb300805f35a"),
+  "hardware-bundle": unsplash("1778790508237-3c6cb00f152a"),
 
   // Hero POS demo product thumbnails (small, decorative — verified 200)
   "hero-coffee": unsplash("1495474472287-4d71bcdd2085", 200, 200),

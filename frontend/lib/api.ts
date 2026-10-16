@@ -63,7 +63,7 @@ export async function verifyLeadEmail(token: string): Promise<VerifyEmailResult>
 /**
  * The Enterprise concierge intake. Distinct from the demo lead: Enterprise never
  * self-serves a trial, so this funnel captures the extra operational detail a rep
- * needs to scope the 1-on-1 consultation and the in-person multi-location rollout.
+ * needs to scope the 1-on-1 consultation and the in-person rollout.
  * On success the backend has persisted the lead and dispatched an internal admin
  * alert carrying these details (see POST /api/leads/enterprise).
  */
@@ -72,7 +72,7 @@ export interface EnterpriseInquiryPayload {
   businessName: string;
   email: string;
   phone: string;
-  /** Free-text scale of the operation, e.g. "6–10 branches". */
+  /** Free-text scale of the operation, e.g. "25 staff, 1,200 SKUs". */
   locations: string;
   currentSystem?: string;
   message?: string;

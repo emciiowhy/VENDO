@@ -36,19 +36,6 @@ export const HARDWARE: MarketingEntry[] = [
     ],
   },
   {
-    slug: "barcode-scanner",
-    eyebrow: "Hardware",
-    icon: "barcode",
-    name: "Barcode Scanner",
-    tagline: "Ring items in a beep.",
-    intro: "Scan products straight into the cart for faster, error-free checkout.",
-    cards: [
-      { icon: "barcode", title: "Instant lookup", body: "Scan a barcode to add the right item immediately." },
-      { icon: "bolt", title: "Faster checkout", body: "No more hunting through the catalog by hand." },
-      { icon: "check", title: "Fewer mistakes", body: "Scanning the code means the right product, every time." },
-    ],
-  },
-  {
     slug: "cash-drawer",
     eyebrow: "Hardware",
     icon: "wallet",
@@ -65,13 +52,13 @@ export const HARDWARE: MarketingEntry[] = [
     slug: "payment-reader",
     eyebrow: "Hardware",
     icon: "card",
-    name: "Card & QR Payment Reader",
-    tagline: "Tap, card, or QR — take it all.",
-    intro: "Accept cards and e-wallet QR at the counter, settled straight into the sale.",
+    name: "E-wallet QR Payments",
+    tagline: "GCash, Maya, or QRPH — scan and pay.",
+    intro: "Upload your store's e-wallet QR codes once; the register pops the right one at checkout.",
     cards: [
-      { icon: "card", title: "Every tender", body: "Cards and GCash/Maya/QRPH all at one device." },
-      { icon: "bolt", title: "Fast settlement", body: "Payments land on the sale without re-keying." },
-      { icon: "shield", title: "Secure", body: "Handles payments safely at the point of sale." },
+      { icon: "qr", title: "Your own QR codes", body: "GCash, Maya, and QRPH codes shown on screen when the cashier picks the tender." },
+      { icon: "receipt", title: "Reference on the sale", body: "The e-wallet reference number is recorded on the sale and its receipt." },
+      { icon: "shield", title: "No extra device", body: "Customers scan from the screen — no card terminal or gateway fees." },
     ],
   },
   {
@@ -87,32 +74,6 @@ export const HARDWARE: MarketingEntry[] = [
       { icon: "heart", title: "Better experience", body: "A polished checkout that reassures every customer." },
     ],
   },
-  {
-    slug: "kitchen-display-screen",
-    eyebrow: "Hardware",
-    icon: "monitor",
-    name: "Kitchen Display Screen",
-    tagline: "A rugged screen for the line.",
-    intro: "A kitchen-grade display that shows tickets the moment they're ordered.",
-    cards: [
-      { icon: "monitor", title: "Clear tickets", body: "Orders and modifiers shown legibly for the kitchen." },
-      { icon: "clock", title: "Pace the line", body: "Track prep and bump items as they're done." },
-      { icon: "bolt", title: "Real-time", body: "Tickets appear the instant a sale or QR order is placed." },
-    ],
-  },
-  {
-    slug: "label-printer",
-    eyebrow: "Hardware",
-    icon: "printer",
-    name: "Label & Sticker Printer",
-    tagline: "Price and label in seconds.",
-    intro: "Print product labels, barcodes, and price tags on demand.",
-    cards: [
-      { icon: "tag", title: "Price & barcode labels", body: "Generate scannable labels for every product." },
-      { icon: "bolt", title: "On-demand", body: "Print exactly what you need, when you need it." },
-      { icon: "box", title: "Inventory-ready", body: "Label stock cleanly so scanning at checkout just works." },
-    ],
-  },
 ];
 
 export const hardware = collection(HARDWARE);
@@ -121,12 +82,9 @@ export const hardware = collection(HARDWARE);
 const HARDWARE_PHOTO: Record<string, string> = {
   "pos-terminal": "pos-terminal",
   "receipt-printer": "receipt-printer",
-  "barcode-scanner": "barcode-scanner",
   "cash-drawer": "cash-drawer",
   "payment-reader": "payment-reader",
   "customer-display": "customer-display",
-  "kitchen-display-screen": "kitchen-display",
-  "label-printer": "label-printer",
 };
 
 export function hardwarePhotoKey(slug: string): string {
@@ -165,17 +123,17 @@ export const HARDWARE_BUNDLES: HardwareBundle[] = [
     icon: "monitor",
     name: "Café & Restaurant",
     forWho: "F&B service",
-    blurb: "Front counter plus a kitchen display so orders reach the line instantly.",
-    includes: ["pos-terminal", "receipt-printer", "kitchen-display-screen", "payment-reader"],
-    photoKey: "kitchen",
+    blurb: "Front counter with receipts, a cash drawer, and e-wallet QR payments.",
+    includes: ["pos-terminal", "receipt-printer", "cash-drawer", "payment-reader"],
+    photoKey: "cafe-counter",
   },
   {
     slug: "retail-pro",
     icon: "cart",
     name: "Retail Pro",
     forWho: "High-volume retail",
-    blurb: "Scan-fast checkout with labels, a customer display, and card/QR payments.",
-    includes: ["pos-terminal", "barcode-scanner", "label-printer", "customer-display", "payment-reader"],
+    blurb: "Fast checkout with a customer display and e-wallet QR payments.",
+    includes: ["pos-terminal", "receipt-printer", "customer-display", "payment-reader"],
     photoKey: "hardware-hero",
   },
 ];

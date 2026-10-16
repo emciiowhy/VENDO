@@ -6,8 +6,7 @@ import { Nav } from "@/app/components/Nav";
 import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 import { TrustStrip } from "@/app/components/marketing/TrustStrip";
-import { RoadmapBadge } from "@/app/components/marketing/RoadmapBadge";
-import { productsByGroup, productStatus } from "@/lib/products";
+import { productsByGroup } from "@/lib/products";
 
 export const metadata: Metadata = pageMetadata({
   title: "Products — VendoPOS",
@@ -66,7 +65,6 @@ export default function ProductsLanding() {
                         <span className="grid place-items-center w-11 h-11 rounded-[12px] bg-brand-50 text-brand-600 hairline">
                           <Icon name={p.icon} className="w-5 h-5" strokeWidth={1.7} />
                         </span>
-                        <RoadmapBadge status={productStatus(p.slug)} />
                       </div>
                       <h3 className="mt-4 text-[1.08rem] font-bold tracking-tight text-ink group-hover:text-brand-600 transition">
                         {p.name}

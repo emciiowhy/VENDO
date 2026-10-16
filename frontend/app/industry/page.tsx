@@ -6,7 +6,6 @@ import { Nav } from "@/app/components/Nav";
 import { Footer } from "@/app/components/Footer";
 import { ScrollReveal } from "@/app/components/ScrollReveal";
 import { MarketingPhoto } from "@/app/components/marketing/MarketingPhoto";
-import { RoadmapBadge } from "@/app/components/marketing/RoadmapBadge";
 import { TrustStrip } from "@/app/components/marketing/TrustStrip";
 import { media } from "@/lib/marketingMedia";
 import { industriesByGroup } from "@/lib/industries";
@@ -14,7 +13,7 @@ import { industriesByGroup } from "@/lib/industries";
 export const metadata: Metadata = pageMetadata({
   title: "Industries — VendoPOS",
   description:
-    "One POS + ERP platform built for how Filipino businesses actually run — F&B, retail, service, and multi-branch enterprise.",
+    "One POS + ERP platform built for how Filipino businesses actually run — F&B, retail, service, and distribution.",
   path: "/industry",
 });
 
@@ -39,7 +38,7 @@ export default function IndustryLanding() {
                 One platform, tuned to your kind of business.
               </h1>
               <p className="mt-5 mx-auto max-w-[58ch] text-[1.1rem] leading-relaxed text-ink-soft">
-                Whether you pour coffee, stock shelves, book appointments, or run a dozen branches —
+                Whether you pour coffee, stock shelves, run a salon, or move goods by the pallet —
                 VendoPOS is shaped around how you actually operate.
               </p>
             </div>
@@ -85,7 +84,6 @@ export default function IndustryLanding() {
                           <h3 className="text-[1.05rem] font-bold tracking-tight text-ink group-hover:text-brand-600 transition">
                             {it.name}
                           </h3>
-                          <RoadmapBadge status={it.status} />
                         </div>
                         <p className="mt-1.5 text-[0.92rem] leading-relaxed text-ink-soft line-clamp-2">
                           {it.intro}

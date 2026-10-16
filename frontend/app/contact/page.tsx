@@ -27,7 +27,7 @@ const CHANNELS: {
   {
     icon: "building",
     title: "Enterprise Sales",
-    blurb: "Multi-branch rollouts, migrations, and volume pricing.",
+    blurb: "Guided rollouts, data migrations, and volume pricing.",
     email: "sales@vendopos.shop",
     responseTime: "Under 2 hours",
   },
@@ -66,7 +66,7 @@ export default function ContactPage() {
               Talk to a team that knows retail.
             </h1>
             <p className="reveal mt-5 mx-auto max-w-[56ch] text-[1.08rem] leading-relaxed text-ink-soft">
-              Whether you&rsquo;re scaling across branches or just sizing us up, reach the right desk
+              Whether you&rsquo;re scaling up or just sizing us up, reach the right desk
               and get a real answer — fast.
             </p>
           </div>

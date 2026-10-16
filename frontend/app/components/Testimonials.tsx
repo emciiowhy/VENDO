@@ -6,7 +6,7 @@ import { Icon } from "./Icon";
 /**
  * Social-proof section — operator stories from local F&B merchants, each praising
  * a concrete VendoPOS strength (shift drawers, fast cashier switching, loyalty
- * and margins, stock alerts, multi-branch reporting). An auto-rotating, swipeable
+ * and margins, stock alerts, printed receipts). An auto-rotating, swipeable
  * carousel with real avatars; all motion respects prefers-reduced-motion.
  */
 interface Review {
@@ -71,13 +71,13 @@ const REVIEWS: Review[] = [
   },
   {
     quote:
-      "Running three branches used to mean three separate notebooks. Now every sale rolls into one dashboard — I can see which branch is up or down for the day without calling a single manager.",
+      "We used to write receipts by hand and lose the line at lunch. Now the thermal printer spits out a BIR-ready receipt in a second, and the stock count is already right when I check it at night.",
     name: "Ramon Teng",
     role: "Owner",
-    store: "Kopi Express (3 branches)",
+    store: "Kopi Express",
     region: "Iloilo City",
     initials: "RT",
-    highlight: "All branches, one dashboard",
+    highlight: "Receipts printed in a second",
     avatar: portrait("1557862921-37829c790f19"),
   },
 ];

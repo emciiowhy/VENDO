@@ -13,7 +13,7 @@ import { HARDWARE, HARDWARE_BUNDLES, hardware, hardwarePhotoKey } from "@/lib/ha
 export const metadata: Metadata = pageMetadata({
   title: "Hardware — VendoPOS",
   description:
-    "POS hardware built for speed and reliability — terminals, printers, scanners, cash drawers, payment readers and displays, in bundles for every business.",
+    "POS hardware built for speed and reliability — terminals, receipt printers, cash drawers, QR payments and displays, in bundles for every business.",
   path: "/hardware",
 });
 

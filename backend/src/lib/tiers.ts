@@ -57,7 +57,6 @@ export type Feature =
   // ENTERPRISE — Business PLUS scale + automation.
   | "manufacturing_bom" // Manufacturing / bill of materials
   | "human_resources_payroll" // HR roster, attendance + payroll
-  | "multi_location" // Multiple store locations
   | "priority_support" // Priority support SLA
   | "predictive_inventory"; // Predictive inventory forecasting + AI insights
 
@@ -81,7 +80,6 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   // ENTERPRISE — Business PLUS:
   manufacturing_bom: "ENTERPRISE",
   human_resources_payroll: "ENTERPRISE",
-  multi_location: "ENTERPRISE",
   priority_support: "ENTERPRISE",
   predictive_inventory: "ENTERPRISE",
 };

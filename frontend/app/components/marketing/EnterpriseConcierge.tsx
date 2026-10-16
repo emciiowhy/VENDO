@@ -10,7 +10,7 @@ import { submitEnterpriseInquiry, type EnterpriseInquiryPayload } from "@/lib/ap
  * Enterprise tier instead of self-serving a trial. It does two jobs:
  *
  *  1. Sets the high-touch expectation: a mandatory 1-on-1 Zoom consultation, then
- *     a custom in-person rollout meeting to map complex multi-location configs.
+ *     a custom in-person rollout meeting to map the store's setup.
  *  2. Captures the operational detail (scale, current system) and submits it —
  *     the backend persists the lead and fires an internal admin alert with those
  *     details so a rep can prep before reaching out.
@@ -25,17 +25,17 @@ const STEPS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: "monitor",
     title: "1 · Your 1-on-1 Zoom consultation",
-    body: "A mandatory video call with a VendoPOS solutions lead to understand your operation, locations and goals — and answer everything before you commit.",
+    body: "A mandatory video call with a VendoPOS solutions lead to understand your operation, team and goals — and answer everything before you commit.",
   },
   {
     icon: "building",
     title: "2 · In-person rollout mapping",
-    body: "We come to you. A hands-on session to map your multi-location configuration — branches, roles, inventory transfers and consolidated reporting — into a rollout plan tailored to your business.",
+    body: "We come to you. A hands-on session to map your setup — staff roles, catalog, suppliers, recipes and payroll — into a rollout plan tailored to your business.",
   },
   {
     icon: "shield",
     title: "3 · Guided go-live",
-    body: "We provision your stores, migrate your data and train your teams, then stay close through launch with a priority support line.",
+    body: "We provision your store, migrate your data and train your teams, then stay close through launch with a priority support line.",
   },
 ];
 
@@ -121,7 +121,7 @@ export function EnterpriseConcierge() {
             Let&apos;s map your rollout together.
           </h1>
           <p className="mt-5 text-[1.05rem] text-ink-soft leading-relaxed">
-            Enterprise isn&apos;t a checkout — it&apos;s a partnership. Multi-location operations have
+            Enterprise isn&apos;t a checkout — it&apos;s a partnership. Larger operations have
             real complexity, so we start with a conversation and a plan, not a credit card. Here&apos;s
             how onboarding works.
           </p>
@@ -193,7 +193,7 @@ export function EnterpriseConcierge() {
                 <Field id="businessName" label="Business name" required value={form.businessName} error={errors.businessName} onChange={(v) => update("businessName", v)} placeholder="Santos Group" autoComplete="organization" />
                 <Field id="email" label="Work email" required type="email" value={form.email} error={errors.email} onChange={(v) => update("email", v)} placeholder="you@company.ph" autoComplete="email" />
                 <Field id="phone" label="Phone" required type="tel" value={form.phone} error={errors.phone} onChange={(v) => update("phone", v)} placeholder="0917 123 4567" autoComplete="tel" />
-                <Field id="locations" label="How many locations?" required value={form.locations} error={errors.locations} onChange={(v) => update("locations", v)} placeholder="e.g. 8 branches" className="sm:col-span-2" />
+                <Field id="locations" label="How big is your operation?" required value={form.locations} error={errors.locations} onChange={(v) => update("locations", v)} placeholder="e.g. 25 staff, 1,200 SKUs" className="sm:col-span-2" />
 
                 <div className="field-wrap flex flex-col gap-2 sm:col-span-2">
                   <label htmlFor="currentSystem" className="text-[14px] font-bold text-ink">

@@ -42,7 +42,6 @@ export type Feature =
   // ENTERPRISE
   | "manufacturing_bom"
   | "human_resources_payroll"
-  | "multi_location"
   | "priority_support"
   | "predictive_inventory";
 
@@ -59,7 +58,6 @@ export const FEATURE_MIN_TIER: Record<Feature, Tier> = {
   custom_branding: "BUSINESS",
   manufacturing_bom: "ENTERPRISE",
   human_resources_payroll: "ENTERPRISE",
-  multi_location: "ENTERPRISE",
   priority_support: "ENTERPRISE",
   predictive_inventory: "ENTERPRISE",
 };
