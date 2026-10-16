@@ -11,7 +11,7 @@ import {
   type Product,
   type ProductFields,
 } from "@/lib/inventory";
-import { VAT_CLASS_LABELS, type VatClass } from "@/lib/pos";
+import { VAT_CLASS_HINTS, VAT_CLASS_LABELS, type VatClass } from "@/lib/pos";
 
 const FIELD_INPUT = "field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14.5px] text-ink";
 
@@ -141,22 +141,38 @@ export function ProductFormModal({
             </Field>
           </div>
 
-          <Field label="VAT classification" error={fieldErrors.vatClass}>
-            <select
-              value={vatClass}
-              onChange={(e) => setVatClass(e.target.value as VatClass)}
-              className={FIELD_INPUT}
-            >
-              {(Object.keys(VAT_CLASS_LABELS) as VatClass[]).map((k) => (
-                <option key={k} value={k}>
-                  {VAT_CLASS_LABELS[k]}
-                </option>
-              ))}
-            </select>
-            <span className="block mt-1 text-[12px] text-ink-faint">
+          <fieldset>
+            <legend className="text-[13px] font-semibold text-ink-soft mb-1.5">Is this product VATable?</legend>
+            <div role="radiogroup" aria-label="VAT classification" className="grid sm:grid-cols-3 gap-2">
+              {(Object.keys(VAT_CLASS_LABELS) as VatClass[]).map((k) => {
+                const on = vatClass === k;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => setVatClass(k)}
+                    className={
+                      "tap min-h-[44px] rounded-[12px] px-3.5 py-2.5 text-left transition " +
+                      (on
+                        ? "bg-brand-50 border border-brand-500 text-ink"
+                        : "bg-surface hairline text-ink-soft hover:border-brand-300")
+                    }
+                  >
+                    <span className="block text-[13.5px] font-semibold">{VAT_CLASS_LABELS[k]}</span>
+                    <span className="block text-[11.5px] text-ink-faint">{VAT_CLASS_HINTS[k]}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {fieldErrors.vatClass && (
+              <span className="block mt-1 text-[12px] font-semibold text-rose-600">{fieldErrors.vatClass}</span>
+            )}
+            <span className="block mt-1.5 text-[12px] text-ink-faint">
               Prices are VAT-inclusive. Only VATable items add 12% output VAT on the receipt.
             </span>
-          </Field>
+          </fieldset>
 
           <div className="grid sm:grid-cols-3 gap-4">
             <Field label="Price" error={fieldErrors.price}>

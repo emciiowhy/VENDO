@@ -19,6 +19,13 @@ export const VAT_CLASS_LABELS: Record<VatClass, string> = {
   ZERO_RATED: "Zero-Rated (0%)",
 };
 
+/** One-line explanation of each VAT class (shown under the product-form choice). */
+export const VAT_CLASS_HINTS: Record<VatClass, string> = {
+  VATABLE: "Adds 12% output VAT on the receipt",
+  EXEMPT: "No VAT — e.g. basic goods, non-VAT items",
+  ZERO_RATED: "0% VAT — e.g. export sales",
+};
+
 export interface CatalogProduct {
   id: string;
   categoryId: string | null;
@@ -164,6 +171,31 @@ export function seniorPwdDiscountCents(lines: { vatClass: VatClass; lineCents: n
   const vatExempted = grossIncl - netBase;
   const seniorDiscount = Math.round((netBase * 20) / 100);
   return vatExempted + seniorDiscount;
+}
+
+/**
+ * Preview-only mirror of the server's `computeVatBreakdown`: output VAT comes
+ * from the VATable lines only — EXEMPT and ZERO_RATED lines carry none. A
+ * cart-level discount is allocated across the classes pro-rata by gross, and the
+ * VATable portion is the residual of the net, exactly as the server books it.
+ */
+export function previewVatCents(
+  lines: { vatClass: VatClass; lineCents: number }[],
+  discountCents = 0,
+): number {
+  const grossOf = (k: VatClass) => lines.reduce((s, l) => (l.vatClass === k ? s + l.lineCents : s), 0);
+  const exemptGross = grossOf("EXEMPT");
+  const zeroGross = grossOf("ZERO_RATED");
+  const totalGross = grossOf("VATABLE") + exemptGross + zeroGross;
+  const disc = Math.min(Math.max(0, Math.round(discountCents)), totalGross);
+  const netCents = totalGross - disc;
+  const share = (gross: number) =>
+    totalGross > 0 ? Math.min(gross, Math.round((disc * gross) / totalGross)) : 0;
+  const vatableNetIncl = Math.max(
+    0,
+    netCents - (exemptGross - share(exemptGross)) - (zeroGross - share(zeroGross)),
+  );
+  return Math.round((vatableNetIncl * SC_PWD_VAT_NUM) / SC_PWD_VAT_DEN);
 }
 
 export interface OrderLine {

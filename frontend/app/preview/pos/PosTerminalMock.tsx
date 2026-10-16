@@ -193,14 +193,10 @@ function Catalog({ cat, setCat }: { cat: Category; setCat: (c: Category) => void
           <Icon name="search" className="w-[16px] h-[16px] text-ink-faint absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             readOnly
-            placeholder="Search or scan barcode…"
+            placeholder="Search by name or SKU…"
             className="field-input tap rounded-[10px] pl-9 pr-3 text-[14px] w-full"
           />
         </label>
-        <span className="tap hidden sm:inline-flex items-center gap-1.5 rounded-[10px] bg-surface hairline px-3 text-[12px] font-bold text-ink-faint">
-          <Icon name="bolt" className="w-[15px] h-[15px]" strokeWidth={1.8} />
-          Scan ready
-        </span>
       </div>
 
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-none">

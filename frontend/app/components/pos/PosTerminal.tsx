@@ -18,6 +18,7 @@ import {
   getActiveShift,
   getCatalog,
   recordAudit,
+  previewVatCents,
   seniorPwdDiscountCents,
   submitOrder,
   type ActiveShift,
@@ -37,7 +38,6 @@ import { printSaleReceipt, type TicketItem } from "./receiptPrint";
 import { buildSaleReceipt } from "@/lib/escpos";
 import { useThermalPrinter, type UseThermalPrinter } from "./useThermalPrinter";
 import { PrinterControl } from "./PrinterControl";
-import { useBarcodeScanner } from "./useBarcodeScanner";
 import { ClockWidget } from "./ClockWidget";
 import { ActivationWizard } from "./ActivationWizard";
 import { clockOut as apiClockOut, getClockStatus } from "@/lib/timecard";
@@ -56,12 +56,6 @@ import {
  * VAT is shown 12% inclusive, per PH retail. Money is centavos end-to-end.
  */
 const UNCATEGORISED = "Uncategorised";
-
-// How long the scan-batcher waits for the next identical-burst scan before it
-// commits. A hardware scanner fires each item as a sub-100ms keystroke burst, so
-// 400ms comfortably groups a rapid "scan the same SKU ×5" sequence into one
-// atomic cart mutation while staying imperceptible for a single scan.
-const SCAN_BATCH_WINDOW_MS = 400;
 
 const PAY_METHODS: { key: PaymentMethod; icon: IconName }[] = [
   { key: "Cash", icon: "peso" },
@@ -155,19 +149,10 @@ export function PosTerminal() {
 
   const [cat, setCat] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  // Transient barcode-scan feedback ("not found" / "out of stock"); cleared on the
-  // next keystroke. Scanner success just drops the item in the cart silently.
+  // Transient SKU-lookup feedback ("not found" / "out of stock"); cleared on the
+  // next keystroke.
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, Line>>({});
-  // ── Scan-batching engine ────────────────────────────────────────────────────
-  // A hardware scanner can fire the same barcode many times in a sub-second
-  // burst. Rather than spawn N heavy cart mutations (and N re-renders), we buffer
-  // identical SKUs in a ref, aggregate their quantities, and commit a single
-  // debounced +N cart update. `scanBatch` mirrors the buffer for the live
-  // accumulation indicator; the ref is the source of truth the timer flushes.
-  const scanBufferRef = useRef<Map<string, { product: CatalogProduct; count: number }>>(new Map());
-  const scanFlushTimer = useRef<number | null>(null);
-  const [scanBatch, setScanBatch] = useState<Record<string, number>>({});
   const [discount, setDiscount] = useState<Discount | null>(null);
   const [cartOpenMobile, setCartOpenMobile] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -201,8 +186,8 @@ export function PosTerminal() {
     danger?: boolean;
   } | null>(null);
   // The on-the-floor shift-clock sheet (labor time-tracking, distinct from the
-  // cash-drawer X/Z-Read shift above). Lifted here so its open state can suspend
-  // the barcode wedge like every other register overlay.
+  // cash-drawer X/Z-Read shift above). Open state lives here with the other
+  // register overlays.
   const [clockOpen, setClockOpen] = useState(false);
 
   const refreshShift = useCallback(async () => {
@@ -226,15 +211,6 @@ export function PosTerminal() {
   // Thermal printer (WebUSB / Web Bluetooth) connection controller. Capability
   // is detected post-mount inside the hook, so this is SSR-safe.
   const thermal = useThermalPrinter();
-  // Global barcode/QR wedge capture: a hardware scanner can ring items from
-  // anywhere on the floor, not only the search box. Suspended while an overlay
-  // owns the screen so a stray scan can't mutate a cart the cashier can't see.
-  const scanOverlayOpen =
-    checkoutOpen || discountOpen || voidOpen || salesOpen || closeShiftOpen || clockOpen || !!confirm || !!receipt || terminalLocked;
-  useBarcodeScanner({
-    onScan: (code) => addByScan(code),
-    enabled: session.status === "authed" && !loading && !scanOverlayOpen,
-  });
 
   const applyCatalog = useCallback(
     (data: Awaited<ReturnType<typeof getCatalog>>) => {
@@ -311,8 +287,15 @@ export function PosTerminal() {
     [discount, grossCents, lines],
   );
   const netCents = Math.max(0, grossCents - discountCents);
-  // A Senior/PWD sale is VAT-exempt — no output VAT on the ticket.
-  const vatCents = discount?.type === "senior_pwd" ? 0 : Math.round((netCents * 12) / 112);
+  // A Senior/PWD sale is VAT-exempt — no output VAT on the ticket. Otherwise VAT
+  // comes from VATable lines only, so a VAT-exempt/zero-rated item shows none.
+  const vatCents =
+    discount?.type === "senior_pwd"
+      ? 0
+      : previewVatCents(
+          lines.map((l) => ({ vatClass: l.product.vatClass, lineCents: l.product.priceCents * l.qty })),
+          discountCents,
+        );
   const count = lines.reduce((s, l) => s + l.qty, 0);
 
   // ── Customer-facing display sync (terminal-local BroadcastChannel) ─────────
@@ -412,9 +395,9 @@ export function PosTerminal() {
       return { ...c, [p.id]: { product: p, qty: cur + 1 } };
     });
   }
-  // Barcode scan: a USB/Bluetooth scanner types the code then sends Enter. Resolve
-  // it to a product — exact SKU match first (what a scanner emits), then a sole
-  // filtered result — add it to the cart and clear the box for the next scan. No
+  // Enter in the search box: resolve the typed text to a product — exact SKU
+  // match first, then a sole filtered result — add it to the cart and clear the
+  // box for the next item. No
   // match / out of stock surfaces a transient message instead of a silent no-op.
   function scanToCart() {
     const code = query.trim();
@@ -434,75 +417,6 @@ export function PosTerminal() {
     setQuery("");
     setScanMsg(null);
   }
-  // Commit every buffered scan in ONE atomic cart mutation: each SKU's pending
-  // count is merged onto its current line, capped at the stock on hand. Clearing
-  // the buffer + indicator together keeps them from ever drifting.
-  const flushScanBatch = useCallback(() => {
-    scanFlushTimer.current = null;
-    const buffer = scanBufferRef.current;
-    if (buffer.size === 0) return;
-    const pending = [...buffer.values()];
-    buffer.clear();
-    setScanBatch({});
-    setCart((c) => {
-      const next = { ...c };
-      for (const { product, count } of pending) {
-        const cur = next[product.id]?.qty ?? 0;
-        const capped = Math.min(cur + count, product.stock);
-        if (capped <= 0) continue;
-        next[product.id] = { product, qty: capped };
-      }
-      return next;
-    });
-  }, []);
-
-  // Hardware-scanner path (global wedge capture). No query context exists, so it
-  // resolves an exact SKU only — a miss surfaces the same transient message so
-  // the cashier knows to key the item manually. Hits don't touch the cart
-  // directly: they feed the batcher, which coalesces a rapid burst into a single
-  // quantity bump (see flushScanBatch) so the UI never thrashes mid-scan.
-  function addByScan(code: string) {
-    const c = code.trim();
-    if (!c) return;
-    const hit = products.find((p) => (p.sku ?? "").toLowerCase() === c.toLowerCase());
-    if (!hit) {
-      setScanMsg(`No product matches “${c}”.`);
-      return;
-    }
-    if (hit.stock <= 0) {
-      setScanMsg(`${hit.name} is out of stock.`);
-      return;
-    }
-    setScanMsg(null);
-    const buffer = scanBufferRef.current;
-    const entry = buffer.get(hit.id);
-    buffer.set(hit.id, { product: hit, count: (entry?.count ?? 0) + 1 });
-    // Mirror the buffer into state for the live accumulation indicator.
-    setScanBatch(Object.fromEntries([...buffer].map(([id, e]) => [id, e.count])));
-    if (scanFlushTimer.current !== null) window.clearTimeout(scanFlushTimer.current);
-    scanFlushTimer.current = window.setTimeout(flushScanBatch, SCAN_BATCH_WINDOW_MS);
-  }
-
-  // Never leak the pending-flush timer if the terminal unmounts mid-burst.
-  useEffect(() => {
-    return () => {
-      if (scanFlushTimer.current !== null) window.clearTimeout(scanFlushTimer.current);
-    };
-  }, []);
-
-  // Pending scan accumulation (name + count) for the live ticker / row badges.
-  // Declared here with the other hooks — above every early return — so the hook
-  // order stays stable across the session-loading → authed transition.
-  const scanBatchList = useMemo(
-    () =>
-      Object.entries(scanBatch).map(([id, qty]) => ({
-        id,
-        name: products.find((p) => p.id === id)?.name ?? id,
-        count: qty,
-      })),
-    [scanBatch, products],
-  );
-
   function setQty(id: string, qty: number) {
     const line = cart[id];
     if (!line) return;
@@ -641,7 +555,6 @@ export function PosTerminal() {
     netCents,
     vatCents,
     count,
-    scanBatch: scanBatchList,
     setQty,
     onDiscount: () => setDiscountOpen(true),
     onVoid: () => setVoidOpen(true),
@@ -851,7 +764,7 @@ export function PosTerminal() {
                     scanToCart();
                   }
                 }}
-                placeholder="Search or scan barcode…"
+                placeholder="Search by name or SKU…"
                 className="field-input tap rounded-[10px] pl-9 pr-3 py-2.5 text-[14px] w-full"
               />
             </label>
@@ -1146,8 +1059,6 @@ interface CartProps {
   netCents: number;
   vatCents: number;
   count: number;
-  /** SKUs mid-accumulation in the scan batcher (live, pre-commit indicator). */
-  scanBatch: { id: string; name: string; count: number }[];
   setQty: (id: string, qty: number) => void;
   onDiscount: () => void;
   onVoid: () => void;
@@ -1164,14 +1075,12 @@ function CartPanel({
   netCents,
   vatCents,
   count,
-  scanBatch,
   setQty,
   onDiscount,
   onVoid,
   onCheckout,
 }: CartProps) {
   const empty = lines.length === 0;
-  const scanBatchById = new Map(scanBatch.map((s) => [s.id, s.count]));
   return (
     <aside className={"flex-col bg-surface min-h-0 lg:border-l lg:border-[rgba(11,18,32,0.07)] " + className}>
       <div className="shrink-0 flex items-center justify-between px-5 py-4 hairline-b">
@@ -1212,20 +1121,6 @@ function CartPanel({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
-        {scanBatch.length > 0 && (
-          <div className="mb-3 space-y-1.5" aria-live="polite">
-            {scanBatch.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center gap-2 rounded-[10px] bg-brand-50 text-brand-700 px-3 py-2 text-[12.5px] font-semibold step-in"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse shrink-0" />
-                <span className="truncate flex-1">Scanning {s.name}…</span>
-                <span className="tabular-nums font-extrabold">+{s.count}</span>
-              </div>
-            ))}
-          </div>
-        )}
         {lines.length === 0 ? (
           <div className="h-full grid place-items-center text-center text-ink-faint py-16">
             <div>
@@ -1242,11 +1137,6 @@ function CartPanel({
                   <div className="text-[13.5px] font-bold tracking-tight truncate">{l.product.name}</div>
                   <div className="text-[12px] text-ink-faint">{peso(l.product.priceCents)} ea</div>
                 </div>
-                {scanBatchById.has(l.product.id) && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 text-brand-700 px-2 py-0.5 text-[11px] font-extrabold tabular-nums animate-pulse">
-                    +{scanBatchById.get(l.product.id)}
-                  </span>
-                )}
                 <div className="flex items-center gap-1.5">
                   <QtyBtn onClick={() => setQty(l.product.id, l.qty - 1)} label="decrease" symbol="−" />
                   <span className="w-6 text-center text-[14px] font-bold tabular-nums">{l.qty}</span>
@@ -1278,7 +1168,7 @@ function CartPanel({
               <span className="tabular-nums">−{peso(discountCents)}</span>
             </div>
           )}
-          <Row label="VAT (12% incl.)" value={peso(vatCents)} muted />
+          <Row label={vatCents > 0 ? "VAT (12% incl.)" : "VAT (none)"} value={peso(vatCents)} muted />
           <div className="flex items-end justify-between pt-2 mt-1 hairline-t">
             <span className="text-[14px] font-bold">Total</span>
             <span className="text-stat font-extrabold tracking-tightest tabular-nums">{peso(netCents)}</span>
@@ -1352,7 +1242,14 @@ function CheckoutOverlay({
   const redeemCents = redeemPoints * 100;
   const dueCents = Math.max(0, netCents - redeemCents);
   // A Senior/PWD sale is VAT-exempt, so no output VAT is shown on the ticket.
-  const dueVatCents = discount?.type === "senior_pwd" ? 0 : Math.round((dueCents * 12) / 112);
+  // Redeemed points fold into the discount, as the server books them.
+  const dueVatCents =
+    discount?.type === "senior_pwd"
+      ? 0
+      : previewVatCents(
+          lines.map((l) => ({ vatClass: l.product.vatClass, lineCents: l.product.priceCents * l.qty })),
+          discountCents + redeemCents,
+        );
 
   const tenderedCents = Math.round((Number(tendered) || 0) * 100);
   const cashShort = method === "Cash" && tenderedCents < dueCents;
@@ -1423,7 +1320,7 @@ function CheckoutOverlay({
                 <span className="tabular-nums">−{peso(redeemCents)}</span>
               </div>
             )}
-            <Row label="VAT (12% incl.)" value={peso(dueVatCents)} muted />
+            <Row label={dueVatCents > 0 ? "VAT (12% incl.)" : "VAT (none)"} value={peso(dueVatCents)} muted />
             <div className="flex items-center justify-between pt-1.5 mt-1 hairline-t">
               <span className="text-[14px] font-bold">Total due</span>
               <span className="text-[1.35rem] font-extrabold tracking-tightest">{peso(dueCents)}</span>
@@ -1657,7 +1554,7 @@ function ReceiptOverlay({
           {sale.discountCents > 0 && (
             <RcptRow label={sale.discountLabel ?? "Discount"} value={`−${peso(sale.discountCents)}`} />
           )}
-          <RcptRow label="VAT (12% incl.)" value={peso(sale.vatCents)} />
+          <RcptRow label={sale.vatCents > 0 ? "VAT (12% incl.)" : "VAT (none)"} value={peso(sale.vatCents)} />
           {sale.paymentRef && <RcptRow label={`${sale.paymentMethod} ref`} value={`••${sale.paymentRef}`} mono />}
           {sale.paymentMethod === "Cash" && sale.tenderedCents !== null && (
             <>

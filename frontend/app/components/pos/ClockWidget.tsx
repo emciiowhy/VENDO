@@ -22,8 +22,7 @@ import {
  * state initializer (server and client would disagree and React would warn).
  * `nowMs` starts null — a deterministic placeholder — and is set, then ticked,
  * strictly inside a post-mount effect that only runs while clocked in. Open
- * state is owned by the parent so the terminal can suspend the global barcode
- * wedge while the sheet is up (a stray scan can't ring a hidden cart).
+ * state is owned by the parent terminal.
  */
 export function ClockWidget({
   open,

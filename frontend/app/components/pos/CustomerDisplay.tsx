@@ -408,7 +408,7 @@ function SummaryPanel({ snap }: { snap: DisplaySnapshot }) {
               accent
             />
           )}
-          <TotalRow label="VAT (12% included)" value={peso(snap.vatCents)} dim />
+          <TotalRow label={snap.vatCents > 0 ? "VAT (12% included)" : "VAT (none)"} value={peso(snap.vatCents)} dim />
         </div>
 
         <div className="mt-5 pt-5 border-t border-white/12">
