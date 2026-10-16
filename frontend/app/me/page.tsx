@@ -60,7 +60,7 @@ export default function MyHrPage() {
         {/* Shift-clock history loads from the time-clock engine and shows for any
             signed-in worker, independent of the payroll-gated ESS profile below. */}
         <MyClockRecords />
-        <EssPortal greetingName={user.name} />
+        <EssPortal greetingName={user.name} role={user.role} />
       </main>
     </div>
   );

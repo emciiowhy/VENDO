@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../Icon";
 import { AttendanceCalendar } from "../hr/AttendanceCalendar";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
-import { getMyEssProfile, type EssProfile } from "@/lib/ess";
+import { getMyEssProfile, type EssErrorKind, type EssProfile } from "@/lib/ess";
+import type { Role } from "@/lib/auth";
 import type { EmployeePayslip } from "@/lib/hr";
 
 /**
@@ -16,10 +18,13 @@ function thisMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-export function EssPortal({ greetingName }: { greetingName: string }) {
+export function EssPortal({ greetingName, role }: { greetingName: string; role: Role }) {
   const [month, setMonth] = useState(thisMonth());
+  const [reload, setReload] = useState(0);
   const [state, setState] = useState<
-    { status: "loading" } | { status: "error"; message: string } | { status: "ready"; profile: EssProfile }
+    | { status: "loading" }
+    | { status: "error"; kind: EssErrorKind; message: string }
+    | { status: "ready"; profile: EssProfile }
   >({ status: "loading" });
 
   useEffect(() => {
@@ -28,12 +33,17 @@ export function EssPortal({ greetingName }: { greetingName: string }) {
       const res = await getMyEssProfile(month);
       if (!alive) return;
       if (res.ok) setState({ status: "ready", profile: res.profile });
-      else setState({ status: "error", message: res.error ?? "Could not load your record." });
+      else
+        setState({
+          status: "error",
+          kind: res.kind ?? "other",
+          message: res.error ?? "Could not load your record.",
+        });
     })();
     return () => {
       alive = false;
     };
-  }, [month]);
+  }, [month, reload]);
 
   const firstName = greetingName.split(/\s+/)[0] ?? greetingName;
 
@@ -51,14 +61,54 @@ export function EssPortal({ greetingName }: { greetingName: string }) {
   }
 
   if (state.status === "error") {
-    // A user with no linked employee record (e.g. the owner) lands here.
+    const isAdmin = role === "MERCHANT_OWNER" || role === "MANAGER";
+    // Each failure gets its own explanation and a next step — the old single
+    // "No employee record linked" card also swallowed plan gates and outages.
+    const copy: { icon: IconName; title: string; body: string } =
+      state.kind === "not_linked"
+        ? isAdmin
+          ? {
+              icon: "users",
+              title: "Payroll records are for roster staff",
+              body: "Owner and manager accounts aren't on the payroll roster, so there are no paystubs or PTO here. Your shift clock is shown above.",
+            }
+          : {
+              icon: "users",
+              title: "Your login isn't linked yet",
+              body: "Ask your store owner to open HR → Employees, pick your profile, and link this login. Your hours and paystubs will appear here.",
+            }
+        : state.kind === "plan"
+          ? { icon: "lock", title: "Paystubs aren't on this plan", body: state.message }
+          : { icon: "warning", title: "Couldn't load your record", body: state.message };
     return (
-      <div className="rounded-xl2 bg-surface hairline shadow-card px-5 py-16 text-center">
+      <div className="rounded-xl2 bg-surface hairline shadow-card px-5 py-12 sm:py-16 text-center">
         <span className="inline-grid place-items-center w-12 h-12 rounded-[14px] bg-brand-50 text-brand-600">
-          <Icon name="users" className="w-6 h-6" strokeWidth={1.6} />
+          <Icon name={copy.icon} className="w-6 h-6" strokeWidth={1.6} />
         </span>
-        <p className="mt-3 text-[14px] font-semibold">No employee record linked</p>
-        <p className="mt-1 text-[13px] text-ink-soft max-w-[44ch] mx-auto">{state.message}</p>
+        <p className="mt-3 text-[14px] font-semibold">{copy.title}</p>
+        <p className="mt-1 text-[13px] text-ink-soft max-w-[44ch] mx-auto">{copy.body}</p>
+        {state.kind === "not_linked" && isAdmin && (
+          <Link
+            href="/dashboard/hr"
+            className="tap press mt-5 inline-flex items-center gap-2 min-h-[44px] px-4 rounded-[12px] bg-brand-600 text-white text-[13.5px] font-semibold hover:bg-brand-700 transition"
+          >
+            Manage employees
+            <Icon name="arrow" className="w-4 h-4" />
+          </Link>
+        )}
+        {state.kind === "other" && (
+          <button
+            type="button"
+            onClick={() => {
+              setState({ status: "loading" });
+              setReload((n) => n + 1);
+            }}
+            className="tap press mt-5 inline-flex items-center gap-2 min-h-[44px] px-4 rounded-[12px] bg-surface hairline text-[13.5px] font-semibold hover:border-brand-300 transition"
+          >
+            <Icon name="refresh" className="w-4 h-4" />
+            Try again
+          </button>
+        )}
       </div>
     );
   }

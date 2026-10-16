@@ -38,11 +38,24 @@ async function readJson<T>(res: Response): Promise<Result<T>> {
   }
 }
 
-export async function getMyEssProfile(month?: string): Promise<Result<{ profile: EssProfile }>> {
+/**
+ * Why the ESS record couldn't load, so the portal can say what to do next:
+ * `not_linked` (404 — no employee row points at this login), `plan` (403 — the
+ * store is below the HR/payroll tier), or `other` (network / server failure).
+ */
+export type EssErrorKind = "not_linked" | "plan" | "other";
+
+export async function getMyEssProfile(
+  month?: string,
+): Promise<Result<{ profile: EssProfile }> & { kind?: EssErrorKind }> {
   const suffix = month ? `?month=${month}` : "";
   try {
-    return await readJson(await fetch(`${BASE}/me${suffix}`, { credentials: "include" }));
+    const res = await fetch(`${BASE}/me${suffix}`, { credentials: "include" });
+    const body = await readJson<{ profile: EssProfile }>(res);
+    if (body.ok) return body;
+    const kind: EssErrorKind = res.status === 404 ? "not_linked" : res.status === 403 ? "plan" : "other";
+    return { ...body, kind };
   } catch {
-    return NETWORK_ERR;
+    return { ...NETWORK_ERR, kind: "other" };
   }
 }
