@@ -27,10 +27,18 @@ import {
 export function ClockWidget({
   open,
   onOpenChange,
+  clockedIn,
   clockOutViaEndShift = false,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /**
+   * The terminal's own view of the labor clock. The ActivationWizard punches the
+   * cashier in AFTER this widget's first status read, so the widget re-reads
+   * whenever this flips — otherwise the pill would keep offering "Clock in" to
+   * someone already on the clock.
+   */
+  clockedIn?: boolean | null;
   /**
    * When true (cashiers), clocking out is folded into "End shift" — the sheet
    * shows a hint pointing there instead of a standalone Clock-out button, so the
@@ -46,18 +54,22 @@ export function ClockWidget({
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<ClockStatus | null> => {
     const res = await getClockStatus();
-    if (res.ok) {
-      setStatus({ timecard: res.timecard, todayMinutes: res.todayMinutes });
-      setError(null);
-    } else {
-      setError(res.error ?? "Could not read your clock.");
-    }
     setLoaded(true);
+    if (res.ok) {
+      const next = { timecard: res.timecard, todayMinutes: res.todayMinutes };
+      setStatus(next);
+      setError(null);
+      return next;
+    }
+    setError(res.error ?? "Could not read your clock.");
+    return null;
   }, []);
 
-  // Initial load. Inlined (rather than calling `refresh`) so the await is
+  // Load on mount, again when the terminal's clock state changes (the wizard's
+  // auto clock-in), and each time the sheet opens, so the sheet never acts on a
+  // stale status. Inlined (rather than calling `refresh`) so the await is
   // lexically visible — the set-state-in-effect lint forbids invoking a
   // setState-bearing helper synchronously from an effect body.
   useEffect(() => {
@@ -76,7 +88,7 @@ export function ClockWidget({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [clockedIn, open]);
 
   const active = status?.timecard ?? null;
 
@@ -119,11 +131,14 @@ export function ClockWidget({
     setError(null);
     const res = await apiClockIn();
     setBusy(false);
-    if (res.ok) await refresh();
-    else {
-      setError(res.error ?? "Could not clock you in.");
-      await refresh(); // a 409 means we're already on the clock — reflect the truth
+    if (res.ok) {
+      await refresh();
+      return;
     }
+    // A 409 means we're already on the clock — the goal is met, so just show the
+    // live clock instead of an error. Only a genuine failure surfaces a message.
+    const live = await refresh();
+    if (!live?.timecard) setError(res.error ?? "Could not clock you in.");
   }, [refresh]);
 
   const doClockOut = useCallback(async () => {

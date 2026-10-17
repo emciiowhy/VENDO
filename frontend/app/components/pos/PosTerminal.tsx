@@ -673,7 +673,7 @@ export function PosTerminal() {
                 The lock-bar's anchor: the live shift clock (emerald pulse) and
                 the cashier + drawer float, read as one unit. It carries
                 hairline-strong so status stays legible at a glance. */}
-            <ClockWidget open={clockOpen} onOpenChange={setClockOpen} />
+            <ClockWidget open={clockOpen} onOpenChange={setClockOpen} clockedIn={clockedIn} />
             <div className="hidden sm:flex items-center gap-2.5 rounded-[10px] bg-surface hairline-strong px-3 h-9">
               <span className="w-7 h-7 rounded-full bg-accent-500 text-white grid place-items-center font-bold text-[12px]">
                 {(user.name[0] ?? "C").toUpperCase()}
