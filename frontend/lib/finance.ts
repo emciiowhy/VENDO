@@ -8,7 +8,10 @@ import { API_BASE_URL } from "./api";
 
 const BASE = `${API_BASE_URL}/api/v1/finance`;
 
-/** Buckets the backend accepts — kept in sync with finance.schema.ts. */
+/**
+ * Preset buckets offered in the expense form — kept in sync with
+ * finance.schema.ts. The backend also accepts an owner-typed custom category.
+ */
 export const EXPENSE_CATEGORIES = [
   "Rent",
   "Utilities",

@@ -42,6 +42,19 @@ const pesosToCents = z
   .refine((n) => Number.isFinite(n) && n >= 0, "Enter a valid amount.")
   .transform((n) => Math.round(n * 100));
 
+/**
+ * A preset bucket or the owner's own label. Free text is allowed so a store can
+ * name what it actually spends on; a typed name that matches a preset
+ * (case-insensitively) snaps to the preset's spelling so "rent" and "Rent"
+ * don't split into two slices on the P&L.
+ */
+const category = z
+  .string()
+  .trim()
+  .min(1, "Pick or type a category.")
+  .max(60, "Keep the category under 60 characters.")
+  .transform((s) => EXPENSE_CATEGORIES.find((c) => c.toLowerCase() === s.toLowerCase()) ?? s);
+
 /** A calendar date the cost applies to, as YYYY-MM-DD. */
 const isoDate = z
   .string()
@@ -49,17 +62,19 @@ const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid date (YYYY-MM-DD).")
   .refine((s) => !Number.isNaN(Date.parse(s)), "Enter a valid date.");
 
-// Empty/whitespace-only strings collapse to undefined ("not provided") so a
-// blank payee or note is stored as NULL rather than "".
+// Empty/whitespace-only strings collapse to null ("clear it") so a blank payee
+// or note is stored as NULL rather than "". It must be null, not undefined: on
+// an update, undefined means "field not sent, leave it alone", so a cleared box
+// would silently keep the old value.
 const optionalText = (max: number) =>
   z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.string().trim().max(max).optional(),
+    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    z.string().trim().max(max).nullable().optional(),
   );
 
 export const expenseCreateSchema = z.object({
   incurredOn: isoDate,
-  category: z.enum(EXPENSE_CATEGORIES),
+  category,
   payee: optionalText(160),
   // Wire value is pesos; after parse this holds integer centavos.
   amount: pesosToCents,

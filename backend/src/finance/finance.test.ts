@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createApp } from "../app.js";
-import { expenseCreateSchema } from "./finance.schema.js";
+import { expenseCreateSchema, expenseUpdateSchema } from "./finance.schema.js";
 
 const app = createApp();
 
@@ -41,13 +41,20 @@ describe("expenseCreateSchema", () => {
     expect(e.paymentMethod).toBe("Cash");
   });
 
-  it("rejects an unknown category", () => {
-    const r = expenseCreateSchema.safeParse({
-      incurredOn: "2026-06-11",
-      category: "Yacht",
-      amount: 200,
-    });
-    expect(r.success).toBe(false);
+  it("accepts an owner-typed custom category", () => {
+    const e = expenseCreateSchema.parse({ incurredOn: "2026-06-11", category: "  Water refill  ", amount: 200 });
+    expect(e.category).toBe("Water refill");
+  });
+
+  it("snaps a typed preset name to the preset's spelling", () => {
+    const e = expenseCreateSchema.parse({ incurredOn: "2026-06-11", category: "taxes & licenses", amount: 200 });
+    expect(e.category).toBe("Taxes & Licenses");
+  });
+
+  it("rejects a blank or overlong category", () => {
+    const base = { incurredOn: "2026-06-11", amount: 200 };
+    expect(expenseCreateSchema.safeParse({ ...base, category: "   " }).success).toBe(false);
+    expect(expenseCreateSchema.safeParse({ ...base, category: "x".repeat(61) }).success).toBe(false);
   });
 
   it("rejects a malformed date", () => {
@@ -60,15 +67,30 @@ describe("expenseCreateSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("coerces empty optional text to undefined", () => {
+  it("coerces empty optional text to null", () => {
     const e = expenseCreateSchema.parse({
       incurredOn: "2026-06-11",
       category: "Rent",
       amount: 200,
       payee: "",
-      note: "",
+      note: "  ",
     });
+    expect(e.payee).toBeNull();
+    expect(e.note).toBeNull();
+  });
+});
+
+describe("expenseUpdateSchema", () => {
+  it("treats a blanked payee/note as a clear, not a no-op", () => {
+    const e = expenseUpdateSchema.parse({ payee: "", note: "" });
+    expect(e.payee).toBeNull();
+    expect(e.note).toBeNull();
+  });
+
+  it("leaves omitted fields undefined so they are not touched", () => {
+    const e = expenseUpdateSchema.parse({ amount: 100 });
     expect(e.payee).toBeUndefined();
     expect(e.note).toBeUndefined();
+    expect(e.paymentMethod).toBeUndefined();
   });
 });

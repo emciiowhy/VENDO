@@ -26,6 +26,9 @@ function today(): string {
   ].join("-");
 }
 
+/** Sentinel <select> value that switches the category to a free-text box. */
+const CUSTOM = "__custom__";
+
 export function ExpenseFormModal({
   expense,
   onClose,
@@ -39,7 +42,11 @@ export function ExpenseFormModal({
   const editing = expense !== null;
 
   const [incurredOn, setIncurredOn] = useState(() => expense?.incurredOn ?? today());
-  const [category, setCategory] = useState(() => expense?.category ?? EXPENSE_CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(() => expense?.category ?? EXPENSE_CATEGORIES[0]);
+  // An expense saved under the owner's own label reopens in custom mode.
+  const [customCategory, setCustomCategory] = useState(
+    () => !!expense && !(EXPENSE_CATEGORIES as readonly string[]).includes(expense.category),
+  );
   const [amount, setAmount] = useState(() => (expense ? String(expense.amount) : ""));
   const [paymentMethod, setPaymentMethod] = useState(() => expense?.paymentMethod ?? "Cash");
   const [payee, setPayee] = useState(() => expense?.payee ?? "");
@@ -58,6 +65,7 @@ export function ExpenseFormModal({
   async function submit() {
     const amt = Number(amount.replace(/[₱,\s]/g, ""));
     if (!Number.isFinite(amt) || amt <= 0) return setError("Enter a valid amount.");
+    if (!category.trim()) return setError("Type a category name.");
     setBusy(true);
     setError(null);
     const fields: ExpenseFields = { incurredOn, category, payee, amount, paymentMethod, note };
@@ -131,8 +139,17 @@ export function ExpenseFormModal({
           <label className="block">
             <span className="text-[12px] font-semibold text-ink-soft">Category</span>
             <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              value={customCategory ? CUSTOM : category}
+              onChange={(e) => {
+                setError(null);
+                if (e.target.value === CUSTOM) {
+                  setCustomCategory(true);
+                  setCategory("");
+                } else {
+                  setCustomCategory(false);
+                  setCategory(e.target.value);
+                }
+              }}
               className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5"
             >
               {EXPENSE_CATEGORIES.map((c) => (
@@ -140,8 +157,26 @@ export function ExpenseFormModal({
                   {c}
                 </option>
               ))}
+              <option value={CUSTOM}>Custom…</option>
             </select>
           </label>
+
+          {customCategory && (
+            <label className="block">
+              <span className="text-[12px] font-semibold text-ink-soft">Custom category</span>
+              <input
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  setError(null);
+                }}
+                autoFocus
+                maxLength={60}
+                placeholder="e.g. Water refill"
+                className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5"
+              />
+            </label>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
