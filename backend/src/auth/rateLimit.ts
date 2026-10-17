@@ -1,4 +1,4 @@
-import rateLimit, { type Options } from "express-rate-limit";
+import rateLimit, { ipKeyGenerator, type Options } from "express-rate-limit";
 
 /**
  * Brute-force / abuse throttles for the public-facing seams.
@@ -42,4 +42,17 @@ export const leadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   limit: 30,
   ...tooMany("Too many submissions. Please try again later."),
+});
+
+/**
+ * Manufacturing recipe assistant — a cheap in-process lookup, capped per STORE
+ * (tenant from the verified session) only as general abuse control. Mounted
+ * after auth, so `req.user` is always set; the IP fallback is a safety net.
+ */
+export const recipeAssistantLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 120,
+  keyGenerator: (req) =>
+    req.user?.tenantId ? `tenant:${req.user.tenantId}` : ipKeyGenerator(req.ip ?? "0.0.0.0"),
+  ...tooMany("You've used the recipe assistant a lot this hour. Try again later."),
 });

@@ -3,13 +3,20 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
 import { useToast } from "../Toast";
-import { produce, type Recipe } from "@/lib/manufacturing";
+import { formatAmount, produce, type Recipe } from "@/lib/manufacturing";
 
 /**
- * Produce N batches of a recipe. Shows exactly what will be consumed and made
- * at the chosen batch count, flagging any component that would fall short
- * before the request is sent (the server re-checks under row locks).
+ * Produce N batches of a recipe. Shows exactly what ingredients will be used and
+ * what will be made at the chosen batch count, flagging any ingredient that
+ * would fall short before the request is sent (the server re-checks under row
+ * locks). Ingredient stock lives in Manufacturing; the finished good lands in
+ * Inventory.
  */
+
+/** Rounded to 3 decimals so 7.5 g × 3 reads 22.5, not 22.499999. */
+function times(qty: number, n: number): number {
+  return Math.round(qty * n * 1000) / 1000;
+}
 export function ProduceModal({
   recipe,
   onClose,
@@ -33,7 +40,9 @@ export function ProduceModal({
   }, [onClose]);
 
   const n = Number(batches) || 0;
-  const shortNames = recipe.components.filter((c) => !c.productId || c.stock < c.qty * n).map((c) => c.name);
+  const shortNames = recipe.components
+    .filter((c) => !c.available || c.stock < times(c.qty, n))
+    .map((c) => c.name);
   const canProduce = n >= 1 && shortNames.length === 0;
 
   async function submit() {
@@ -45,7 +54,7 @@ export function ProduceModal({
       push({
         variant: "success",
         title: `Produced ${res.run.outputQty} × ${recipe.productName}`,
-        message: `${res.run.reference} · stock updated.`,
+        message: `${res.run.reference} · ingredients used, Inventory restocked.`,
       });
       onProduced();
       return;
@@ -95,16 +104,19 @@ export function ProduceModal({
 
           {/* Consumption preview */}
           <div className="rounded-[12px] bg-paper hairline p-3">
-            <div className="text-[12px] font-semibold text-ink-soft mb-2">Will consume</div>
+            <div className="text-[12px] font-semibold text-ink-soft mb-2">Will use</div>
             <div className="space-y-1.5">
               {recipe.components.map((c) => {
-                const need = c.qty * n;
-                const short = !c.productId || c.stock < need;
+                const need = times(c.qty, n);
+                const short = !c.available || c.stock < need;
                 return (
                   <div key={c.id} className="flex items-center justify-between text-[13px]">
                     <span className="truncate pr-2">{c.name}</span>
-                    <span className={"tabular-nums font-semibold " + (short ? "text-rose-600" : "text-ink-soft")}>
-                      {need} <span className="text-ink-faint font-normal">/ {c.productId ? c.stock : 0} in stock</span>
+                    <span className={"tabular-nums font-semibold whitespace-nowrap " + (short ? "text-rose-600" : "text-ink-soft")}>
+                      {formatAmount(need)} {c.unit}{" "}
+                      <span className="text-ink-faint font-normal">
+                        / {c.available ? formatAmount(c.stock) : 0} {c.unit} on hand
+                      </span>
                     </span>
                   </div>
                 );
@@ -120,7 +132,8 @@ export function ProduceModal({
 
           {!canProduce && shortNames.length > 0 && (
             <p className="text-[12.5px] font-semibold text-rose-600">
-              Not enough stock for {n} batch{n === 1 ? "" : "es"}: {shortNames.join(", ")}.
+              Not enough for {n} batch{n === 1 ? "" : "es"}: {shortNames.join(", ")}. Restock it under the
+              Ingredients tab.
             </p>
           )}
           {error && <p className="text-[12.5px] font-semibold text-rose-600">{error}</p>}

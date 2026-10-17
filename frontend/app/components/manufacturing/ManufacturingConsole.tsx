@@ -7,27 +7,52 @@ import { ConfirmDialog } from "../ConfirmDialog";
 import { formatCount, formatDate } from "@/lib/format";
 import {
   deleteRecipe,
+  formatAmount,
   getManufacturingSummary,
+  listIngredients,
   listProductionRuns,
   listRecipes,
+  type Ingredient,
   type ManufacturingSummary,
   type ProductionRunSummary,
   type Recipe,
 } from "@/lib/manufacturing";
 import { RecipeFormModal } from "./RecipeFormModal";
 import { ProduceModal } from "./ProduceModal";
+import { IngredientsTab } from "./IngredientsTab";
 
 /**
- * Merchant Manufacturing console — recipes (BOM) + production history. Each
- * recipe shows how many batches current stock allows; producing consumes
- * component stock and restocks the finished good (server-side, atomic).
+ * Merchant Manufacturing console — recipes, ingredients + production history.
+ * Ingredients are raw materials kept out of Inventory with their own stock.
+ * Each recipe shows how many batches that stock allows; producing uses the
+ * ingredients and restocks the finished good in Inventory (server-side, atomic).
  */
-type Tab = "recipes" | "history";
+type Tab = "recipes" | "ingredients" | "history";
 
-type State =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; summary: ManufacturingSummary; recipes: Recipe[]; runs: ProductionRunSummary[] };
+type Loaded = {
+  summary: ManufacturingSummary;
+  recipes: Recipe[];
+  ingredients: Ingredient[];
+  runs: ProductionRunSummary[];
+};
+
+type State = { status: "loading" } | { status: "error"; message: string } | ({ status: "ready" } & Loaded);
+
+async function fetchAll(): Promise<State> {
+  const [s, r, i, runs] = await Promise.all([
+    getManufacturingSummary(),
+    listRecipes(),
+    listIngredients(),
+    listProductionRuns(),
+  ]);
+  if (s.ok && r.ok && i.ok && runs.ok)
+    return { status: "ready", summary: s.summary, recipes: r.recipes, ingredients: i.ingredients, runs: runs.runs };
+  return {
+    status: "error",
+    message:
+      (!s.ok && s.error) || (!r.ok && r.error) || (!i.ok && i.error) || (!runs.ok && runs.error) || "Could not load manufacturing.",
+  };
+}
 
 export function ManufacturingConsole() {
   const { push } = useToast();
@@ -38,29 +63,14 @@ export function ManufacturingConsole() {
   const [confirm, setConfirm] = useState<Recipe | null>(null);
 
   async function load() {
-    const [s, r, runs] = await Promise.all([getManufacturingSummary(), listRecipes(), listProductionRuns()]);
-    if (s.ok && r.ok && runs.ok) {
-      setState({ status: "ready", summary: s.summary, recipes: r.recipes, runs: runs.runs });
-    } else {
-      setState({
-        status: "error",
-        message: (!s.ok && s.error) || (!r.ok && r.error) || (!runs.ok && runs.error) || "Could not load manufacturing.",
-      });
-    }
+    setState(await fetchAll());
   }
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [s, r, runs] = await Promise.all([getManufacturingSummary(), listRecipes(), listProductionRuns()]);
-      if (!alive) return;
-      if (s.ok && r.ok && runs.ok)
-        setState({ status: "ready", summary: s.summary, recipes: r.recipes, runs: runs.runs });
-      else
-        setState({
-          status: "error",
-          message: (!s.ok && s.error) || (!r.ok && r.error) || (!runs.ok && runs.error) || "Could not load manufacturing.",
-        });
+      const next = await fetchAll();
+      if (alive) setState(next);
     })();
     return () => {
       alive = false;
@@ -85,7 +95,7 @@ export function ManufacturingConsole() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-[1.3rem] font-extrabold tracking-tightest">Manufacturing</h2>
-          <p className="text-[13.5px] text-ink-soft">Recipes turn components into finished goods — producing moves stock for you.</p>
+          <p className="text-[13.5px] text-ink-soft">Recipes turn ingredients into finished products — producing updates the stock for you.</p>
         </div>
         <button
           type="button"
@@ -106,19 +116,32 @@ export function ManufacturingConsole() {
 
       {state.status === "ready" && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <Kpi icon="factory" label="Active recipes" value={String(state.summary.recipeCount)} />
             <Kpi icon="check" label="Buildable now" value={String(state.summary.buildableNow)} tone="good" />
+            <Kpi
+              icon="box"
+              label="Ingredients running low"
+              value={String(state.summary.lowIngredients)}
+              tone={state.summary.lowIngredients > 0 ? "warn" : undefined}
+            />
             <Kpi icon="refresh" label="Runs this month" value={String(state.summary.runsThisMonth)} />
             <Kpi icon="box" label="Units made this month" value={formatCount(state.summary.unitsThisMonth)} />
           </div>
 
-          <div className="flex items-center gap-1 border-b border-ink/8">
+          <div className="flex items-center gap-1 border-b border-ink/8 overflow-x-auto">
             <TabButton active={tab === "recipes"} onClick={() => setTab("recipes")} label={`Recipes (${state.recipes.length})`} />
+            <TabButton
+              active={tab === "ingredients"}
+              onClick={() => setTab("ingredients")}
+              label={`Ingredients (${state.ingredients.length})`}
+            />
             <TabButton active={tab === "history"} onClick={() => setTab("history")} label={`Production history (${state.runs.length})`} />
           </div>
 
-          {tab === "recipes" ? (
+          {tab === "ingredients" ? (
+            <IngredientsTab ingredients={state.ingredients} onChanged={() => void load()} />
+          ) : tab === "recipes" ? (
             state.recipes.length === 0 ? (
               <EmptyState onNew={() => setForm({ recipe: null })} />
             ) : (
@@ -193,7 +216,7 @@ function RecipeCard({
         <div className="min-w-0">
           <h3 className="font-extrabold tracking-tight truncate">{recipe.productName}</h3>
           <p className="text-[12.5px] text-ink-soft">
-            Yields {recipe.outputQty} unit{recipe.outputQty === 1 ? "" : "s"} / batch
+            Makes {recipe.outputQty} piece{recipe.outputQty === 1 ? "" : "s"} / batch
             {!recipe.isActive && " · archived"}
           </p>
         </div>
@@ -203,20 +226,22 @@ function RecipeCard({
             (buildable ? "bg-accent-50 text-accent-600" : "bg-amber-50 text-amber-600")
           }
         >
-          {buildable ? `${recipe.maxBatches} buildable` : "Low stock"}
+          {buildable ? `${recipe.maxBatches} batch${recipe.maxBatches === 1 ? "" : "es"} possible` : "Not enough ingredients"}
         </span>
       </div>
 
       <div className="mt-3 space-y-1.5 flex-1">
         {recipe.components.map((c) => {
-          const short = !c.productId || c.stock < c.qty;
+          const short = !c.available || c.stock < c.qty;
           return (
             <div key={c.id} className="flex items-center justify-between text-[13px]">
               <span className="truncate pr-2 text-ink-soft">{c.name}</span>
               <span className="tabular-nums shrink-0">
-                <span className="font-semibold">{c.qty}</span>
+                <span className="font-semibold">
+                  {formatAmount(c.qty)} {c.unit}
+                </span>
                 <span className={"text-[11.5px] ml-1.5 " + (short ? "text-rose-600 font-semibold" : "text-ink-faint")}>
-                  ({c.productId ? c.stock : 0} stock)
+                  ({c.available ? `${formatAmount(c.stock)} on hand` : "deleted"})
                 </span>
               </span>
             </div>
@@ -295,8 +320,8 @@ function EmptyState({ onNew }: { onNew: () => void }) {
       </span>
       <p className="mt-3 text-[14px] font-semibold">No recipes yet</p>
       <p className="mt-1 text-[13px] text-ink-soft max-w-[44ch] mx-auto">
-        Create a recipe to assemble a finished product from your inventory items. Producing a batch
-        consumes the components and restocks the finished good.
+        List the ingredients for one batch — 500 g flour, 60 g sugar… Producing a batch uses them up
+        and adds the finished product to Inventory.
       </p>
       <button
         type="button"
@@ -325,10 +350,16 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
   );
 }
 
-function Kpi({ icon, label, value, tone }: { icon: IconName; label: string; value: string; tone?: "good" }) {
+const KPI_TONE = {
+  good: "bg-accent-50 text-accent-600",
+  warn: "bg-amber-50 text-amber-600",
+  default: "bg-brand-50 text-brand-600",
+};
+
+function Kpi({ icon, label, value, tone }: { icon: IconName; label: string; value: string; tone?: "good" | "warn" }) {
   return (
     <div className="rounded-xl2 bg-surface hairline shadow-card p-5">
-      <span className={"grid place-items-center w-9 h-9 rounded-[10px] " + (tone === "good" ? "bg-accent-50 text-accent-600" : "bg-brand-50 text-brand-600")}>
+      <span className={"grid place-items-center w-9 h-9 rounded-[10px] " + KPI_TONE[tone ?? "default"]}>
         <Icon name={icon} className="w-[18px] h-[18px]" strokeWidth={1.7} />
       </span>
       <div className="mt-3 text-[1.7rem] leading-none font-extrabold tracking-tightest">{value}</div>

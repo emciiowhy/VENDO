@@ -581,6 +581,42 @@ CREATE TABLE IF NOT EXISTS production_counters (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Ingredients — raw materials kept OUT of the sellable catalogue. Inventory
+-- (\`products\`) holds only finished goods; flour, sugar, yeast live here with
+-- their own stock in a measuring unit (g / kg / mL / L / pcs). Amounts are
+-- NUMERIC so "1.5 kg" or "7.5 g" are exact. A recipe line now points at an
+-- ingredient; the legacy \`product_id\` line (a catalogue item used as a
+-- component) still produces, so recipes saved before this keep working.
+CREATE TABLE IF NOT EXISTS ingredients (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id           UUID          NOT NULL REFERENCES tenants (id) ON DELETE CASCADE,
+  name                TEXT          NOT NULL,
+  unit                TEXT          NOT NULL,
+  stock               NUMERIC(14,3) NOT NULL DEFAULT 0 CHECK (stock >= 0),
+  low_stock_threshold NUMERIC(14,3) NOT NULL DEFAULT 0 CHECK (low_stock_threshold >= 0),
+  created_at          TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ingredients_tenant_name_key ON ingredients (tenant_id, lower(name));
+
+ALTER TABLE recipe_components ADD COLUMN IF NOT EXISTS ingredient_id UUID REFERENCES ingredients (id) ON DELETE SET NULL;
+ALTER TABLE recipe_components ADD COLUMN IF NOT EXISTS unit TEXT;
+ALTER TABLE production_run_items ADD COLUMN IF NOT EXISTS ingredient_id UUID REFERENCES ingredients (id) ON DELETE SET NULL;
+ALTER TABLE production_run_items ADD COLUMN IF NOT EXISTS unit TEXT;
+-- Widen integer quantities to NUMERIC once (guarded so re-runs don't re-lock).
+DO $$
+BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+       WHERE table_name = 'recipe_components' AND column_name = 'qty') = 'integer' THEN
+    ALTER TABLE recipe_components ALTER COLUMN qty TYPE NUMERIC(14,3);
+  END IF;
+  IF (SELECT data_type FROM information_schema.columns
+       WHERE table_name = 'production_run_items' AND column_name = 'qty_consumed') = 'integer' THEN
+    ALTER TABLE production_run_items ALTER COLUMN qty_consumed TYPE NUMERIC(14,3);
+  END IF;
+END $$;
+
 -- ---------------------------------------------------------------------------
 -- HR — employee roster, attendance, payroll.
 --
@@ -1101,7 +1137,7 @@ async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs, tenant_support_notes ready.",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, ingredients, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs, tenant_support_notes ready.",
   );
 }
 

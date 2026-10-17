@@ -2,25 +2,43 @@ import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { requireFeature } from "../auth/tier.middleware.js";
-import { produceSchema, recipeCreateSchema, recipeUpdateSchema } from "./manufacturing.schema.js";
 import {
+  ingredientCreateSchema,
+  ingredientRestockSchema,
+  ingredientUpdateSchema,
+  produceSchema,
+  recipeCreateSchema,
+  recipeSuggestSchema,
+  recipeUpdateSchema,
+} from "./manufacturing.schema.js";
+import { assistantStatus, suggestRecipe } from "./recipeSuggest.js";
+import { recipeAssistantLimiter } from "../auth/rateLimit.js";
+import {
+  createIngredient,
   createRecipe,
+  deleteIngredient,
   deleteRecipe,
   getManufacturingSummary,
   getRecipe,
+  listIngredients,
   listProductionRuns,
   listRecipes,
   produce,
+  restockIngredient,
+  updateIngredient,
   updateRecipe,
+  type IngredientWriteResult,
   type ProduceResult,
   type RecipeWriteResult,
 } from "./manufacturing.repository.js";
 
 /**
- * Merchant Manufacturing — recipes (BOM) + production runs.
+ * Merchant Manufacturing — ingredients, recipes (BOM) + production runs.
  *
  * Fenced to store staff (MERCHANT_OWNER / MANAGER). Tenant scope comes only from
- * the verified session (`req.user.tenantId`); producing moves catalogue stock.
+ * the verified session (`req.user.tenantId`). Ingredients (raw materials) keep
+ * their own stock here, outside the catalogue; producing consumes ingredient
+ * stock and adds the finished good to catalogue stock.
  */
 export const manufacturingRouter = Router();
 
@@ -50,6 +68,8 @@ function noTenant(res: Response) {
 function sendRecipe(res: Response, result: RecipeWriteResult, createdStatus = 200) {
   if (result.ok) return res.status(createdStatus).json({ ok: true, recipe: result.recipe });
   if (result.code === "NOT_FOUND") return res.status(404).json({ ok: false, error: "Recipe not found." });
+  if (result.code === "INGREDIENT_INVALID")
+    return res.status(400).json({ ok: false, error: "One or more ingredients no longer exist. Pick them again." });
   return res.status(400).json({
     ok: false,
     error: "One or more selected products aren't in your catalogue.",
@@ -66,6 +86,115 @@ manufacturingRouter.get("/summary", async (req, res) => {
   } catch (err) {
     console.error("[manufacturing] summary failed:", err);
     res.status(500).json({ ok: false, error: "Could not load your manufacturing summary." });
+  }
+});
+
+// ── Ingredients ────────────────────────────────────────────────────────────
+
+function sendIngredient(res: Response, result: IngredientWriteResult, createdStatus = 200) {
+  if (result.ok) return res.status(createdStatus).json({ ok: true, ingredient: result.ingredient });
+  if (result.code === "NOT_FOUND") return res.status(404).json({ ok: false, error: "Ingredient not found." });
+  return res.status(409).json({
+    ok: false,
+    errors: { name: "You already have an ingredient with that name." },
+  });
+}
+
+manufacturingRouter.get("/ingredients", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    res.json({ ok: true, ingredients: await listIngredients(tenantId) });
+  } catch (err) {
+    console.error("[manufacturing] list ingredients failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load ingredients." });
+  }
+});
+
+manufacturingRouter.post("/ingredients", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = ingredientCreateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    sendIngredient(res, await createIngredient(tenantId, parsed.data), 201);
+  } catch (err) {
+    console.error("[manufacturing] create ingredient failed:", err);
+    res.status(500).json({ ok: false, error: "Could not add the ingredient." });
+  }
+});
+
+manufacturingRouter.patch("/ingredients/:id", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = ingredientUpdateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    sendIngredient(res, await updateIngredient(tenantId, req.params.id, parsed.data));
+  } catch (err) {
+    console.error("[manufacturing] update ingredient failed:", err);
+    res.status(500).json({ ok: false, error: "Could not update the ingredient." });
+  }
+});
+
+/** POST /ingredients/:id/restock — ADD to stock on hand (a delivery / market run). */
+manufacturingRouter.post("/ingredients/:id/restock", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = ingredientRestockSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const ingredient = await restockIngredient(tenantId, req.params.id, parsed.data.qty);
+    if (!ingredient) return res.status(404).json({ ok: false, error: "Ingredient not found." });
+    res.json({ ok: true, ingredient });
+  } catch (err) {
+    console.error("[manufacturing] restock ingredient failed:", err);
+    res.status(500).json({ ok: false, error: "Could not restock the ingredient." });
+  }
+});
+
+manufacturingRouter.delete("/ingredients/:id", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const ok = await deleteIngredient(tenantId, req.params.id);
+    if (!ok) return res.status(404).json({ ok: false, error: "Ingredient not found." });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[manufacturing] delete ingredient failed:", err);
+    res.status(500).json({ ok: false, error: "Could not delete the ingredient." });
+  }
+});
+
+// ── Recipe assistant (library retrieval + baker's-percentage scaling) ────────
+
+/** GET /assistant — always available; also lists library recipes and whether an AI fallback is on. */
+manufacturingRouter.get("/assistant", (_req, res) => {
+  res.json({ ok: true, ...assistantStatus() });
+});
+
+/**
+ * POST /assistant/suggest — draft one batch's ingredient list for a product,
+ * from the recipe library (or the optional AI fallback on a miss). Returns a
+ * suggestion only; nothing is saved until the owner submits the form.
+ */
+manufacturingRouter.post("/assistant/suggest", recipeAssistantLimiter, async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = recipeSuggestSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const result = suggestRecipe(parsed.data, await listIngredients(tenantId));
+    if (result.ok) return res.json({ ok: true, suggestion: result.suggestion });
+    return res.status(404).json({
+      ok: false,
+      code: "NO_MATCH",
+      error: `"${parsed.data.product}" isn't in the recipe library yet. Add its ingredients by hand.`,
+      known: result.known,
+    });
+  } catch (err) {
+    console.error("[manufacturing] recipe suggestion failed:", err);
+    res.status(500).json({ ok: false, error: "Could not get a suggestion." });
   }
 });
 
@@ -172,13 +301,13 @@ function sendProduce(res: Response, result: ProduceResult) {
     case "COMPONENT_GONE":
       return res.status(409).json({
         ok: false,
-        error: `A component (${result.shortage?.name ?? "unknown"}) is no longer in your catalogue.`,
+        error: `${result.shortage?.name ?? "An ingredient"} was deleted. Edit the recipe and pick it again.`,
       });
     case "INSUFFICIENT":
       return res.status(409).json({
         ok: false,
         code: "INSUFFICIENT",
-        error: `Not enough ${result.shortage?.name}: need ${result.shortage?.needed}, have ${result.shortage?.available}.`,
+        error: `Not enough ${result.shortage?.name}: need ${result.shortage?.needed} ${result.shortage?.unit}, have ${result.shortage?.available} ${result.shortage?.unit}.`,
         shortage: result.shortage,
       });
     default:
