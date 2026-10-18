@@ -18,6 +18,12 @@ export interface ThermalPrinter {
   readonly kind: PrinterKind;
   /** Human-readable device label for the UI ("EPSON TM-T20", "BlueTooth Printer"). */
   readonly name: string;
+  /**
+   * The underlying USBDevice / BluetoothDevice. The browser hands back the same
+   * object for the same physical unit, so this tells whether two handles share
+   * one printer (closing either would drop both).
+   */
+  readonly device: object;
   /** Push an ESC/POS byte stream to the head. Rejects if the link dropped. */
   write(data: Uint8Array): Promise<void>;
   /** Tear down the connection (best-effort). */
@@ -66,35 +72,60 @@ function findBulkOutEndpoint(
  * and the silent reconnect path ({@link getGrantedUsbPrinter}).
  */
 async function openUsbPrinter(device: USBDevice): Promise<ThermalPrinter> {
-  await device.open();
-  if (device.configuration === null) await device.selectConfiguration(1);
-  const endpoint = findBulkOutEndpoint(device);
-  if (!endpoint) {
+  let endpoint: { interfaceNumber: number; endpointNumber: number } | null;
+  try {
+    await device.open();
+    if (device.configuration === null) await device.selectConfiguration(1);
+    endpoint = findBulkOutEndpoint(device);
+    if (!endpoint) throw new Error("That device has no printable USB interface.");
+    await device.claimInterface(endpoint.interfaceNumber);
+  } catch (e) {
+    // Never leave a half-opened device behind — a later open/claim (or the other
+    // rail's silent probe) would trip over it.
     await device.close().catch(() => {});
-    throw new Error("That device has no printable USB interface.");
+    const msg = e instanceof Error ? e.message : "";
+    // On Windows the OS print driver usually owns the interface, so the browser
+    // gets "Access denied" / "Unable to claim interface".
+    if (/access denied|unable to claim|claim interface/i.test(msg)) {
+      throw new Error(
+        "This USB printer is in use by your computer’s printer driver. Switch it to the WinUSB driver, or connect over Bluetooth.",
+      );
+    }
+    throw e;
   }
-  await device.claimInterface(endpoint.interfaceNumber);
+  const ep = endpoint;
 
   let connected = true;
+  const disconnectCbs: Array<() => void> = [];
+  // WebUSB raises unplug events on navigator.usb, not on the device itself.
+  const onUsbDisconnect = (e: USBConnectionEvent) => {
+    if (e.device !== device || !connected) return;
+    connected = false;
+    navigator.usb?.removeEventListener("disconnect", onUsbDisconnect);
+    for (const cb of disconnectCbs) cb();
+  };
+  navigator.usb?.addEventListener("disconnect", onUsbDisconnect);
+
   return {
     kind: "usb",
     name: device.productName || device.manufacturerName || "USB printer",
+    device,
     isConnected: () => connected && device.opened,
     async write(data: Uint8Array) {
-      if (!connected) throw new Error("USB printer is disconnected.");
+      if (!connected || !device.opened) throw new Error("USB printer is disconnected.");
       // Chunk the stream so a large ticket doesn't overflow a single transfer.
       const CHUNK = 4096;
       for (let i = 0; i < data.length; i += CHUNK) {
-        await device.transferOut(endpoint.endpointNumber, data.subarray(i, i + CHUNK));
+        await device.transferOut(ep.endpointNumber, data.subarray(i, i + CHUNK));
       }
     },
     async close() {
       connected = false;
+      navigator.usb?.removeEventListener("disconnect", onUsbDisconnect);
       await device.close().catch(() => {});
     },
-    onDisconnect() {
-      // WebUSB surfaces disconnects on navigator.usb, not the device; the hook
-      // also catches dropped links via write() failures, so this is a no-op.
+    onDisconnect(cb: () => void) {
+      disconnectCbs.push(cb);
     },
   };
 }
@@ -187,6 +218,7 @@ async function openBluetoothPrinter(device: BluetoothDevice): Promise<ThermalPri
   return {
     kind: "bluetooth",
     name: device.name || "Bluetooth printer",
+    device,
     isConnected: () => gatt.connected,
     async write(data: Uint8Array) {
       if (!gatt.connected) throw new Error("Bluetooth printer is disconnected.");

@@ -18,6 +18,16 @@ export type ThermalStatus = "disconnected" | "connecting" | "connected" | "error
 export type PaperSize = "58mm" | "80mm";
 export const PAPER_WIDTH: Record<PaperSize, number> = { "58mm": 32, "80mm": 48 };
 const PAPER_STORAGE_KEY = "vendopos_printer_paper";
+const KIND_STORAGE_KEY = "vendopos_printer_kind";
+
+/** The rail the cashier last connected, so a refresh re-adopts that one first. */
+function lastKind(): PrinterKind {
+  try {
+    return window.localStorage.getItem(KIND_STORAGE_KEY) === "bluetooth" ? "bluetooth" : "usb";
+  } catch {
+    return "usb";
+  }
+}
 
 export interface ThermalSupport {
   usb: boolean;
@@ -70,10 +80,17 @@ export function useThermalPrinter(): UseThermalPrinter {
   const [error, setError] = useState<string | null>(null);
   const [paper, setPaperState] = useState<PaperSize>("58mm");
   const printerRef = useRef<ThermalPrinter | null>(null);
+  /** Bumped on every manual connect/disconnect so a slow silent probe knows it lost. */
+  const generationRef = useRef(0);
+  /** Tail of the print queue — writes run one at a time (see {@link print}). */
+  const printQueueRef = useRef<Promise<unknown>>(Promise.resolve());
 
   /** Wire a freshly-opened printer into state + the disconnect listener. */
   const adopt = useCallback((printer: ThermalPrinter) => {
     printer.onDisconnect(() => {
+      // Ignore drops from a handle we've already replaced — e.g. closing the old
+      // Bluetooth unit fires gattserverdisconnected after we've moved to USB.
+      if (printerRef.current !== printer) return;
       printerRef.current = null;
       setStatus("disconnected");
       setDeviceName(null);
@@ -92,15 +109,28 @@ export function useThermalPrinter(): UseThermalPrinter {
     setPaperState(initialPaper());
 
     // Silently re-adopt a printer the user already granted in a prior session,
-    // so a page refresh mid-shift doesn't force a re-pair. Best-effort: USB
-    // first (reconnect is reliable), then Bluetooth. Guarded by `cancelled` in
-    // case the terminal unmounts before the async probe resolves.
+    // so a page refresh mid-shift doesn't force a re-pair. Best-effort: the rail
+    // used last goes first, then the other. Guarded by `cancelled` (unmount) and
+    // the generation counter — a Bluetooth reconnect can take seconds, and if
+    // the cashier connected a printer by hand meanwhile, theirs wins.
     let cancelled = false;
+    const generation = generationRef.current;
     (async () => {
-      const printer = (await getGrantedUsbPrinter()) ?? (await getGrantedBluetoothPrinter());
+      const probes =
+        lastKind() === "bluetooth"
+          ? [getGrantedBluetoothPrinter, getGrantedUsbPrinter]
+          : [getGrantedUsbPrinter, getGrantedBluetoothPrinter];
+      let printer: ThermalPrinter | null = null;
+      for (const probe of probes) {
+        if (cancelled || generationRef.current !== generation) return;
+        printer = await probe();
+        if (printer) break;
+      }
       if (!printer) return;
-      if (cancelled) {
-        void printer.close();
+      if (cancelled || generationRef.current !== generation) {
+        // Don't close a unit the manual connect is now using — same device
+        // object means closing ours would drop theirs too.
+        if (printerRef.current?.device !== printer.device) void printer.close();
         return;
       }
       adopt(printer);
@@ -124,14 +154,29 @@ export function useThermalPrinter(): UseThermalPrinter {
 
   const connect = useCallback(
     async (kind: PrinterKind): Promise<boolean> => {
+      const generation = ++generationRef.current;
       setStatus("connecting");
       setError(null);
       try {
-        await printerRef.current?.close().catch(() => {});
+        // Detach before closing so the old handle's disconnect event is ignored.
+        const previous = printerRef.current;
+        printerRef.current = null;
+        await previous?.close().catch(() => {});
         const printer = kind === "usb" ? await connectUsbPrinter() : await connectBluetoothPrinter();
+        if (generationRef.current !== generation) {
+          // A newer connect/disconnect superseded this one while the chooser was open.
+          void printer.close();
+          return false;
+        }
+        try {
+          window.localStorage.setItem(KIND_STORAGE_KEY, kind);
+        } catch {
+          /* ignore */
+        }
         adopt(printer);
         return true;
       } catch (e) {
+        if (generationRef.current !== generation) return false;
         printerRef.current = null;
         const msg = e instanceof Error ? e.message : "Couldn’t connect to the printer.";
         // Dismissing the device chooser rejects with NotFoundError — treat as a
@@ -147,31 +192,41 @@ export function useThermalPrinter(): UseThermalPrinter {
   );
 
   const disconnect = useCallback(async (): Promise<void> => {
-    await printerRef.current?.close().catch(() => {});
+    generationRef.current++;
+    const previous = printerRef.current;
     printerRef.current = null;
+    await previous?.close().catch(() => {});
     setStatus("disconnected");
     setDeviceName(null);
     setError(null);
   }, []);
 
-  const print = useCallback(async (bytes: Uint8Array): Promise<boolean> => {
-    const printer = printerRef.current;
-    if (!printer || !printer.isConnected()) {
-      setError("No thermal printer connected.");
-      return false;
-    }
-    try {
-      await printer.write(bytes);
-      return true;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Print failed.");
-      if (!printer.isConnected()) {
-        printerRef.current = null;
-        setStatus("disconnected");
-        setDeviceName(null);
+  // Writes are queued: auto-print on settlement and a reprint/test print can
+  // land together, and interleaved chunks garble the ticket (USB) or fail with
+  // "GATT operation already in progress" (Bluetooth).
+  const print = useCallback((bytes: Uint8Array): Promise<boolean> => {
+    const job = printQueueRef.current.then(async (): Promise<boolean> => {
+      const printer = printerRef.current;
+      if (!printer || !printer.isConnected()) {
+        setError("No thermal printer connected.");
+        return false;
       }
-      return false;
-    }
+      try {
+        await printer.write(bytes);
+        setError(null);
+        return true;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Print failed.");
+        if (!printer.isConnected() && printerRef.current === printer) {
+          printerRef.current = null;
+          setStatus("disconnected");
+          setDeviceName(null);
+        }
+        return false;
+      }
+    });
+    printQueueRef.current = job;
+    return job;
   }, []);
 
   return {
