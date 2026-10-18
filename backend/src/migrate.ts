@@ -1131,13 +1131,45 @@ CREATE TABLE IF NOT EXISTS tenant_support_notes (
 
 CREATE INDEX IF NOT EXISTS tenant_support_notes_tenant_idx
   ON tenant_support_notes (tenant_id, created_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- Predefined discounts (CRM → Discounts).
+--
+-- Cashiers can no longer key a free-form % or peso discount; they pick one of
+-- three server-priced categories: Senior Citizen, PWD (both RA 9994 / RA 10754:
+-- VAT-exempt, then 20% off) or the owner-configured loyalty Member discount.
+--
+--   tenants.loyalty_*         points earn/redeem rates. Defaults reproduce the
+--                             old hardcoded rules (1 pt per ₱100, 1 pt = ₱1).
+--   tenants.member_discount_* the loyalty member %, 0 = off, and the lifetime
+--                             spend a customer needs before it applies.
+--   products.sc_pwd_eligible  whether the statutory benefit covers this item
+--                             (e.g. untick alcohol). Defaults TRUE, so every
+--                             existing product keeps its current treatment.
+--   sales.sc_pwd_type         which statutory category a sale used; NULL for
+--                             legacy "Senior/PWD" sales and non-benefit sales.
+-- All additive + idempotent; no existing row changes meaning.
+-- ---------------------------------------------------------------------------
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_pesos_per_point INTEGER NOT NULL DEFAULT 100
+  CHECK (loyalty_pesos_per_point BETWEEN 1 AND 100000);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_point_value_cents INTEGER NOT NULL DEFAULT 100
+  CHECK (loyalty_point_value_cents BETWEEN 1 AND 100000);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS member_discount_pct INTEGER NOT NULL DEFAULT 0
+  CHECK (member_discount_pct BETWEEN 0 AND 50);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS member_discount_min_spend_cents INTEGER NOT NULL DEFAULT 0
+  CHECK (member_discount_min_spend_cents >= 0);
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS sc_pwd_eligible BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS sc_pwd_type TEXT
+  CHECK (sc_pwd_type IN ('senior', 'pwd'));
 `;
 
 async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, ingredients, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs, tenant_support_notes ready.",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, ingredients, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs, tenant_support_notes ready (+ discount settings).",
   );
 }
 

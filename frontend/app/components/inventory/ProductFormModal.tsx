@@ -40,6 +40,7 @@ export function ProductFormModal({
   const [threshold, setThreshold] = useState(product ? String(product.lowStockThreshold) : "0");
   const [vatClass, setVatClass] = useState<VatClass>(product?.vatClass ?? "VATABLE");
   const [isActive, setIsActive] = useState(product?.isActive ?? true);
+  const [scPwdEligible, setScPwdEligible] = useState(product?.scPwdEligible ?? true);
 
   const [file, setFile] = useState<File | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
@@ -63,6 +64,7 @@ export function ProductFormModal({
       lowStockThreshold: threshold,
       vatClass,
       isActive,
+      scPwdEligible,
     };
 
     const res = editing
@@ -234,6 +236,36 @@ export function ProductFormModal({
             </span>
             <span className="text-[14px] font-semibold text-ink">
               {isActive ? "Active — sold at POS" : "Inactive — hidden from POS"}
+            </span>
+          </button>
+
+          {/* Senior Citizen / PWD eligibility (RA 9994 / RA 10754) */}
+          <button
+            type="button"
+            onClick={() => setScPwdEligible((v) => !v)}
+            aria-pressed={scPwdEligible}
+            className="flex items-center gap-3 group text-left"
+          >
+            <span
+              className={
+                "relative shrink-0 w-10 h-6 rounded-full transition duration-150 " +
+                (scPwdEligible ? "bg-accent-500" : "bg-ink/15")
+              }
+            >
+              <span
+                className={
+                  "absolute top-0.5 w-5 h-5 rounded-full bg-surface shadow-sm transition duration-150 " +
+                  (scPwdEligible ? "left-[18px]" : "left-0.5")
+                }
+              />
+            </span>
+            <span>
+              <span className="block text-[14px] font-semibold text-ink">
+                {scPwdEligible ? "Senior / PWD discount applies" : "No Senior / PWD discount"}
+              </span>
+              <span className="block text-[12px] text-ink-faint">
+                Turn off for items the benefit doesn&rsquo;t cover, e.g. alcohol or gift items.
+              </span>
             </span>
           </button>
 

@@ -147,6 +147,133 @@ export function computeSeniorPwdBreakdown(
   };
 }
 
+/**
+ * The only discounts a till may apply. Every one is predefined — the cashier
+ * picks a category, never an amount:
+ *   senior / pwd — the statutory benefit (computeSeniorPwdBreakdown), on the
+ *                  benefit-eligible lines only;
+ *   member       — the owner's loyalty member % (CRM → Discounts).
+ * Exactly one per sale: RA 9994 / RA 10754 bar stacking the 20% with another
+ * promo, and the discriminated union makes a second discount unrepresentable.
+ */
+export type CartDiscount = { kind: "senior" | "pwd" } | { kind: "member"; pct: number };
+
+export interface PriceCartInput {
+  lines: { vatClass: VatClass; grossCents: number; scPwdEligible: boolean }[];
+  discount: CartDiscount | null;
+  /** Points the cashier asked to redeem (clamped below). */
+  requestedPoints: number;
+  /** The attached customer's live balance (0 with no customer). */
+  pointsBalance: number;
+  /** What one point is worth, in centavos (tenants.loyalty_point_value_cents). */
+  pointValueCents: number;
+}
+
+export interface PricedCart extends VatBreakdown {
+  grossCents: number;
+  /** gross − net: every reduction (removed VAT, 20%, member %, points). */
+  discountCents: number;
+  pointsRedeemed: number;
+  /** Lines the Senior/PWD benefit actually covered (0 for other discounts). */
+  eligibleLineCount: number;
+}
+
+/**
+ * Price a cart — the single source of truth for what a sale charges. Pure and
+ * integer-centavo, so checkout and the register's preview mirror (frontend
+ * lib/pos.ts, held to this by frontendParity.test.ts) can never disagree.
+ *
+ * Senior/PWD: eligible lines go through computeSeniorPwdBreakdown (VAT stripped,
+ * then 20%); ineligible lines are charged normally, VAT intact. Member: the % is
+ * taken off the whole gross. Points then come off what is still payable — capped
+ * at the balance and at the payable — split pro-rata between the benefit and
+ * non-benefit parts so neither part's VAT base goes negative.
+ */
+export function priceCart(input: PriceCartInput): PricedCart {
+  const grossCents = input.lines.reduce((s, l) => s + l.grossCents, 0);
+  const pointValue = Math.max(1, Math.round(input.pointValueCents));
+  const clampPoints = (payable: number) =>
+    Math.max(
+      0,
+      Math.min(
+        Math.floor(input.requestedPoints),
+        Math.floor(input.pointsBalance),
+        Math.floor(payable / pointValue),
+      ),
+    );
+  const sum = (a: VatBreakdown, b: VatBreakdown): VatBreakdown => ({
+    vatCents: a.vatCents + b.vatCents,
+    vatableSalesCents: a.vatableSalesCents + b.vatableSalesCents,
+    vatExemptCents: a.vatExemptCents + b.vatExemptCents,
+    zeroRatedCents: a.zeroRatedCents + b.zeroRatedCents,
+    subtotalCents: a.subtotalCents + b.subtotalCents,
+    netCents: a.netCents + b.netCents,
+  });
+
+  const d = input.discount;
+  if (d && (d.kind === "senior" || d.kind === "pwd")) {
+    const eligible = input.lines.filter((l) => l.scPwdEligible);
+    const other = input.lines.filter((l) => !l.scPwdEligible);
+    const benefit = computeSeniorPwdBreakdown(eligible);
+    const otherGross = other.reduce((s, l) => s + l.grossCents, 0);
+    const pointsRedeemed = clampPoints(benefit.totalDueCents + otherGross);
+    const extra = pointsRedeemed * pointValue;
+    const totalPayable = benefit.totalDueCents + otherGross;
+    let extraBenefit =
+      totalPayable > 0 ? Math.round((extra * benefit.totalDueCents) / totalPayable) : 0;
+    extraBenefit = Math.min(extraBenefit, benefit.totalDueCents);
+    const extraOther = Math.min(extra - extraBenefit, otherGross);
+    extraBenefit = extra - extraOther; // any rounding remainder lands where it fits
+    const b1 =
+      extraBenefit > 0 ? computeSeniorPwdBreakdown(eligible, extraBenefit).breakdown : benefit.breakdown;
+    const b2 = computeVatBreakdown(other, extraOther);
+    const breakdown = sum(b1, b2);
+    return {
+      ...breakdown,
+      grossCents,
+      discountCents: grossCents - breakdown.netCents,
+      pointsRedeemed,
+      eligibleLineCount: eligible.length,
+    };
+  }
+
+  const memberCents =
+    d?.kind === "member"
+      ? Math.round((grossCents * Math.min(100, Math.max(0, d.pct))) / 100)
+      : 0;
+  const pointsRedeemed = clampPoints(grossCents - memberCents);
+  const breakdown = computeVatBreakdown(input.lines, memberCents + pointsRedeemed * pointValue);
+  return {
+    ...breakdown,
+    grossCents,
+    discountCents: grossCents - breakdown.netCents,
+    pointsRedeemed,
+    eligibleLineCount: 0,
+  };
+}
+
+/** Receipt label for a priced sale (e.g. "Senior Citizen (20% + VAT-exempt) + 5 pts"). */
+export function discountLabelFor(discount: CartDiscount | null, pointsRedeemed: number): string | null {
+  let label: string | null = null;
+  if (discount?.kind === "senior") label = "Senior Citizen (20% + VAT-exempt)";
+  else if (discount?.kind === "pwd") label = "PWD (20% + VAT-exempt)";
+  else if (discount?.kind === "member") label = `Member ${discount.pct}% off`;
+  if (pointsRedeemed > 0) {
+    const pts = `${pointsRedeemed} pt${pointsRedeemed === 1 ? "" : "s"} redeemed`;
+    label = label ? `${label} + ${pts}` : pts;
+  }
+  return label;
+}
+
+const scPwdFields = {
+  idNumber: z.string().trim().min(1, "Enter the ID number.").max(40),
+  holderName: z.string().trim().min(1, "Enter the cardholder's name.").max(80),
+  // RA 9994 / RA 10754: the benefit covers the cardholder's own purchase only.
+  exclusiveUse: z.literal(true, {
+    errorMap: () => ({ message: "Confirm the purchase is for the cardholder's exclusive use." }),
+  }),
+};
+
 export const orderSchema = z.object({
   items: z
     .array(
@@ -168,27 +295,15 @@ export const orderSchema = z.object({
     .regex(/^\d{1,8}$/, "Reference must be digits.")
     .optional()
     .or(z.literal("").transform(() => undefined)),
-  // Cart-level discount. `percent` → value is 0–100; `fixed` → value is centavos;
-  // `senior_pwd` carries the BIR-required ID number + cardholder name and the
-  // server derives the VAT-exempt-then-20% amount itself (no client peso figure).
+  // Cart-level discount — a predefined CATEGORY only, never an amount (see
+  // CartDiscount). Senior/PWD carry the BIR-required ID number + cardholder name;
+  // `member` carries nothing, the % is read from the tenant's CRM settings. The
+  // old free-form `percent` / `fixed` shapes are rejected (400).
   discount: z
     .discriminatedUnion("type", [
-      z.object({
-        type: z.literal("percent"),
-        value: z.number().nonnegative(),
-        label: z.string().trim().max(40).optional(),
-      }),
-      z.object({
-        type: z.literal("fixed"),
-        value: z.number().nonnegative(),
-        label: z.string().trim().max(40).optional(),
-      }),
-      z.object({
-        type: z.literal("senior_pwd"),
-        idNumber: z.string().trim().min(1, "Enter the Senior/PWD ID number.").max(40),
-        holderName: z.string().trim().min(1, "Enter the cardholder's name.").max(80),
-        label: z.string().trim().max(40).optional(),
-      }),
+      z.object({ type: z.literal("senior"), ...scPwdFields }),
+      z.object({ type: z.literal("pwd"), ...scPwdFields }),
+      z.object({ type: z.literal("member") }),
     ])
     .optional(),
   // Optional CRM customer to attach to the sale (loyalty accrues to them). The
@@ -218,6 +333,17 @@ export interface CatalogProduct {
   lowStockThreshold: number;
   imageUrl: string | null;
   vatClass: VatClass;
+  /** Whether the Senior/PWD benefit covers this item. */
+  scPwdEligible: boolean;
+}
+
+/** The tenant's discount rules, surfaced so the register can preview totals. */
+export interface PricingSettings {
+  pointValueCents: number;
+  pesosPerPoint: number;
+  /** 0 = member discount off. */
+  memberDiscountPct: number;
+  memberMinSpendCents: number;
 }
 
 export interface CatalogCategory {
@@ -256,6 +382,7 @@ export interface Catalog {
   products: CatalogProduct[];
   /** Owner-uploaded e-wallet QR codes shown to customers at checkout. */
   paymentQrs: PaymentQrMap;
+  pricing: PricingSettings;
 }
 
 export interface Sale {
@@ -287,6 +414,8 @@ export interface Sale {
   scPwdIdNumber: string | null;
   /** The Senior/PWD cardholder's name recorded on the sale (else null). */
   scPwdName: string | null;
+  /** Which statutory category was applied (null = none / legacy sale). */
+  scPwdType: "senior" | "pwd" | null;
   createdAt: string;
 }
 

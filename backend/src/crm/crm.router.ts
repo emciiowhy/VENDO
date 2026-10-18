@@ -2,7 +2,8 @@ import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { requireFeature } from "../auth/tier.middleware.js";
-import { customerCreateSchema, customerUpdateSchema } from "./crm.schema.js";
+import { getPricingSettings } from "../pos/pos.repository.js";
+import { customerCreateSchema, customerUpdateSchema, discountSettingsSchema } from "./crm.schema.js";
 import {
   createCustomer,
   deleteCustomer,
@@ -11,7 +12,12 @@ import {
   listCustomers,
   searchCustomers,
   updateCustomer,
+  updateDiscountSettings,
 } from "./crm.repository.js";
+
+// Changing the customer book or the discount rules is back-office work; a
+// CASHIER may search, view and quick-add, but never edit, delete or re-price.
+const managersOnly = requireRole("MERCHANT_OWNER", "MANAGER");
 
 /**
  * Merchant CRM — customers + loyalty.
@@ -111,7 +117,7 @@ crmRouter.post("/customers", async (req, res) => {
   }
 });
 
-crmRouter.patch("/customers/:id", async (req, res) => {
+crmRouter.patch("/customers/:id", managersOnly, async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
   const parsed = customerUpdateSchema.safeParse(req.body);
@@ -126,7 +132,7 @@ crmRouter.patch("/customers/:id", async (req, res) => {
   }
 });
 
-crmRouter.delete("/customers/:id", async (req, res) => {
+crmRouter.delete("/customers/:id", managersOnly, async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
   try {
@@ -136,5 +142,36 @@ crmRouter.delete("/customers/:id", async (req, res) => {
   } catch (err) {
     console.error("[crm] delete customer failed:", err);
     res.status(500).json({ ok: false, error: "Could not delete the customer." });
+  }
+});
+
+// ── Discounts ────────────────────────────────────────────────────────────────
+
+/** GET /api/v1/crm/discount-settings — the loyalty rules (any store staff). */
+crmRouter.get("/discount-settings", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    res.json({ ok: true, settings: await getPricingSettings(tenantId) });
+  } catch (err) {
+    console.error("[crm] discount settings failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load discount settings." });
+  }
+});
+
+/** PUT /api/v1/crm/discount-settings — owner/manager only; cashiers get 403. */
+crmRouter.put("/discount-settings", managersOnly, async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = discountSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  }
+  try {
+    await updateDiscountSettings(tenantId, parsed.data);
+    res.json({ ok: true, settings: await getPricingSettings(tenantId) });
+  } catch (err) {
+    console.error("[crm] save discount settings failed:", err);
+    res.status(500).json({ ok: false, error: "Could not save discount settings." });
   }
 });

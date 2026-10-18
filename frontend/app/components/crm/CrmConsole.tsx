@@ -14,6 +14,7 @@ import {
 } from "@/lib/crm";
 import { CustomerFormModal } from "./CustomerFormModal";
 import { CustomerDetailDrawer } from "./CustomerDetailDrawer";
+import { DiscountSettings } from "./DiscountSettings";
 
 /**
  * Merchant CRM console — the customer book. Lifetime spend, order counts and
@@ -31,6 +32,7 @@ export function CrmConsole() {
   const [form, setForm] = useState<{ customer: Customer | null } | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Customer | null>(null);
+  const [tab, setTab] = useState<"customers" | "discounts">("customers");
 
   async function load() {
     const [s, c] = await Promise.all([getCrmSummary(), listCustomers()]);
@@ -80,23 +82,38 @@ export function CrmConsole() {
     <div className="space-y-6 max-w-[1180px]">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-[1.3rem] font-extrabold tracking-tightest">Customers</h2>
-          <p className="text-[13.5px] text-ink-soft">Your customer book — spend, visits and loyalty from real sales.</p>
+          <h2 className="text-[1.3rem] font-extrabold tracking-tightest">
+            {tab === "customers" ? "Customers" : "Discounts"}
+          </h2>
+          <p className="text-[13.5px] text-ink-soft">
+            {tab === "customers"
+              ? "Your customer book — spend, visits and loyalty from real sales."
+              : "The only discounts the register can apply. Cashiers pick one; they can't change amounts."}
+          </p>
         </div>
-        <button type="button" onClick={() => setForm({ customer: null })} className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn tracking-tight transition duration-150">
-          <Icon name="plus" className="w-[18px] h-[18px]" strokeWidth={2} />
-          Add customer
-        </button>
+        {tab === "customers" && (
+          <button type="button" onClick={() => setForm({ customer: null })} className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn tracking-tight transition duration-150">
+            <Icon name="plus" className="w-[18px] h-[18px]" strokeWidth={2} />
+            Add customer
+          </button>
+        )}
       </div>
 
-      {state.status === "loading" && <Skeleton />}
-      {state.status === "error" && (
+      <div className="flex items-center gap-1 border-b border-ink/8 overflow-x-auto overflow-y-hidden scrollbar-none">
+        <TabButton active={tab === "customers"} onClick={() => setTab("customers")} label="Customers" />
+        <TabButton active={tab === "discounts"} onClick={() => setTab("discounts")} label="Discounts" />
+      </div>
+
+      {tab === "discounts" && <DiscountSettings />}
+
+      {tab === "customers" && state.status === "loading" && <Skeleton />}
+      {tab === "customers" && state.status === "error" && (
         <div className="rounded-xl2 bg-surface hairline shadow-card p-8 text-center">
           <p className="text-[14px] font-semibold text-rose-600">{state.message}</p>
         </div>
       )}
 
-      {state.status === "ready" && (
+      {tab === "customers" && state.status === "ready" && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Kpi icon="users" label="Customers" value={String(state.summary.totalCustomers)} />
@@ -222,6 +239,21 @@ function EmptyState({ onNew }: { onNew: () => void }) {
         Add your first customer
       </button>
     </div>
+  );
+}
+
+function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "shrink-0 whitespace-nowrap bg-transparent px-4 py-2.5 text-[13.5px] font-semibold border-b-2 -mb-px transition-colors duration-200 " +
+        (active ? "border-brand-500 text-brand-600" : "border-transparent text-ink-soft hover:text-ink hover:border-ink/15")
+      }
+    >
+      {label}
+    </button>
   );
 }
 

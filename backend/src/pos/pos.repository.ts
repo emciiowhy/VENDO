@@ -2,7 +2,7 @@ import { pool, query } from "../db.js";
 import { moveStock } from "../inventory/stockLedger.js";
 import { getPaymentQrMap } from "../merchant/paymentQr.repository.js";
 import { notifyLowStock, type LowStockHit } from "../notifications/notifications.repository.js";
-import { computeSeniorPwdBreakdown, computeVatBreakdown } from "./pos.schema.js";
+import { discountLabelFor, priceCart, type CartDiscount } from "./pos.schema.js";
 import type {
   Catalog,
   CashierProfile,
@@ -10,6 +10,7 @@ import type {
   CatalogProduct,
   OrderInput,
   PaymentMethod,
+  PricingSettings,
   Sale,
   VatClass,
 } from "./pos.schema.js";
@@ -27,6 +28,7 @@ interface CatalogRow {
   low_stock_threshold: number;
   image_url: string | null;
   vat_class: VatClass;
+  sc_pwd_eligible: boolean;
 }
 
 /**
@@ -64,7 +66,8 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
 
   const prods = await query<CatalogRow>(
     `SELECT p.id, p.category_id, c.name AS category_name, p.name, p.sku,
-            p.price_cents, p.stock, p.low_stock_threshold, p.image_url, p.vat_class
+            p.price_cents, p.stock, p.low_stock_threshold, p.image_url, p.vat_class,
+            p.sc_pwd_eligible
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
       WHERE p.tenant_id = $1 AND p.is_active = TRUE
@@ -85,6 +88,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
     lowStockThreshold: r.low_stock_threshold,
     imageUrl: r.image_url,
     vatClass: r.vat_class,
+    scPwdEligible: r.sc_pwd_eligible,
   }));
 
   const s = store.rows[0];
@@ -107,6 +111,33 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
     categories: cats.rows,
     products,
     paymentQrs,
+    pricing: await getPricingSettings(tenantId),
+  };
+}
+
+/**
+ * The tenant's discount rules (CRM → Discounts). Defaults — 1 pt per ₱100,
+ * 1 pt = ₱1, member discount off — are the column defaults, so a tenant that
+ * never opened the settings prices exactly as before.
+ */
+export async function getPricingSettings(tenantId: string): Promise<PricingSettings> {
+  const { rows } = await query<{
+    loyalty_pesos_per_point: number;
+    loyalty_point_value_cents: number;
+    member_discount_pct: number;
+    member_discount_min_spend_cents: number;
+  }>(
+    `SELECT loyalty_pesos_per_point, loyalty_point_value_cents,
+            member_discount_pct, member_discount_min_spend_cents
+       FROM tenants WHERE id = $1`,
+    [tenantId],
+  );
+  const r = rows[0];
+  return {
+    pesosPerPoint: r?.loyalty_pesos_per_point ?? 100,
+    pointValueCents: r?.loyalty_point_value_cents ?? 100,
+    memberDiscountPct: r?.member_discount_pct ?? 0,
+    memberMinSpendCents: r?.member_discount_min_spend_cents ?? 0,
   };
 }
 
@@ -130,7 +161,11 @@ export async function listCashiers(tenantId: string): Promise<CashierProfile[]> 
 export type OrderError =
   | { code: "UNAVAILABLE"; productId: string }
   | { code: "OUT_OF_STOCK"; productId: string; name: string; available: number }
-  | { code: "INSUFFICIENT_CASH"; totalCents: number };
+  | { code: "INSUFFICIENT_CASH"; totalCents: number }
+  | { code: "NO_ELIGIBLE_ITEMS" }
+  | { code: "MEMBER_REQUIRES_CUSTOMER" }
+  | { code: "MEMBER_DISCOUNT_OFF" }
+  | { code: "MEMBER_NOT_ELIGIBLE"; minSpendCents: number };
 
 export type OrderResult = { ok: true; sale: Sale } | { ok: false; error: OrderError };
 
@@ -166,8 +201,8 @@ export async function createOrder(
       lineTotal: number;
       threshold: number;
       vatClass: VatClass;
+      scPwdEligible: boolean;
     }[] = [];
-    let totalCents = 0;
 
     for (const [productId, qty] of wanted) {
       const r = await client.query<{
@@ -177,8 +212,9 @@ export async function createOrder(
         stock: number;
         low_stock_threshold: number;
         vat_class: VatClass;
+        sc_pwd_eligible: boolean;
       }>(
-        `SELECT id, name, price_cents, stock, low_stock_threshold, vat_class
+        `SELECT id, name, price_cents, stock, low_stock_threshold, vat_class, sc_pwd_eligible
            FROM products
           WHERE id = $1 AND tenant_id = $2 AND is_active = TRUE
           FOR UPDATE`,
@@ -197,7 +233,6 @@ export async function createOrder(
         };
       }
       const lineTotal = row.price_cents * qty;
-      totalCents += lineTotal;
       resolved.push({
         id: row.id,
         name: row.name,
@@ -206,6 +241,7 @@ export async function createOrder(
         lineTotal,
         threshold: row.low_stock_threshold,
         vatClass: row.vat_class,
+        scPwdEligible: row.sc_pwd_eligible,
       });
     }
 
@@ -229,85 +265,66 @@ export async function createOrder(
       }
     }
 
-    // Resolve the cart-level discount and the per-class VAT split together, since
-    // the Senior/PWD benefit changes both (it makes the sale VAT-exempt). Every
+    // Price the cart server-side (priceCart). The client sends only a discount
+    // CATEGORY; the amount comes from the law (Senior/PWD) or the owner's CRM
+    // settings (member %), and points are clamped to the live balance. Every
     // peso figure is server-authoritative; a tampered client cannot set its own.
-    const grossCents = totalCents;
-    const breakdownLines = resolved.map((it) => ({ vatClass: it.vatClass, grossCents: it.lineTotal }));
-    let discountCents = 0;
-    let discountLabel: string | null = null;
+    const pricing = await getPricingSettings(tenantId);
+    let discount: CartDiscount | null = null;
     let scPwdIdNumber: string | null = null;
     let scPwdName: string | null = null;
-    let pointsRedeemed = 0;
-    let netCents: number;
-    let vatCents: number;
-    let subtotalCents: number;
-    let vatableSalesCents: number;
-    let vatExemptCents: number;
-    let zeroRatedCents: number;
-
-    if (input.discount?.type === "senior_pwd") {
-      // BIR Senior/PWD: strip the 12% VAT first, then 20% off the net-of-VAT base.
-      // Loyalty points (if any) fold in on top, clamped to the live balance and to
-      // what's still payable after the statutory discount.
-      const base = computeSeniorPwdBreakdown(breakdownLines);
-      if (customerId && input.redeemPoints && input.redeemPoints > 0) {
-        pointsRedeemed = Math.min(
-          input.redeemPoints,
-          loyaltyBalance,
-          Math.floor(base.totalDueCents / 100),
-        );
-      }
-      const sr =
-        pointsRedeemed > 0 ? computeSeniorPwdBreakdown(breakdownLines, pointsRedeemed * 100) : base;
-      discountCents = sr.discountCents;
-      netCents = sr.totalDueCents;
-      ({ vatCents, subtotalCents, vatableSalesCents, vatExemptCents, zeroRatedCents } = sr.breakdown);
+    let scPwdType: "senior" | "pwd" | null = null;
+    if (input.discount?.type === "senior" || input.discount?.type === "pwd") {
+      discount = { kind: input.discount.type };
+      scPwdType = input.discount.type;
       scPwdIdNumber = input.discount.idNumber;
       scPwdName = input.discount.holderName;
-      discountLabel = "Senior/PWD (20% + VAT-exempt)";
-      if (pointsRedeemed > 0) {
-        discountLabel += ` + ${pointsRedeemed} pt${pointsRedeemed === 1 ? "" : "s"}`;
+    } else if (input.discount?.type === "member") {
+      // Member pricing needs an attached, qualifying CRM customer and the owner
+      // must have switched it on — each checked here, never trusted from the till.
+      if (!customerId) {
+        await client.query("ROLLBACK");
+        return { ok: false, error: { code: "MEMBER_REQUIRES_CUSTOMER" } };
       }
-    } else {
-      // `percent` clamps to 0–100; `fixed` is centavos, never below zero net.
-      if (input.discount) {
-        if (input.discount.type === "percent") {
-          const pct = Math.min(100, Math.max(0, input.discount.value));
-          discountCents = Math.round((grossCents * pct) / 100);
-        } else {
-          discountCents = Math.min(grossCents, Math.round(input.discount.value));
-        }
-        discountLabel = input.discount.label?.trim() || null;
+      if (pricing.memberDiscountPct <= 0) {
+        await client.query("ROLLBACK");
+        return { ok: false, error: { code: "MEMBER_DISCOUNT_OFF" } };
       }
-
-      // Loyalty redemption (1 pt = ₱1). Clamp the requested points to the live
-      // balance AND to what's still payable after any manual discount, so points
-      // can never drive the total below zero or overdraw the account. The redeemed
-      // value folds into the cart discount — a single figure the books and the
-      // refund path already understand — and the points are deducted below, in this
-      // same transaction.
-      if (customerId && input.redeemPoints && input.redeemPoints > 0) {
-        const payableAfterDiscount = Math.max(0, grossCents - discountCents);
-        pointsRedeemed = Math.min(
-          input.redeemPoints,
-          loyaltyBalance,
-          Math.floor(payableAfterDiscount / 100),
+      if (pricing.memberMinSpendCents > 0) {
+        const spent = await client.query<{ spent: string }>(
+          `SELECT coalesce(sum(total_cents), 0) AS spent FROM sales
+            WHERE tenant_id = $1 AND customer_id = $2`,
+          [tenantId, customerId],
         );
-        if (pointsRedeemed > 0) {
-          discountCents += pointsRedeemed * 100;
-          const redeemLabel = `${pointsRedeemed} pt${pointsRedeemed === 1 ? "" : "s"} redeemed`;
-          discountLabel = discountLabel ? `${discountLabel} + ${redeemLabel}` : redeemLabel;
+        if (Number(spent.rows[0]?.spent ?? 0) < pricing.memberMinSpendCents) {
+          await client.query("ROLLBACK");
+          return {
+            ok: false,
+            error: { code: "MEMBER_NOT_ELIGIBLE", minSpendCents: pricing.memberMinSpendCents },
+          };
         }
       }
-
-      netCents = Math.max(0, grossCents - discountCents);
-      // Split the net across VAT classes (discount allocated pro-rata by gross),
-      // then extract 12% output VAT from the VATable portion only. Exempt and
-      // zero-rated lines contribute to the net but carry no VAT.
-      ({ vatCents, subtotalCents, vatableSalesCents, vatExemptCents, zeroRatedCents } =
-        computeVatBreakdown(breakdownLines, discountCents));
+      discount = { kind: "member", pct: pricing.memberDiscountPct };
     }
+
+    const priced = priceCart({
+      lines: resolved.map((it) => ({
+        vatClass: it.vatClass,
+        grossCents: it.lineTotal,
+        scPwdEligible: it.scPwdEligible,
+      })),
+      discount,
+      requestedPoints: customerId ? (input.redeemPoints ?? 0) : 0,
+      pointsBalance: loyaltyBalance,
+      pointValueCents: pricing.pointValueCents,
+    });
+    if (scPwdType && priced.eligibleLineCount === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: { code: "NO_ELIGIBLE_ITEMS" } };
+    }
+    const { grossCents, discountCents, pointsRedeemed, netCents } = priced;
+    const { vatCents, subtotalCents, vatableSalesCents, vatExemptCents, zeroRatedCents } = priced;
+    const discountLabel = discountLabelFor(discount, pointsRedeemed);
 
     // Cash settlement must cover the net total.
     let tenderedCents: number | null = null;
@@ -328,8 +345,8 @@ export async function createOrder(
     const lowStockHits: LowStockHit[] = [];
 
     // Points earned accrue on what was actually paid (net of every discount,
-    // redemption included) — 1 point per ₱100.
-    const pointsEarned = customerId ? Math.floor(netCents / 10_000) : 0;
+    // redemption included) — 1 point per `pesosPerPoint` (default ₱100).
+    const pointsEarned = customerId ? Math.floor(netCents / (pricing.pesosPerPoint * 100)) : 0;
 
     // Serialized BIR-style invoice reference (per Tenant). The per-tenant
     // counter row is locked by this upsert for the rest of the transaction, so
@@ -361,8 +378,8 @@ export async function createOrder(
          (tenant_id, cashier_user_id, reference, subtotal_cents, vat_cents, total_cents,
           payment_method, tendered_cents, change_cents, payment_ref, discount_cents, discount_label,
           shift_id, customer_id, points_earned, points_redeemed,
-          vatable_sales_cents, vat_exempt_cents, zero_rated_cents, sc_pwd_id_number, sc_pwd_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+          vatable_sales_cents, vat_exempt_cents, zero_rated_cents, sc_pwd_id_number, sc_pwd_name, sc_pwd_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
        RETURNING id, created_at`,
       [
         tenantId,
@@ -386,6 +403,7 @@ export async function createOrder(
         zeroRatedCents,
         scPwdIdNumber,
         scPwdName,
+        scPwdType,
       ],
     );
     const saleId = saleRes.rows[0].id;
@@ -460,6 +478,7 @@ export async function createOrder(
         pointsRedeemed,
         scPwdIdNumber,
         scPwdName,
+        scPwdType,
         createdAt: saleRes.rows[0].created_at.toISOString(),
       },
     };

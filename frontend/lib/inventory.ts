@@ -33,6 +33,7 @@ export interface Product {
   imageUrl: string | null;
   isActive: boolean;
   vatClass: VatClass;
+  scPwdEligible: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -79,6 +80,7 @@ export interface ProductFields {
   lowStockThreshold: string;
   isActive: boolean;
   vatClass: VatClass;
+  scPwdEligible: boolean;
 }
 
 function toFormData(fields: Partial<ProductFields>, image: File | null, removeImage = false): FormData {

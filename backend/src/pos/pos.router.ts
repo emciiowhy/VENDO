@@ -169,6 +169,20 @@ posRouter.post("/orders", async (req, res) => {
           ok: false,
           error: `Cash tendered is less than the ${formatPeso(result.error.totalCents)} total.`,
         });
+      case "NO_ELIGIBLE_ITEMS":
+        return res.status(400).json({
+          ok: false,
+          error: "No item in this cart qualifies for the Senior Citizen / PWD discount.",
+        });
+      case "MEMBER_REQUIRES_CUSTOMER":
+        return res.status(400).json({ ok: false, error: "Attach a CRM customer to apply the member discount." });
+      case "MEMBER_DISCOUNT_OFF":
+        return res.status(400).json({ ok: false, error: "The member discount is switched off for this store." });
+      case "MEMBER_NOT_ELIGIBLE":
+        return res.status(400).json({
+          ok: false,
+          error: `This customer needs ${formatPeso(result.error.minSpendCents)} lifetime spend to get the member discount.`,
+        });
     }
   } catch (err) {
     console.error("[pos] order failed:", err);

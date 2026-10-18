@@ -37,7 +37,25 @@ export interface CatalogProduct {
   lowStockThreshold: number;
   imageUrl: string | null;
   vatClass: VatClass;
+  /** Whether the Senior/PWD benefit covers this item. */
+  scPwdEligible: boolean;
 }
+
+/** The store's discount rules (CRM → Discounts), for the register preview. */
+export interface PricingSettings {
+  pointValueCents: number;
+  pesosPerPoint: number;
+  /** 0 = member discount off. */
+  memberDiscountPct: number;
+  memberMinSpendCents: number;
+}
+
+export const DEFAULT_PRICING: PricingSettings = {
+  pointValueCents: 100,
+  pesosPerPoint: 100,
+  memberDiscountPct: 0,
+  memberMinSpendCents: 0,
+};
 
 export interface CatalogCategory {
   id: string;
@@ -74,6 +92,7 @@ export interface Catalog {
   products: CatalogProduct[];
   /** Owner-uploaded e-wallet QR codes shown to customers at checkout. */
   paymentQrs: PaymentQrMap;
+  pricing: PricingSettings;
 }
 
 export interface Sale {
@@ -100,6 +119,8 @@ export interface Sale {
   scPwdIdNumber?: string | null;
   /** The Senior/PWD cardholder's name recorded on the sale (else null). */
   scPwdName?: string | null;
+  /** Which statutory category was applied (null = none / legacy sale). */
+  scPwdType?: "senior" | "pwd" | null;
   createdAt: string;
 }
 
@@ -141,48 +162,47 @@ export interface ShiftZRead extends ShiftTally {
 }
 
 /**
- * Cart-level discount. `percent` → value 0–100; `fixed` → value in centavos;
- * `senior_pwd` is the BIR Senior Citizen / PWD benefit — it carries the ID
- * number + cardholder name and the SERVER derives the VAT-exempt-then-20%
- * amount (the client never sends a peso figure for it).
+ * The Senior Citizen / PWD benefit picked at the till. Carries the BIR-required
+ * ID number + cardholder name and the exclusive-use confirmation; the SERVER
+ * derives the VAT-exempt-then-20% amount (the client never sends a peso figure).
  */
-export type Discount =
-  | { type: "percent"; value: number; label?: string }
-  | { type: "fixed"; value: number; label?: string }
-  | { type: "senior_pwd"; idNumber: string; holderName: string; label?: string };
-
-const SC_PWD_VAT_NUM = 12;
-const SC_PWD_VAT_DEN = 112;
+export type ScPwdDiscount = {
+  type: "senior" | "pwd";
+  idNumber: string;
+  holderName: string;
+  exclusiveUse: true;
+};
 
 /**
- * Preview-only mirror of the server's Senior/PWD math (see
- * `computeSeniorPwdBreakdown` in the backend): strip the 12% VAT from each
- * VATable line, then take 20% off the net-of-VAT base. Returns the combined
- * discount in centavos (removed VAT + 20%) so the terminal can show an accurate
- * "less" figure before checkout. The server re-derives this authoritatively.
+ * What checkout sends. Every discount is a predefined CATEGORY — cashiers can't
+ * key an amount. `member` carries nothing: the % comes from CRM → Discounts.
  */
-export function seniorPwdDiscountCents(lines: { vatClass: VatClass; lineCents: number }[]): number {
-  const grossIncl = lines.reduce((s, l) => s + l.lineCents, 0);
-  const netBase = lines.reduce((s, l) => {
-    if (l.vatClass !== "VATABLE") return s + l.lineCents;
-    const vat = Math.round((l.lineCents * SC_PWD_VAT_NUM) / SC_PWD_VAT_DEN);
-    return s + (l.lineCents - vat);
-  }, 0);
-  const vatExempted = grossIncl - netBase;
-  const seniorDiscount = Math.round((netBase * 20) / 100);
-  return vatExempted + seniorDiscount;
+export type Discount = ScPwdDiscount | { type: "member" };
+
+/** The pricing-relevant shape of a discount (mirror of the server's CartDiscount). */
+export type CartDiscount = { kind: "senior" | "pwd" } | { kind: "member"; pct: number };
+
+export function discountLabel(d: CartDiscount | null): string | null {
+  if (!d) return null;
+  if (d.kind === "member") return `Member ${d.pct}% off`;
+  return d.kind === "senior" ? "Senior Citizen (20% + VAT-exempt)" : "PWD (20% + VAT-exempt)";
 }
 
-/**
- * Preview-only mirror of the server's `computeVatBreakdown`: output VAT comes
- * from the VATable lines only — EXEMPT and ZERO_RATED lines carry none. A
- * cart-level discount is allocated across the classes pro-rata by gross, and the
- * VATable portion is the residual of the net, exactly as the server books it.
- */
-export function previewVatCents(
-  lines: { vatClass: VatClass; lineCents: number }[],
-  discountCents = 0,
-): number {
+const VAT_NUM = 12;
+const VAT_DEN = 112;
+
+type PreviewLine = { vatClass: VatClass; lineCents: number };
+
+interface Breakdown {
+  vatCents: number;
+  vatableSalesCents: number;
+  vatExemptCents: number;
+  zeroRatedCents: number;
+  netCents: number;
+}
+
+/** Mirror of the server's computeVatBreakdown (pro-rata discount, VAT residual). */
+function breakdown(lines: PreviewLine[], discountCents: number): Breakdown {
   const grossOf = (k: VatClass) => lines.reduce((s, l) => (l.vatClass === k ? s + l.lineCents : s), 0);
   const exemptGross = grossOf("EXEMPT");
   const zeroGross = grossOf("ZERO_RATED");
@@ -191,11 +211,105 @@ export function previewVatCents(
   const netCents = totalGross - disc;
   const share = (gross: number) =>
     totalGross > 0 ? Math.min(gross, Math.round((disc * gross) / totalGross)) : 0;
-  const vatableNetIncl = Math.max(
-    0,
-    netCents - (exemptGross - share(exemptGross)) - (zeroGross - share(zeroGross)),
+  const vatExemptCents = exemptGross - share(exemptGross);
+  const zeroRatedCents = zeroGross - share(zeroGross);
+  const vatableNetIncl = Math.max(0, netCents - vatExemptCents - zeroRatedCents);
+  const vatCents = Math.round((vatableNetIncl * VAT_NUM) / VAT_DEN);
+  return { vatCents, vatableSalesCents: vatableNetIncl - vatCents, vatExemptCents, zeroRatedCents, netCents };
+}
+
+/**
+ * Preview-only mirror of the server's `computeVatBreakdown`: output VAT comes
+ * from the VATable lines only — EXEMPT and ZERO_RATED lines carry none. A
+ * cart-level discount is allocated across the classes pro-rata by gross, and the
+ * VATable portion is the residual of the net, exactly as the server books it.
+ */
+export function previewVatCents(lines: PreviewLine[], discountCents = 0): number {
+  return breakdown(lines, discountCents).vatCents;
+}
+
+/** Mirror of computeSeniorPwdBreakdown: strip VAT, then 20% (+ extra) off. */
+function seniorPwd(lines: PreviewLine[], extraCents: number): { totalDueCents: number; b: Breakdown } {
+  const netLines = lines.map((l) =>
+    l.vatClass !== "VATABLE"
+      ? l
+      : { vatClass: "EXEMPT" as VatClass, lineCents: l.lineCents - Math.round((l.lineCents * VAT_NUM) / VAT_DEN) },
   );
-  return Math.round((vatableNetIncl * SC_PWD_VAT_NUM) / SC_PWD_VAT_DEN);
+  const netBase = netLines.reduce((s, l) => s + l.lineCents, 0);
+  const senior = Math.round((netBase * 20) / 100);
+  const extra = Math.min(Math.max(0, Math.round(extraCents)), Math.max(0, netBase - senior));
+  const b = breakdown(netLines, senior + extra);
+  return { totalDueCents: b.netCents, b };
+}
+
+export interface CartPreview {
+  grossCents: number;
+  /** gross − net: every reduction (removed VAT, 20%, member %, points). */
+  discountCents: number;
+  vatCents: number;
+  netCents: number;
+  pointsRedeemed: number;
+  eligibleLineCount: number;
+}
+
+/**
+ * Preview-only mirror of the server's `priceCart` (pos.schema.ts), so the
+ * register shows the total the receipt will print. The server re-derives every
+ * figure; frontendParity.test.ts holds the two together.
+ */
+export function previewCart(input: {
+  lines: (PreviewLine & { scPwdEligible: boolean })[];
+  discount: CartDiscount | null;
+  requestedPoints: number;
+  pointsBalance: number;
+  pointValueCents: number;
+}): CartPreview {
+  const grossCents = input.lines.reduce((s, l) => s + l.lineCents, 0);
+  const pointValue = Math.max(1, Math.round(input.pointValueCents));
+  const clampPoints = (payable: number) =>
+    Math.max(
+      0,
+      Math.min(Math.floor(input.requestedPoints), Math.floor(input.pointsBalance), Math.floor(payable / pointValue)),
+    );
+  const d = input.discount;
+
+  if (d && (d.kind === "senior" || d.kind === "pwd")) {
+    const eligible = input.lines.filter((l) => l.scPwdEligible);
+    const other = input.lines.filter((l) => !l.scPwdEligible);
+    const benefit = seniorPwd(eligible, 0);
+    const otherGross = other.reduce((s, l) => s + l.lineCents, 0);
+    const totalPayable = benefit.totalDueCents + otherGross;
+    const pointsRedeemed = clampPoints(totalPayable);
+    const extra = pointsRedeemed * pointValue;
+    let extraBenefit = totalPayable > 0 ? Math.round((extra * benefit.totalDueCents) / totalPayable) : 0;
+    extraBenefit = Math.min(extraBenefit, benefit.totalDueCents);
+    const extraOther = Math.min(extra - extraBenefit, otherGross);
+    extraBenefit = extra - extraOther;
+    const b1 = extraBenefit > 0 ? seniorPwd(eligible, extraBenefit).b : benefit.b;
+    const b2 = breakdown(other, extraOther);
+    const netCents = b1.netCents + b2.netCents;
+    return {
+      grossCents,
+      discountCents: grossCents - netCents,
+      vatCents: b1.vatCents + b2.vatCents,
+      netCents,
+      pointsRedeemed,
+      eligibleLineCount: eligible.length,
+    };
+  }
+
+  const memberCents =
+    d?.kind === "member" ? Math.round((grossCents * Math.min(100, Math.max(0, d.pct))) / 100) : 0;
+  const pointsRedeemed = clampPoints(grossCents - memberCents);
+  const b = breakdown(input.lines, memberCents + pointsRedeemed * pointValue);
+  return {
+    grossCents,
+    discountCents: grossCents - b.netCents,
+    vatCents: b.vatCents,
+    netCents: b.netCents,
+    pointsRedeemed,
+    eligibleLineCount: 0,
+  };
 }
 
 export interface OrderLine {
@@ -240,7 +354,7 @@ export async function submitOrder(payload: {
   referenceCode?: string;
   discount?: Discount;
   customerId?: string;
-  /** Loyalty points the attached customer redeems (1 pt = ₱1 off). */
+  /** Loyalty points the attached customer redeems (valued at the store’s point rate). */
   redeemPoints?: number;
 }): Promise<Result<{ sale: Sale }>> {
   try {

@@ -117,6 +117,7 @@ interface ProductRow {
   image_url: string | null;
   is_active: boolean;
   vat_class: Product["vatClass"];
+  sc_pwd_eligible: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -136,13 +137,14 @@ function toProduct(row: ProductRow): Product {
     imageUrl: row.image_url,
     isActive: row.is_active,
     vatClass: row.vat_class,
+    scPwdEligible: row.sc_pwd_eligible,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
 }
 
 const PRODUCT_COLUMNS = `p.id, p.category_id, p.name, p.sku, p.price_cents, p.stock,
-  p.low_stock_threshold, p.image_url, p.is_active, p.vat_class, p.created_at, p.updated_at,
+  p.low_stock_threshold, p.image_url, p.is_active, p.vat_class, p.sc_pwd_eligible, p.created_at, p.updated_at,
   c.name AS category_name`;
 
 export async function listProducts(tenantId: string): Promise<Product[]> {
@@ -184,8 +186,9 @@ export async function createProduct(
     await client.query("BEGIN");
     const ins = await client.query<{ id: string }>(
       `INSERT INTO products
-         (tenant_id, name, sku, category_id, price_cents, stock, low_stock_threshold, image_url, is_active, vat_class)
-       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9)
+         (tenant_id, name, sku, category_id, price_cents, stock, low_stock_threshold, image_url, is_active, vat_class,
+          sc_pwd_eligible)
+       VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, $10)
        RETURNING id`,
       [
         tenantId,
@@ -197,6 +200,7 @@ export async function createProduct(
         imageUrl,
         input.isActive ?? true,
         input.vatClass ?? "VATABLE",
+        input.scPwdEligible ?? true,
       ],
     );
     newId = ins.rows[0].id;
@@ -248,6 +252,7 @@ export async function updateProduct(
   if (input.lowStockThreshold !== undefined) set("low_stock_threshold", input.lowStockThreshold);
   if (input.isActive !== undefined) set("is_active", input.isActive);
   if (input.vatClass !== undefined) set("vat_class", input.vatClass);
+  if (input.scPwdEligible !== undefined) set("sc_pwd_eligible", input.scPwdEligible);
   if (imageUrl !== undefined) set("image_url", imageUrl);
 
   const stockRequested = input.stock !== undefined;

@@ -42,6 +42,19 @@ export const customerCreateSchema = z.object({
 
 export const customerUpdateSchema = customerCreateSchema.partial();
 
+/**
+ * CRM → Discounts: the owner-configurable loyalty rules. Senior Citizen / PWD
+ * are statutory (fixed by RA 9994 / RA 10754) and deliberately NOT here — no
+ * one in the store can change those amounts. Money is integer centavos.
+ */
+export const discountSettingsSchema = z.object({
+  pesosPerPoint: z.number().int().min(1, "At least ₱1 per point.").max(100_000),
+  pointValueCents: z.number().int().min(1, "A point must be worth at least ₱0.01.").max(100_000),
+  memberDiscountPct: z.number().int().min(0).max(50, "Member discount can be at most 50%."),
+  memberMinSpendCents: z.number().int().min(0).max(1_000_000_000),
+});
+export type DiscountSettingsInput = z.infer<typeof discountSettingsSchema>;
+
 export type CustomerCreateInput = z.infer<typeof customerCreateSchema>;
 export type CustomerUpdateInput = z.infer<typeof customerUpdateSchema>;
 
@@ -84,4 +97,6 @@ export interface CustomerLite {
   name: string;
   phone: string | null;
   loyaltyPoints: number;
+  /** Net lifetime spend (centavos) — lets the till preview member eligibility. */
+  totalSpentCents: number;
 }
