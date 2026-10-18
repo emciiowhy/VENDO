@@ -5,13 +5,17 @@ import { Icon } from "../Icon";
 import { useToast } from "../Toast";
 import { formatPesoExact } from "@/lib/format";
 import { getDiscountSettings, saveDiscountSettings, type DiscountSettings as Settings } from "@/lib/crm";
+import { useSession } from "../auth/useSession";
+import { PromotionsManager } from "./PromotionsManager";
 
 /**
  * CRM → Discounts. The single place discounts are defined:
+ *   • Promos — the OWNER sets each amount; cashiers can only tap one.
  *   • Senior Citizen / PWD — statutory (RA 9994 / RA 10754), shown read-only;
  *     nobody in the store can change the amount.
- *   • Loyalty — the owner/manager sets the points rates and the member %.
+ *   • Loyalty — the OWNER sets the points rates and the member %.
  * Cashiers only ever pick one of these at the till; the server prices it.
+ * Managers see the rules read-only (the API 403s their saves).
  */
 const FIELD_INPUT =
   "field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14px] tabular-nums transition duration-150 ease-in-out";
@@ -27,6 +31,8 @@ const toForm = (s: Settings): Form => ({
 
 export function DiscountSettings() {
   const { push } = useToast();
+  const session = useSession();
+  const isOwner = session.status === "authed" && session.user.role === "MERCHANT_OWNER";
   const [form, setForm] = useState<Form | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -72,6 +78,15 @@ export function DiscountSettings() {
 
   return (
     <div className="space-y-6">
+      {session.status === "authed" && !isOwner && (
+        <div className="flex items-center gap-2.5 rounded-[12px] bg-paper hairline px-4 py-3 text-[13.5px] text-ink-soft">
+          <Icon name="lock" className="w-4 h-4 shrink-0" strokeWidth={1.8} />
+          Only the store owner can create promos or change discount amounts.
+        </div>
+      )}
+
+      {isOwner && <PromotionsManager />}
+
       <div className="grid gap-4 md:grid-cols-2">
         <StatutoryCard
           title="Senior Citizen"
@@ -85,7 +100,7 @@ export function DiscountSettings() {
         <div>
           <h3 className="text-[1.05rem] font-extrabold tracking-tight">Loyalty discounts</h3>
           <p className="text-[13px] text-ink-soft">
-            Set by the owner or a manager. Cashiers can apply these at checkout but never change them.
+            Set by the owner. Cashiers can apply these at checkout but never change them.
           </p>
         </div>
 
@@ -93,7 +108,7 @@ export function DiscountSettings() {
         {!form && !loadError && <div className="h-32 rounded-[12px] bg-paper animate-pulse" />}
 
         {form && (
-          <>
+          <fieldset disabled={!isOwner} className="space-y-5 disabled:opacity-70">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 label="Earn 1 point for every"
@@ -140,16 +155,18 @@ export function DiscountSettings() {
               .
             </div>
 
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn tracking-tight transition duration-150 disabled:opacity-50"
-              >
-                {saving ? "Saving…" : "Save loyalty settings"}
-              </button>
-            </div>
-          </>
+            {isOwner && (
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn tracking-tight transition duration-150 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save loyalty settings"}
+                </button>
+              </div>
+            )}
+          </fieldset>
         )}
       </form>
     </div>

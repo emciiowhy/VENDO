@@ -152,11 +152,29 @@ export function computeSeniorPwdBreakdown(
  * picks a category, never an amount:
  *   senior / pwd — the statutory benefit (computeSeniorPwdBreakdown), on the
  *                  benefit-eligible lines only;
- *   member       — the owner's loyalty member % (CRM → Discounts).
+ *   member       — the owner's loyalty member % (CRM → Discounts);
+ *   promo        — an owner-defined promotion, looked up by id server-side.
  * Exactly one per sale: RA 9994 / RA 10754 bar stacking the 20% with another
  * promo, and the discriminated union makes a second discount unrepresentable.
  */
-export type CartDiscount = { kind: "senior" | "pwd" } | { kind: "member"; pct: number };
+export type CartDiscount =
+  | { kind: "senior" | "pwd" }
+  | { kind: "member"; pct: number }
+  | { kind: "promo"; name: string; promoKind: "percent" | "fixed"; value: number };
+
+/** An owner-defined promotion as the till sees it (value: % or centavos). */
+export interface Promotion {
+  id: string;
+  name: string;
+  kind: "percent" | "fixed";
+  value: number;
+}
+
+/** Centavos a percent/fixed reduction takes off `grossCents` (never above it). */
+function reductionCents(grossCents: number, kind: "percent" | "fixed", value: number): number {
+  if (kind === "percent") return Math.round((grossCents * Math.min(100, Math.max(0, value))) / 100);
+  return Math.min(grossCents, Math.max(0, Math.round(value)));
+}
 
 export interface PriceCartInput {
   lines: { vatClass: VatClass; grossCents: number; scPwdEligible: boolean }[];
@@ -237,12 +255,14 @@ export function priceCart(input: PriceCartInput): PricedCart {
     };
   }
 
-  const memberCents =
+  const offCents =
     d?.kind === "member"
-      ? Math.round((grossCents * Math.min(100, Math.max(0, d.pct))) / 100)
-      : 0;
-  const pointsRedeemed = clampPoints(grossCents - memberCents);
-  const breakdown = computeVatBreakdown(input.lines, memberCents + pointsRedeemed * pointValue);
+      ? reductionCents(grossCents, "percent", d.pct)
+      : d?.kind === "promo"
+        ? reductionCents(grossCents, d.promoKind, d.value)
+        : 0;
+  const pointsRedeemed = clampPoints(grossCents - offCents);
+  const breakdown = computeVatBreakdown(input.lines, offCents + pointsRedeemed * pointValue);
   return {
     ...breakdown,
     grossCents,
@@ -258,6 +278,7 @@ export function discountLabelFor(discount: CartDiscount | null, pointsRedeemed: 
   if (discount?.kind === "senior") label = "Senior Citizen (20% + VAT-exempt)";
   else if (discount?.kind === "pwd") label = "PWD (20% + VAT-exempt)";
   else if (discount?.kind === "member") label = `Member ${discount.pct}% off`;
+  else if (discount?.kind === "promo") label = discount.name;
   if (pointsRedeemed > 0) {
     const pts = `${pointsRedeemed} pt${pointsRedeemed === 1 ? "" : "s"} redeemed`;
     label = label ? `${label} + ${pts}` : pts;
@@ -304,6 +325,8 @@ export const orderSchema = z.object({
       z.object({ type: z.literal("senior"), ...scPwdFields }),
       z.object({ type: z.literal("pwd"), ...scPwdFields }),
       z.object({ type: z.literal("member") }),
+      // Only the promo's id — its amount is read from the owner's promotions.
+      z.object({ type: z.literal("promo"), promoId: z.string().uuid("Invalid promo.") }),
     ])
     .optional(),
   // Optional CRM customer to attach to the sale (loyalty accrues to them). The
@@ -383,6 +406,8 @@ export interface Catalog {
   /** Owner-uploaded e-wallet QR codes shown to customers at checkout. */
   paymentQrs: PaymentQrMap;
   pricing: PricingSettings;
+  /** The owner's ACTIVE promotions — tap-only buttons at the till. */
+  promotions: Promotion[];
 }
 
 export interface Sale {

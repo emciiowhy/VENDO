@@ -55,6 +55,24 @@ export const discountSettingsSchema = z.object({
 });
 export type DiscountSettingsInput = z.infer<typeof discountSettingsSchema>;
 
+/**
+ * An owner-defined promotion. `value` is a whole percent (1–100) for a
+ * `percent` promo, or integer centavos for a `fixed` one. The amount lives
+ * only here — the till sends just the promo's id.
+ */
+export const promotionSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name the promo.").max(40, "Keep the name under 40 characters."),
+    kind: z.enum(["percent", "fixed"], { errorMap: () => ({ message: "Choose % or ₱." }) }),
+    value: z.number().int().positive("Enter an amount above zero.").max(100_000_000),
+    isActive: z.boolean().default(true),
+  })
+  .refine((p) => p.kind !== "percent" || p.value <= 100, {
+    message: "A percent promo can be at most 100%.",
+    path: ["value"],
+  });
+export type PromotionInput = z.infer<typeof promotionSchema>;
+
 export type CustomerCreateInput = z.infer<typeof customerCreateSchema>;
 export type CustomerUpdateInput = z.infer<typeof customerUpdateSchema>;
 

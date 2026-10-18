@@ -1163,13 +1163,32 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS sc_pwd_eligible BOOLEAN NOT NULL D
 
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS sc_pwd_type TEXT
   CHECK (sc_pwd_type IN ('senior', 'pwd'));
+
+-- Owner-defined promotions (CRM → Discounts). The OWNER sets each promo's
+-- amount; at the till a cashier can only tap an active promo — the server looks
+-- the amount up by id, so it can't be edited or forged. \`value\` is a whole
+-- percent (1–100) for 'percent' promos, or integer centavos for 'fixed'. Sales
+-- snapshot the promo's name in discount_label, so editing or deleting a promo
+-- never rewrites history. Strictly tenant-fenced.
+CREATE TABLE IF NOT EXISTS promotions (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID        NOT NULL REFERENCES tenants (id) ON DELETE CASCADE,
+  name        TEXT        NOT NULL,
+  kind        TEXT        NOT NULL CHECK (kind IN ('percent', 'fixed')),
+  value       INTEGER     NOT NULL CHECK (value > 0),
+  is_active   BOOLEAN     NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT promotions_percent_range CHECK (kind <> 'percent' OR value <= 100)
+);
+CREATE INDEX IF NOT EXISTS promotions_tenant_idx ON promotions (tenant_id, is_active);
 `;
 
 async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, ingredients, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs, tenant_support_notes ready (+ discount settings).",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, ingredients, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs, tenant_support_notes, promotions ready (+ discount settings).",
   );
 }
 

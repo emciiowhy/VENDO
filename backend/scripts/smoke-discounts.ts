@@ -12,6 +12,7 @@ import { pool, query } from "../src/db.js";
 import { createOrder, getPricingSettings } from "../src/pos/pos.repository.js";
 import { reverseSale } from "../src/pos/refunds.repository.js";
 import { priceCart } from "../src/pos/pos.schema.js";
+import { createPromotion, deletePromotion, updatePromotion } from "../src/crm/promotions.repository.js";
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = "") {
@@ -100,6 +101,49 @@ async function main() {
         paymentMethod: "GCash",
       });
       check("another tenant cannot sell this product", !cross.ok && cross.error.code === "UNAVAILABLE");
+    }
+
+    // Owner promo: the till sends only the id; the server applies the owner's 10%.
+    const promo = await createPromotion(tenantId, { name: "SMOKE 10%", kind: "percent", value: 10, isActive: true });
+    try {
+      const promoSale = await createOrder(tenantId, null, {
+        items: [{ productId: a.id, qty: 1 }],
+        paymentMethod: "GCash",
+        discount: { type: "promo", promoId: promo.id },
+      });
+      check("promo sale commits", promoSale.ok);
+      if (promoSale.ok) {
+        const want = a.price_cents - Math.round(a.price_cents * 0.1);
+        check("promo takes the owner's 10%", promoSale.sale.totalCents === want, `${promoSale.sale.totalCents} vs ${want}`);
+        check("promo name on the receipt", promoSale.sale.discountLabel === "SMOKE 10%");
+        await reverseSale(tenantId, null, promoSale.sale.id, { kind: "void" }, "smoke test cleanup", null);
+      }
+
+      await updatePromotion(tenantId, promo.id, { name: "SMOKE 10%", kind: "percent", value: 10, isActive: false });
+      const paused = await createOrder(tenantId, null, {
+        items: [{ productId: a.id, qty: 1 }],
+        paymentMethod: "GCash",
+        discount: { type: "promo", promoId: promo.id },
+      });
+      check("paused promo is refused", !paused.ok && paused.error.code === "PROMO_UNAVAILABLE");
+
+      if (other.rows[0]) {
+        await updatePromotion(tenantId, promo.id, { name: "SMOKE 10%", kind: "percent", value: 10, isActive: true });
+        const otherProduct = await query<{ id: string }>(
+          `SELECT id FROM products WHERE tenant_id = $1 AND is_active AND stock >= 1 LIMIT 1`,
+          [other.rows[0].id],
+        );
+        if (otherProduct.rows[0]) {
+          const stolen = await createOrder(other.rows[0].id, null, {
+            items: [{ productId: otherProduct.rows[0].id, qty: 1 }],
+            paymentMethod: "GCash",
+            discount: { type: "promo", promoId: promo.id },
+          });
+          check("another tenant cannot use this store's promo", !stolen.ok && stolen.error.code === "PROMO_UNAVAILABLE");
+        }
+      }
+    } finally {
+      await deletePromotion(tenantId, promo.id);
     }
   } finally {
     await query(`UPDATE products SET sc_pwd_eligible = $2 WHERE id = $1`, [b.id, b.sc_pwd_eligible]);

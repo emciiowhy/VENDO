@@ -93,6 +93,16 @@ export interface Catalog {
   /** Owner-uploaded e-wallet QR codes shown to customers at checkout. */
   paymentQrs: PaymentQrMap;
   pricing: PricingSettings;
+  /** The owner's ACTIVE promotions — tap-only buttons at the till. */
+  promotions?: Promotion[];
+}
+
+/** An owner-defined promo. `value` is a whole % or centavos, per `kind`. */
+export interface Promotion {
+  id: string;
+  name: string;
+  kind: "percent" | "fixed";
+  value: number;
 }
 
 export interface Sale {
@@ -177,13 +187,23 @@ export type ScPwdDiscount = {
  * What checkout sends. Every discount is a predefined CATEGORY — cashiers can't
  * key an amount. `member` carries nothing: the % comes from CRM → Discounts.
  */
-export type Discount = ScPwdDiscount | { type: "member" };
+export type Discount = ScPwdDiscount | { type: "member" } | { type: "promo"; promoId: string };
 
 /** The pricing-relevant shape of a discount (mirror of the server's CartDiscount). */
-export type CartDiscount = { kind: "senior" | "pwd" } | { kind: "member"; pct: number };
+export type CartDiscount =
+  | { kind: "senior" | "pwd" }
+  | { kind: "member"; pct: number }
+  | { kind: "promo"; name: string; promoKind: "percent" | "fixed"; value: number };
+
+/** "10% off" / "₱50.00 off" — how a promo's owner-set amount reads on a button. */
+export function promoAmountText(p: Pick<Promotion, "kind" | "value">): string {
+  if (p.kind === "percent") return `${p.value}% off`;
+  return `₱${(p.value / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} off`;
+}
 
 export function discountLabel(d: CartDiscount | null): string | null {
   if (!d) return null;
+  if (d.kind === "promo") return d.name;
   if (d.kind === "member") return `Member ${d.pct}% off`;
   return d.kind === "senior" ? "Senior Citizen (20% + VAT-exempt)" : "PWD (20% + VAT-exempt)";
 }
@@ -298,10 +318,14 @@ export function previewCart(input: {
     };
   }
 
-  const memberCents =
-    d?.kind === "member" ? Math.round((grossCents * Math.min(100, Math.max(0, d.pct))) / 100) : 0;
-  const pointsRedeemed = clampPoints(grossCents - memberCents);
-  const b = breakdown(input.lines, memberCents + pointsRedeemed * pointValue);
+  const reduction = (kind: "percent" | "fixed", value: number) =>
+    kind === "percent"
+      ? Math.round((grossCents * Math.min(100, Math.max(0, value))) / 100)
+      : Math.min(grossCents, Math.max(0, Math.round(value)));
+  const offCents =
+    d?.kind === "member" ? reduction("percent", d.pct) : d?.kind === "promo" ? reduction(d.promoKind, d.value) : 0;
+  const pointsRedeemed = clampPoints(grossCents - offCents);
+  const b = breakdown(input.lines, offCents + pointsRedeemed * pointValue);
   return {
     grossCents,
     discountCents: grossCents - b.netCents,

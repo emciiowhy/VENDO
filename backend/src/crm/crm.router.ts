@@ -3,7 +3,18 @@ import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { requireFeature } from "../auth/tier.middleware.js";
 import { getPricingSettings } from "../pos/pos.repository.js";
-import { customerCreateSchema, customerUpdateSchema, discountSettingsSchema } from "./crm.schema.js";
+import {
+  customerCreateSchema,
+  customerUpdateSchema,
+  discountSettingsSchema,
+  promotionSchema,
+} from "./crm.schema.js";
+import {
+  createPromotion,
+  deletePromotion,
+  listPromotions,
+  updatePromotion,
+} from "./promotions.repository.js";
 import {
   createCustomer,
   deleteCustomer,
@@ -15,9 +26,12 @@ import {
   updateDiscountSettings,
 } from "./crm.repository.js";
 
-// Changing the customer book or the discount rules is back-office work; a
-// CASHIER may search, view and quick-add, but never edit, delete or re-price.
+// Editing the customer book is back-office work; a CASHIER may search, view and
+// quick-add, but never edit or delete.
 const managersOnly = requireRole("MERCHANT_OWNER", "MANAGER");
+// Discount amounts (promos, loyalty, member %) are the OWNER's call alone, so a
+// till can only ever apply what the owner set — never re-price a sale.
+const ownerOnly = requireRole("MERCHANT_OWNER");
 
 /**
  * Merchant CRM — customers + loyalty.
@@ -159,8 +173,8 @@ crmRouter.get("/discount-settings", async (req, res) => {
   }
 });
 
-/** PUT /api/v1/crm/discount-settings — owner/manager only; cashiers get 403. */
-crmRouter.put("/discount-settings", managersOnly, async (req, res) => {
+/** PUT /api/v1/crm/discount-settings — owner only; managers and cashiers get 403. */
+crmRouter.put("/discount-settings", ownerOnly, async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
   const parsed = discountSettingsSchema.safeParse(req.body);
@@ -173,5 +187,60 @@ crmRouter.put("/discount-settings", managersOnly, async (req, res) => {
   } catch (err) {
     console.error("[crm] save discount settings failed:", err);
     res.status(500).json({ ok: false, error: "Could not save discount settings." });
+  }
+});
+
+// ── Promotions ───────────────────────────────────────────────────────────────
+
+/** GET /api/v1/crm/promotions — every promo, active and paused (owner only). */
+crmRouter.get("/promotions", ownerOnly, async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    res.json({ ok: true, promotions: await listPromotions(tenantId) });
+  } catch (err) {
+    console.error("[crm] list promotions failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load promotions." });
+  }
+});
+
+crmRouter.post("/promotions", ownerOnly, async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = promotionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    res.status(201).json({ ok: true, promotion: await createPromotion(tenantId, parsed.data) });
+  } catch (err) {
+    console.error("[crm] create promotion failed:", err);
+    res.status(500).json({ ok: false, error: "Could not save the promo." });
+  }
+});
+
+crmRouter.put("/promotions/:id", ownerOnly, async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const parsed = promotionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const promotion = await updatePromotion(tenantId, req.params.id, parsed.data);
+    if (!promotion) return res.status(404).json({ ok: false, error: "Promo not found." });
+    res.json({ ok: true, promotion });
+  } catch (err) {
+    console.error("[crm] update promotion failed:", err);
+    res.status(500).json({ ok: false, error: "Could not save the promo." });
+  }
+});
+
+crmRouter.delete("/promotions/:id", ownerOnly, async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const ok = await deletePromotion(tenantId, req.params.id);
+    if (!ok) return res.status(404).json({ ok: false, error: "Promo not found." });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[crm] delete promotion failed:", err);
+    res.status(500).json({ ok: false, error: "Could not delete the promo." });
   }
 });

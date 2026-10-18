@@ -178,6 +178,11 @@ posRouter.post("/orders", async (req, res) => {
         return res.status(400).json({ ok: false, error: "Attach a CRM customer to apply the member discount." });
       case "MEMBER_DISCOUNT_OFF":
         return res.status(400).json({ ok: false, error: "The member discount is switched off for this store." });
+      case "PROMO_UNAVAILABLE":
+        return res.status(400).json({
+          ok: false,
+          error: "That promo is no longer running. Refresh the register.",
+        });
       case "MEMBER_NOT_ELIGIBLE":
         return res.status(400).json({
           ok: false,

@@ -31,6 +31,9 @@ import {
   type PricingSettings,
   type Sale,
   type ScPwdDiscount,
+  type Discount,
+  type Promotion,
+  promoAmountText,
   type StoreBrand,
 } from "@/lib/pos";
 import { searchCustomers, type CustomerLite } from "@/lib/crm";
@@ -91,9 +94,23 @@ const EMPTY_STORE: StoreBrand = {
 /** centavos → "₱1,234.50" */
 const peso = (cents: number) => formatPesoExact(cents / 100);
 
-/** The pricing shape of the cart's Senior/PWD pick (member is chosen at checkout). */
-const toCartDiscount = (d: ScPwdDiscount | null): CartDiscount | null => (d ? { kind: d.type } : null);
-const discountText = (d: ScPwdDiscount | null) => discountLabel(toCartDiscount(d));
+/**
+ * The cart's discount pick: Senior/PWD, or one of the owner's promos (kept whole
+ * here only to preview it — checkout sends just its id). The member discount is
+ * chosen at checkout, where the customer is attached.
+ */
+type TillDiscount = ScPwdDiscount | { type: "promo"; promo: Promotion };
+
+const toCartDiscount = (d: TillDiscount | null): CartDiscount | null => {
+  if (!d) return null;
+  if (d.type === "promo") return { kind: "promo", name: d.promo.name, promoKind: d.promo.kind, value: d.promo.value };
+  return { kind: d.type };
+};
+const discountText = (d: TillDiscount | null) => discountLabel(toCartDiscount(d));
+
+/** What checkout sends: the category or promo id only, never an amount. */
+const toOrderDiscount = (d: TillDiscount): Discount =>
+  d.type === "promo" ? { type: "promo", promoId: d.promo.id } : d;
 
 /** Cart lines in the shape the price preview takes. */
 const toPreviewLines = (lines: Line[]) =>
@@ -150,8 +167,9 @@ export function PosTerminal() {
   // next keystroke.
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, Line>>({});
-  const [discount, setDiscount] = useState<ScPwdDiscount | null>(null);
+  const [discount, setDiscount] = useState<TillDiscount | null>(null);
   const [pricing, setPricing] = useState<PricingSettings>(DEFAULT_PRICING);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [cartOpenMobile, setCartOpenMobile] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
@@ -217,6 +235,15 @@ export function PosTerminal() {
         setProducts(data.products);
         setPaymentQrs(data.paymentQrs);
         setPricing(data.pricing ?? DEFAULT_PRICING);
+        const promos = data.promotions ?? [];
+        setPromotions(promos);
+        // The owner paused/edited a promo since it was tapped — drop the stale pick
+        // (the server would refuse it anyway) rather than preview a wrong total.
+        setDiscount((cur) =>
+          cur?.type === "promo" && !promos.some((p) => p.id === cur.promo.id && p.value === cur.promo.value && p.kind === cur.promo.kind)
+            ? null
+            : cur,
+        );
         // Tab order: declared categories that actually have products, then
         // "Uncategorised" if any product has no category.
         const present = new Set(data.products.map((p) => p.categoryName ?? UNCATEGORISED));
@@ -856,6 +883,7 @@ export function PosTerminal() {
       {discountOpen && (
         <DiscountModal
           lines={lines}
+          promotions={promotions}
           pointValueCents={pricing.pointValueCents}
           current={discount}
           onClose={() => setDiscountOpen(false)}
@@ -1197,8 +1225,8 @@ function CheckoutOverlay({
   lines: Line[];
   grossCents: number;
   count: number;
-  /** The Senior/PWD pick from the cart, if any (excludes the member discount). */
-  discount: ScPwdDiscount | null;
+  /** The cart's Senior/PWD or promo pick, if any (excludes the member discount). */
+  discount: TillDiscount | null;
   pricing: PricingSettings;
   paymentQrs: PaymentQrMap;
   onMethodChange?: (m: PaymentMethod) => void;
@@ -1227,7 +1255,7 @@ function CheckoutOverlay({
   const memberQualifies = memberOffered && customer!.totalSpentCents >= pricing.memberMinSpendCents;
   const applyMember = member && memberQualifies;
   const cartDiscount: CartDiscount | null = discount
-    ? { kind: discount.type }
+    ? toCartDiscount(discount)
     : applyMember
       ? { kind: "member", pct: pricing.memberDiscountPct }
       : null;
@@ -1273,7 +1301,7 @@ function CheckoutOverlay({
       tenderedCents: method === "Cash" ? tenderedCents : undefined,
       referenceCode: isEwallet && refCode ? refCode : undefined,
       // Only the CATEGORY is sent — the server prices it.
-      discount: discount ?? (applyMember ? { type: "member" } : undefined),
+      discount: discount ? toOrderDiscount(discount) : applyMember ? { type: "member" } : undefined,
       customerId: customer?.id,
       redeemPoints: redeemPoints > 0 ? redeemPoints : undefined,
     });
@@ -1672,29 +1700,34 @@ function RcptRow({ label, value, mono, strong }: { label: string; value: string;
 /* ------------------------------ discount modal ------------------------------ */
 
 /**
- * The cart's statutory-discount picker. Cashiers choose a CATEGORY — Senior
- * Citizen or PWD — and enter the cardholder's details; they can never type an
- * amount. The server prices it (VAT-exempt, then 20%, on eligible items only).
- * The loyalty member discount is applied at checkout, where the customer is.
+ * The cart's discount picker. Cashiers can only TAP what the owner set up:
+ *   • an active promo (amount set by the owner in CRM → Discounts), or
+ *   • Senior Citizen / PWD, entering the cardholder's details.
+ * There is no amount field anywhere — the server prices every pick. The loyalty
+ * member discount is applied at checkout, where the customer is attached.
  */
 function DiscountModal({
   lines,
+  promotions,
   pointValueCents,
   current,
   onClose,
   onApply,
 }: {
   lines: Line[];
+  promotions: Promotion[];
   pointValueCents: number;
-  current: ScPwdDiscount | null;
+  current: TillDiscount | null;
   onClose: () => void;
-  onApply: (d: ScPwdDiscount | null) => void;
+  onApply: (d: TillDiscount | null) => void;
 }) {
   const { closing, dismiss } = useDismiss(onClose);
-  const [kind, setKind] = useState<"senior" | "pwd" | null>(current?.type ?? null);
-  const [idNumber, setIdNumber] = useState(current?.idNumber ?? "");
-  const [holderName, setHolderName] = useState(current?.holderName ?? "");
-  const [exclusiveUse, setExclusiveUse] = useState(current?.exclusiveUse ?? false);
+  const scPwd = current && current.type !== "promo" ? current : null;
+  const [kind, setKind] = useState<"senior" | "pwd" | null>(scPwd?.type ?? null);
+  const [idNumber, setIdNumber] = useState(scPwd?.idNumber ?? "");
+  const [holderName, setHolderName] = useState(scPwd?.holderName ?? "");
+  const [exclusiveUse, setExclusiveUse] = useState(scPwd?.exclusiveUse ?? false);
+  const activePromoId = current?.type === "promo" ? current.promo.id : null;
 
   const preview = kind
     ? previewCart({
@@ -1720,13 +1753,41 @@ function DiscountModal({
       <button type="button" aria-label="Close" onClick={dismiss} className={"absolute inset-0 glass overlay-backdrop " + (closing ? "closing" : "")} />
       <div className={"relative w-full max-w-[380px] rounded-xl2 bg-surface hairline shadow-soft overlay-card " + (closing ? "closing" : "")}>
         <div className="flex items-center justify-between px-6 py-4 hairline-b">
-          <h3 className="text-[1.1rem] font-extrabold tracking-tight">Senior Citizen / PWD</h3>
+          <h3 className="text-[1.1rem] font-extrabold tracking-tight">Discounts</h3>
           <button type="button" onClick={dismiss} aria-label="Close" className="tap press grid place-items-center text-ink-faint hover:text-ink">
             <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          {promotions.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[12px] font-bold tracking-wide text-ink-faint uppercase">Promos</div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {promotions.map((p) => {
+                  const on = activePromoId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => onApply({ type: "promo", promo: p })}
+                      aria-pressed={on}
+                      className={
+                        "press rounded-[12px] hairline px-3 py-3 text-left " +
+                        (on ? "bg-brand-50 border-brand-300" : "bg-paper hover:border-brand-200 hover:bg-brand-50")
+                      }
+                    >
+                      <div className="text-[14px] font-extrabold tracking-tight truncate">{p.name}</div>
+                      <div className="text-[12px] text-ink-soft">{promoAmountText(p)}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[12px] text-ink-faint">Promo amounts are set by the owner.</p>
+            </div>
+          )}
+
+          <div className="text-[12px] font-bold tracking-wide text-ink-faint uppercase">Senior Citizen / PWD</div>
           <div className="grid grid-cols-2 gap-2.5">
             {(["senior", "pwd"] as const).map((k) => (
               <button

@@ -109,6 +109,8 @@ describe("register cart preview mirrors the server's priceCart", () => {
       { kind: "pwd" },
       { kind: "member", pct: 5 },
       { kind: "member", pct: 37 },
+      { kind: "promo", name: "Payday", promoKind: "percent", value: 15 },
+      { kind: "promo", name: "₱50 off", promoKind: "fixed", value: 5_000 },
     ];
     for (let i = 0; i < 3000; i++) {
       const lines: CartLine[] = Array.from({ length: 1 + Math.floor(rand() * 6) }, () => ({

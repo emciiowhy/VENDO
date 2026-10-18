@@ -59,6 +59,21 @@ describe("Checkout utilities validation (discount + e-wallet reference)", () => 
     expect(parsed.success && parsed.data.discount).toEqual({ type: "member" });
   });
 
+  it("accepts a promo by id only, and drops any amount the till tries to send", () => {
+    const parsed = orderSchema.safeParse({
+      ...base,
+      discount: { type: "promo", promoId: "22222222-2222-2222-2222-222222222222", value: 100, kind: "percent" },
+    });
+    expect(parsed.success && parsed.data.discount).toEqual({
+      type: "promo",
+      promoId: "22222222-2222-2222-2222-222222222222",
+    });
+  });
+
+  it("rejects a promo without a valid id", () => {
+    expect(orderSchema.safeParse({ ...base, discount: { type: "promo", promoId: "abc" } }).success).toBe(false);
+  });
+
   it("rejects two discounts at once (one discount object per sale)", () => {
     const parsed = orderSchema.safeParse({ ...base, discount: [{ type: "member" }, { type: "member" }] });
     expect(parsed.success).toBe(false);
@@ -324,6 +339,25 @@ describe("priceCart — server-side discount pricing", () => {
     expect(r.discountCents).toBe(1_000);
   });
 
+  it("promo: a % promo comes off the gross", () => {
+    const r = priceCart({
+      lines: [vatable(20_000)],
+      discount: { kind: "promo", name: "Payday", promoKind: "percent", value: 10 },
+      ...noPoints,
+    });
+    expect(r.netCents).toBe(18_000);
+  });
+
+  it("promo: a fixed promo never drives the total below zero", () => {
+    const r = priceCart({
+      lines: [vatable(3_000)],
+      discount: { kind: "promo", name: "₱50 off", promoKind: "fixed", value: 5_000 },
+      ...noPoints,
+    });
+    expect(r.netCents).toBe(0);
+    expect(r.discountCents).toBe(3_000);
+  });
+
   it("points: clamped to balance and payable, valued by the tenant rate", () => {
     const r = priceCart({
       lines: [vatable(1_000)],
@@ -369,6 +403,9 @@ describe("discountLabelFor", () => {
     expect(discountLabelFor({ kind: "senior" }, 0)).toBe("Senior Citizen (20% + VAT-exempt)");
     expect(discountLabelFor({ kind: "pwd" }, 1)).toBe("PWD (20% + VAT-exempt) + 1 pt redeemed");
     expect(discountLabelFor({ kind: "member", pct: 5 }, 0)).toBe("Member 5% off");
+    expect(discountLabelFor({ kind: "promo", name: "Payday", promoKind: "percent", value: 10 }, 2)).toBe(
+      "Payday + 2 pts redeemed",
+    );
     expect(discountLabelFor(null, 0)).toBeNull();
   });
 });

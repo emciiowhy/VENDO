@@ -1,4 +1,5 @@
 import { pool, query } from "../db.js";
+import { getActivePromotion, listActivePromotions } from "../crm/promotions.repository.js";
 import { moveStock } from "../inventory/stockLedger.js";
 import { getPaymentQrMap } from "../merchant/paymentQr.repository.js";
 import { notifyLowStock, type LowStockHit } from "../notifications/notifications.repository.js";
@@ -112,6 +113,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
     products,
     paymentQrs,
     pricing: await getPricingSettings(tenantId),
+    promotions: await listActivePromotions(tenantId),
   };
 }
 
@@ -165,7 +167,8 @@ export type OrderError =
   | { code: "NO_ELIGIBLE_ITEMS" }
   | { code: "MEMBER_REQUIRES_CUSTOMER" }
   | { code: "MEMBER_DISCOUNT_OFF" }
-  | { code: "MEMBER_NOT_ELIGIBLE"; minSpendCents: number };
+  | { code: "MEMBER_NOT_ELIGIBLE"; minSpendCents: number }
+  | { code: "PROMO_UNAVAILABLE" };
 
 export type OrderResult = { ok: true; sale: Sale } | { ok: false; error: OrderError };
 
@@ -305,6 +308,15 @@ export async function createOrder(
         }
       }
       discount = { kind: "member", pct: pricing.memberDiscountPct };
+    } else if (input.discount?.type === "promo") {
+      // The till sent only an id; the amount is the owner's, read here. A paused,
+      // deleted or other-tenant promo is refused rather than silently ignored.
+      const promo = await getActivePromotion(client, tenantId, input.discount.promoId);
+      if (!promo) {
+        await client.query("ROLLBACK");
+        return { ok: false, error: { code: "PROMO_UNAVAILABLE" } };
+      }
+      discount = { kind: "promo", name: promo.name, promoKind: promo.kind, value: promo.value };
     }
 
     const priced = priceCart({
