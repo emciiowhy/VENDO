@@ -52,9 +52,14 @@ interface USBDevice {
   claimInterface(interfaceNumber: number): Promise<void>;
   transferOut(endpointNumber: number, data: Uint8Array): Promise<USBOutTransferResult>;
 }
+interface USBConnectionEvent extends Event {
+  readonly device: USBDevice;
+}
 interface USB {
   requestDevice(options: USBDeviceRequestOptions): Promise<USBDevice>;
   getDevices(): Promise<USBDevice[]>;
+  addEventListener(type: "connect" | "disconnect", listener: (e: USBConnectionEvent) => void): void;
+  removeEventListener(type: "connect" | "disconnect", listener: (e: USBConnectionEvent) => void): void;
 }
 
 // ── Web Bluetooth ─────────────────────────────────────────────────────────────
