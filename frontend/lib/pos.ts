@@ -592,16 +592,35 @@ export async function listReversals(
   }
 }
 
-// ── Terminal audit trail (cashier accountability) ───────────────────────────
+// ── Activity log (staff accountability) ─────────────────────────────────────
 
-/** The sensitive live-terminal actions the register reports for auditing. */
+/** The shop-floor actions the register itself reports (no ledger row). */
 export type AuditAction = "void_item" | "cancel_transaction" | "open_drawer";
+
+/** Actions only the server writes — the register can't post these. */
+export type ServerAction =
+  | "sale"
+  | "refund"
+  | "void_sale"
+  | "discount_applied"
+  | "login"
+  | "logout"
+  | "clock_in"
+  | "clock_out"
+  | "shift_open"
+  | "shift_close"
+  | "timecard_corrected"
+  | "payroll_approved";
+
+export type ActivityAction = AuditAction | ServerAction;
 
 export interface AuditLog {
   id: string;
   cashierUserId: string | null;
+  /** Who did it — their name at the time. */
   cashierName: string;
-  action: AuditAction;
+  action: ActivityAction;
+  refId: string | null;
   itemName: string | null;
   itemQty: number | null;
   valueCents: number;
@@ -611,14 +630,20 @@ export interface AuditLog {
 
 export interface AuditSummary {
   total: number;
-  byAction: Record<AuditAction, number>;
+  byAction: Record<ActivityAction, number>;
+  /** Value implicated by cart voids, cancels, voided sales and refunds. */
   flaggedValueCents: number;
 }
 
+export interface ActivityActor {
+  userId: string;
+  name: string;
+}
+
 /**
- * Report a sensitive terminal action (void a cart line, cancel a transaction,
- * pop the drawer). Best-effort and fire-and-forget from the caller's view — it
- * never blocks the register — but the server write itself is durable.
+ * Report a shop-floor action (void a cart line, cancel a transaction, pop the
+ * drawer). Best-effort and fire-and-forget from the caller's view — it never
+ * blocks the register — but the server write itself is durable.
  */
 export async function recordAudit(event: {
   action: AuditAction;
@@ -640,12 +665,19 @@ export async function recordAudit(event: {
   }
 }
 
-/** The owner/manager audit trail of terminal actions, with a rollup. */
-export async function listAuditLogs(
-  limit = 100,
-): Promise<Result<{ logs: AuditLog[]; summary: AuditSummary }>> {
+/** The owner/manager activity log, optionally filtered, with a rollup. */
+export async function listAuditLogs(filter: {
+  action?: ActivityAction;
+  userId?: string;
+  /** YYYY-MM-DD, inclusive (Manila). */
+  from?: string;
+  to?: string;
+  limit?: number;
+} = {}): Promise<Result<{ logs: AuditLog[]; actors: ActivityActor[]; summary: AuditSummary }>> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "") qs.set(k, String(v));
   try {
-    return await readJson(await fetch(`${BASE}/audit?limit=${limit}`, { credentials: "include" }));
+    return await readJson(await fetch(`${BASE}/audit?${qs.toString()}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }

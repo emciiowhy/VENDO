@@ -12,8 +12,8 @@ import { AuditConsole } from "../../components/dash/AuditConsole";
 export default function AuditPage() {
   return (
     <DashShell
-      title="Audit log"
-      subtitle="Cashier accountability"
+      title="Activity log"
+      subtitle="Staff accountability"
       brandSub="Merchant Workspace"
       nav={MERCHANT_NAV}
       allow={["MERCHANT_OWNER", "MANAGER"]}

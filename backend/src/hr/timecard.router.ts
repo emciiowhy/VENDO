@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { requireRole } from "../auth/auth.middleware.js";
 import { clockIn, clockOut, getClockStatus, getMyTimecards } from "./timecard.repository.js";
+import { logActivity } from "../pos/audit.repository.js";
 
 /**
  * Shift clock engine — POST /clock-in, POST /clock-out, GET /status, GET /me.
@@ -49,6 +50,10 @@ timecardRouter.post("/clock-in", async (req, res) => {
     if (!result.ok) {
       return res.status(409).json({ ok: false, error: "You're already clocked in.", timecard: result.timecard });
     }
+    void logActivity(
+      { tenantId: s.tenantId, userId: s.userId, name: req.user?.name ?? "Staff" },
+      { action: "clock_in", refId: result.timecard.id },
+    );
     res.status(201).json({ ok: true, timecard: result.timecard });
   } catch (err) {
     console.error("[timecard] clock-in failed:", err);
@@ -65,6 +70,11 @@ timecardRouter.post("/clock-out", async (req, res) => {
     if (!result.ok) {
       return res.status(409).json({ ok: false, error: "You're not clocked in." });
     }
+    const mins = result.timecard.durationMinutes;
+    void logActivity(
+      { tenantId: s.tenantId, userId: s.userId, name: req.user?.name ?? "Staff" },
+      { action: "clock_out", refId: result.timecard.id, detail: `${Math.floor(mins / 60)}h ${mins % 60}m on the clock` },
+    );
     res.json({ ok: true, timecard: result.timecard });
   } catch (err) {
     console.error("[timecard] clock-out failed:", err);
