@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { AttendanceCalendar, fmtHours } from "../hr/AttendanceCalendar";
 import { AttendanceDayPanel } from "../hr/AttendanceDayPanel";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
@@ -18,6 +19,8 @@ import type { EmployeePayslip } from "@/lib/hr";
 function thisMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
+
+const NO_SLIPS: EmployeePayslip[] = [];
 
 export function EssPortal({ greetingName, role }: { greetingName: string; role: Role }) {
   const [month, setMonth] = useState(thisMonth());
@@ -49,6 +52,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
 
   const firstName = greetingName.split(/\s+/)[0] ?? greetingName;
 
+  const slips = usePagination(state.status === "ready" ? state.profile.payslips : NO_SLIPS, null, 10);
   if (state.status === "loading") {
     return (
       <div className="space-y-5 animate-pulse">
@@ -192,7 +196,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
                 </tr>
               </thead>
               <tbody>
-                {p.payslips.map((slip) => (
+                {slips.pageItems.map((slip) => (
                   <tr key={slip.runId} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition">
                     <td className="px-5 py-3 font-bold tabular-nums">{slip.reference}</td>
                     <td className="px-3 py-3 text-ink-soft tabular-nums whitespace-nowrap">
@@ -213,6 +217,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
                 ))}
               </tbody>
             </table>
+            <Pagination page={slips.page} total={slips.total} pageSize={slips.pageSize} onPage={slips.setPage} noun="payslips" />
           </div>
         )}
       </div>

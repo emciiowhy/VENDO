@@ -55,7 +55,7 @@ describe("activity log access", () => {
       .get("/api/v1/pos/audit?action=drop_table&userId=not-a-uuid&from=yesterday")
       .set("Cookie", cookieFor("MERCHANT_OWNER"));
     const listQuery = calls.find((c) => /ORDER BY created_at DESC/.test(c.sql));
-    expect(listQuery?.params).toEqual([TENANT, 200]);
+    expect(listQuery?.params).toEqual([TENANT, 25, 0]); // page size, offset — nothing from the bad filters
   });
 
   it("refuses a register POSTing a server-only event (a 'sale' can't be forged)", async () => {

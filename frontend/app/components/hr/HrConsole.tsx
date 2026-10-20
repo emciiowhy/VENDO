@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { useToast } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { HrOverview } from "./HrOverview";
@@ -201,6 +202,7 @@ function EmployeesTable({
   onAskDelete: (e: Employee) => void;
   onNew: () => void;
 }) {
+  const pager = usePagination(employees);
   if (employees.length === 0) {
     return (
       <EmptyState
@@ -227,7 +229,7 @@ function EmployeesTable({
             </tr>
           </thead>
           <tbody>
-            {employees.map((e) => (
+            {pager.pageItems.map((e) => (
               <tr key={e.id} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition">
                 <td className="px-5 py-3">
                   <Link href={`/dashboard/hr/employees/${e.id}`} className="font-semibold hover:text-brand-600 transition">
@@ -264,9 +266,12 @@ function EmployeesTable({
           </tbody>
         </table>
       </div>
+      <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="employees" />
     </div>
   );
 }
+
+const NO_ROWS: TeamAttendanceRow[] = [];
 
 // ── Attendance tab ─────────────────────────────────────────────────────────────
 
@@ -298,6 +303,7 @@ function AttendanceTab({ hasEmployees }: { hasEmployees: boolean }) {
       alive = false;
     };
   }, [month]);
+  const pager = usePagination(state.status === "ready" ? state.rows : NO_ROWS, month);
 
   if (!hasEmployees) {
     return (
@@ -365,7 +371,7 @@ function AttendanceTab({ hasEmployees }: { hasEmployees: boolean }) {
               </tr>
             </thead>
             <tbody>
-              {state.rows.map((r) => (
+              {pager.pageItems.map((r) => (
                 <tr key={r.employeeId} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition">
                   <td className="px-6 py-3">
                     <Link href={`/dashboard/hr/employees/${r.employeeId}`} className="font-semibold hover:text-brand-600 transition">
@@ -405,6 +411,7 @@ function AttendanceTab({ hasEmployees }: { hasEmployees: boolean }) {
               ))}
             </tbody>
           </table>
+          <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="employees" />
         </div>
       ) : null}
     </div>
@@ -422,6 +429,7 @@ function PayrollTable({
   onOpen: (id: string) => void;
   onRun: () => void;
 }) {
+  const pager = usePagination(runs);
   if (runs.length === 0) {
     return (
       <EmptyState
@@ -448,7 +456,7 @@ function PayrollTable({
             </tr>
           </thead>
           <tbody>
-            {runs.map((run) => (
+            {pager.pageItems.map((run) => (
               <tr key={run.id} onClick={() => onOpen(run.id)} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition cursor-pointer">
                 <td className="px-5 py-3 font-bold tabular-nums">{run.reference}</td>
                 <td className="px-3 py-3 text-ink-soft tabular-nums whitespace-nowrap">
@@ -476,6 +484,7 @@ function PayrollTable({
           </tbody>
         </table>
       </div>
+      <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="payroll runs" />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { useToast } from "../Toast";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
 import {
@@ -56,6 +57,8 @@ function Chip({ tone, label, value }: { tone: string; label: string; value: numb
   );
 }
 
+const NO_SLIPS: EmployeeDetail["payslips"] = [];
+
 export function EmployeeProfile({ employeeId }: { employeeId: string }) {
   const { push } = useToast();
   const [month, setMonth] = useState(thisMonth());
@@ -66,6 +69,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
   const [granting, setGranting] = useState(false);
   const [payslipRun, setPayslipRun] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const slips = usePagination(state.status === "ready" ? state.emp.payslips : NO_SLIPS, employeeId, 10);
 
   async function load() {
     const res = await getEmployeeDetail(employeeId, month);
@@ -342,7 +346,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {e.payslips.map((p) => (
+                {slips.pageItems.map((p) => (
                   <tr key={p.runId} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition">
                     <td className="px-5 py-3 font-bold tabular-nums">{p.reference}</td>
                     <td className="px-3 py-3 text-ink-soft tabular-nums whitespace-nowrap">
@@ -365,6 +369,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
                 ))}
               </tbody>
             </table>
+            <Pagination page={slips.page} total={slips.total} pageSize={slips.pageSize} onPage={slips.setPage} noun="payslips" />
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { useToast } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
@@ -207,6 +208,7 @@ function Ready({
 }) {
   const profit = summary.netProfitCents;
   const profitPositive = profit >= 0;
+  const pager = usePagination(expenses);
 
   return (
     <>
@@ -297,7 +299,7 @@ function Ready({
                 </tr>
               </thead>
               <tbody>
-                {expenses.map((e) => (
+                {pager.pageItems.map((e) => (
                   <tr key={e.id} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition">
                     <td className="px-5 py-3 whitespace-nowrap text-ink-soft tabular-nums">
                       {formatDate(e.incurredOn)}
@@ -325,6 +327,7 @@ function Ready({
                 ))}
               </tbody>
             </table>
+            <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="expenses" />
           </div>
         )}
       </div>

@@ -136,3 +136,20 @@ export function summarizeAudit(rows: Pick<AuditLog, "action" | "valueCents">[]):
   }
   return { total: rows.length, byAction, flaggedValueCents };
 }
+
+/**
+ * The same rollup as summarizeAudit, from per-action SQL counts — used by the
+ * paginated log so the totals cover every matching row, not just one page.
+ */
+export function summarizeCounts(rows: { action: ActivityAction; count: number; valueCents: number }[]): AuditSummary {
+  const byAction = Object.fromEntries(ACTIVITY_ACTIONS.map((a) => [a, 0])) as Record<ActivityAction, number>;
+  let total = 0;
+  let flaggedValueCents = 0;
+  for (const r of rows) {
+    if (!(r.action in byAction)) continue;
+    byAction[r.action] += r.count;
+    total += r.count;
+    if (FLAGGED.has(r.action)) flaggedValueCents += r.valueCents;
+  }
+  return { total, byAction, flaggedValueCents };
+}

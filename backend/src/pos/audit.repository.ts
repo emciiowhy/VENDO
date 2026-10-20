@@ -1,5 +1,5 @@
 import { query } from "../db.js";
-import type { ActivityAction, ActivityEvent, AuditEventInput, AuditLog } from "./audit.js";
+import { summarizeCounts, type ActivityAction, type ActivityEvent, type AuditEventInput, type AuditLog, type AuditSummary } from "./audit.js";
 
 /**
  * Data access for the POS activity log. Every query is scoped by `tenantId`
@@ -106,11 +106,28 @@ export interface ActivityFilter {
   /** Inclusive Manila dates, YYYY-MM-DD. */
   from?: string;
   to?: string;
-  limit?: number;
 }
 
-/** Activity for this Tenant, newest first, optionally filtered (owner review). */
-export async function listAuditLogs(tenantId: string, filter: ActivityFilter = {}): Promise<AuditLog[]> {
+export interface ActivityPage {
+  items: AuditLog[];
+  /** Rows matching the filter (all pages). */
+  total: number;
+  page: number;
+  pageSize: number;
+  /** Rollup over ALL matching rows, not just this page. */
+  summary: AuditSummary;
+}
+
+/**
+ * One page of this Tenant's activity, newest first, optionally filtered (owner
+ * review). The totals come from SQL over every matching row, so the KPI tiles
+ * stay right however many pages there are. Values are bound, never inlined.
+ */
+export async function listAuditLogs(
+  tenantId: string,
+  filter: ActivityFilter = {},
+  paging: { page: number; pageSize: number; offset: number } = { page: 1, pageSize: 25, offset: 0 },
+): Promise<ActivityPage> {
   const where = ["tenant_id = $1"];
   const vals: unknown[] = [tenantId];
   const add = (sql: string, v: unknown) => {
@@ -121,15 +138,23 @@ export async function listAuditLogs(tenantId: string, filter: ActivityFilter = {
   if (filter.userId) add("cashier_user_id = ?", filter.userId);
   if (filter.from) add("created_at >= (?::date::timestamp AT TIME ZONE 'Asia/Manila')", filter.from);
   if (filter.to) add("created_at < (((?::date + 1)::timestamp) AT TIME ZONE 'Asia/Manila')", filter.to);
-  vals.push(Math.min(Math.max(filter.limit ?? 200, 1), 500));
-  const { rows } = await query<AuditRow>(
-    `SELECT ${COLS} FROM pos_audit_logs
-      WHERE ${where.join(" AND ")}
-      ORDER BY created_at DESC
-      LIMIT $${vals.length}`,
-    vals,
-  );
-  return rows.map(toLog);
+  const whereSql = where.join(" AND ");
+  const [rows, agg] = await Promise.all([
+    query<AuditRow>(
+      `SELECT ${COLS} FROM pos_audit_logs
+        WHERE ${whereSql}
+        ORDER BY created_at DESC, id DESC
+        LIMIT $${vals.length + 1} OFFSET $${vals.length + 2}`,
+      [...vals, paging.pageSize, paging.offset],
+    ),
+    query<{ action: ActivityAction; n: string; value: string }>(
+      `SELECT action, count(*) AS n, coalesce(sum(value_cents), 0) AS value
+         FROM pos_audit_logs WHERE ${whereSql} GROUP BY action`,
+      vals,
+    ),
+  ]);
+  const summary = summarizeCounts(agg.rows.map((r) => ({ action: r.action, count: Number(r.n), valueCents: Number(r.value) })));
+  return { items: rows.rows.map(toLog), total: summary.total, page: paging.page, pageSize: paging.pageSize, summary };
 }
 
 /** Everyone who appears in this Tenant's log, for the "who" filter. */

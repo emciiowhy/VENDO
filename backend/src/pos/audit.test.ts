@@ -91,3 +91,21 @@ describe("activity log — server-only actions", () => {
     expect(maskId("12")).toBe("••••");
   });
 });
+
+describe("summarizeCounts (paged log totals)", () => {
+  it("matches summarizeAudit for the same rows", async () => {
+    const { summarizeCounts } = await import("./audit.js");
+    const rows = [
+      row({ action: "sale", valueCents: 10_000 }),
+      row({ action: "sale", valueCents: 5_000 }),
+      row({ action: "void_sale", valueCents: 2_000 }),
+      row({ action: "refund", valueCents: 700 }),
+    ];
+    const counts = [
+      { action: "sale" as const, count: 2, valueCents: 15_000 },
+      { action: "void_sale" as const, count: 1, valueCents: 2_000 },
+      { action: "refund" as const, count: 1, valueCents: 700 },
+    ];
+    expect(summarizeCounts(counts)).toEqual(summarizeAudit(rows));
+  });
+});

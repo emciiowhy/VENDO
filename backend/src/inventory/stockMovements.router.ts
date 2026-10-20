@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { requireRole } from "../auth/auth.middleware.js";
+import { parsePaging } from "../lib/paging.js";
 import {
   findLedgerDrift,
   listMovements,
@@ -39,8 +40,9 @@ stockMovementsRouter.get("/products/:id/movements", async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
   try {
-    const movements = await listProductMovements(tenantId, req.params.id);
-    res.json({ ok: true, movements });
+    const paging = parsePaging(req.query);
+    const page = await listProductMovements(tenantId, req.params.id, paging);
+    res.json({ ok: true, movements: page.items, total: page.total, page: paging.page, pageSize: paging.pageSize });
   } catch (err) {
     console.error("[inventory] product movements failed:", err);
     res.status(500).json({ ok: false, error: "Could not load stock history." });
@@ -54,8 +56,9 @@ stockMovementsRouter.get("/movements", async (req, res) => {
   const raw = typeof req.query.reason === "string" ? req.query.reason : undefined;
   const reason = REASONS.includes(raw as StockReason) ? (raw as StockReason) : undefined;
   try {
-    const movements = await listMovements(tenantId, { reason });
-    res.json({ ok: true, movements });
+    const paging = parsePaging(req.query);
+    const page = await listMovements(tenantId, { reason }, paging);
+    res.json({ ok: true, movements: page.items, total: page.total, page: paging.page, pageSize: paging.pageSize });
   } catch (err) {
     console.error("[inventory] movements feed failed:", err);
     res.status(500).json({ ok: false, error: "Could not load stock movements." });

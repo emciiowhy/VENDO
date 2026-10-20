@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { formatCents, formatCentsWhole, formatCount } from "@/lib/format";
 import {
   getPlatformCompliance,
@@ -94,6 +95,7 @@ export function ComplianceMatrix() {
     const q = query.trim().toLowerCase();
     return q ? all.filter((r) => r.tenant.toLowerCase().includes(q)) : all;
   }, [view, query]);
+  const pager = usePagination(filtered, `${query}|${month}`);
 
   return (
     <div className="space-y-7 max-w-[1180px]">
@@ -214,7 +216,7 @@ export function ComplianceMatrix() {
           <>
             {/* Phones: stacked per-store cards (the register table scrolls awkwardly under ~md). */}
             <ul className="md:hidden divide-y divide-[rgba(11,18,32,0.06)] dark:divide-[rgba(255,255,255,0.07)]">
-              {filtered.map((r) => {
+              {pager.pageItems.map((r) => {
                 const silent = r.invoiceCount === 0;
                 return (
                   <li key={r.tenantId} className="px-5 py-4 space-y-3">
@@ -292,7 +294,7 @@ export function ComplianceMatrix() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r) => {
+                  {pager.pageItems.map((r) => {
                     const silent = r.invoiceCount === 0;
                     return (
                       <tr
@@ -370,6 +372,7 @@ export function ComplianceMatrix() {
                 )}
               </table>
             </div>
+            <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="stores" />
           </>
         )}
       </div>

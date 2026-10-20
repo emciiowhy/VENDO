@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Icon, type IconName } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { useToast } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { formatCentsWhole, formatCount, formatDate } from "@/lib/format";
@@ -64,6 +65,7 @@ export function CrmConsole() {
         c.tags.some((t) => t.toLowerCase().includes(q)),
     );
   }, [state, search]);
+  const pager = usePagination(filtered, search);
 
   async function onDelete() {
     if (!confirm) return;
@@ -153,7 +155,7 @@ export function CrmConsole() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((c) => (
+                    {pager.pageItems.map((c) => (
                       <tr key={c.id} onClick={() => setDetailId(c.id)} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition cursor-pointer">
                         <td className="px-5 py-3">
                           <span className="font-semibold">{c.name}</span>
@@ -183,6 +185,7 @@ export function CrmConsole() {
                   </tbody>
                 </table>
               </div>
+              <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="customers" />
             </div>
           )}
         </>

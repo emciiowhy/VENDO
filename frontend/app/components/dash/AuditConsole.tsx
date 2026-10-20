@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../Icon";
+import { Pagination } from "../Pagination";
 import { formatCents } from "@/lib/format";
 import {
   listAuditLogs,
@@ -26,7 +27,7 @@ import {
 type State =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; logs: AuditLog[]; actors: ActivityActor[]; summary: AuditSummary };
+  | { status: "ready"; logs: AuditLog[]; actors: ActivityActor[]; summary: AuditSummary; total: number };
 
 const WARN = "bg-amber-50 text-amber-700";
 const DANGER = "bg-rose-50 text-rose-600";
@@ -80,19 +81,26 @@ export function AuditConsole() {
   const [action, setAction] = useState<ActivityAction | "">("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  // Any filter change starts again from page 1.
+  const filter = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v);
+    setPage(1);
+  };
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const res = await listAuditLogs({ userId: who, action: action || undefined, from, to, limit: 200 });
+      const res = await listAuditLogs({ userId: who, action: action || undefined, from, to, page, pageSize });
       if (!alive) return;
-      if (res.ok) setState({ status: "ready", logs: res.logs, actors: res.actors ?? [], summary: res.summary });
+      if (res.ok) setState({ status: "ready", logs: res.logs, actors: res.actors ?? [], summary: res.summary, total: res.total });
       else setState({ status: "error", message: res.error ?? "Could not load the activity log." });
     })();
     return () => {
       alive = false;
     };
-  }, [who, action, from, to]);
+  }, [who, action, from, to, page, pageSize]);
 
   const filtered = who !== "" || action !== "" || from !== "" || to !== "";
   const s = state.status === "ready" ? state.summary : null;
@@ -111,7 +119,7 @@ export function AuditConsole() {
       <div className="rounded-xl2 bg-surface hairline shadow-card p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_auto_auto] lg:items-end">
         <label className="block space-y-1">
           <span className="text-[12px] font-semibold text-ink-faint">Who</span>
-          <select value={who} onChange={(e) => setWho(e.target.value)} className={SELECT}>
+          <select value={who} onChange={(e) => filter(setWho)(e.target.value)} className={SELECT}>
             <option value="">Everyone</option>
             {state.status === "ready" &&
               state.actors.map((a) => (
@@ -123,7 +131,7 @@ export function AuditConsole() {
         </label>
         <label className="block space-y-1">
           <span className="text-[12px] font-semibold text-ink-faint">Action</span>
-          <select value={action} onChange={(e) => setAction(e.target.value as ActivityAction | "")} className={SELECT}>
+          <select value={action} onChange={(e) => filter(setAction)(e.target.value as ActivityAction | "")} className={SELECT}>
             <option value="">All actions</option>
             {(Object.keys(ACTION_META) as ActivityAction[]).map((a) => (
               <option key={a} value={a}>
@@ -134,11 +142,11 @@ export function AuditConsole() {
         </label>
         <label className="block space-y-1">
           <span className="text-[12px] font-semibold text-ink-faint">From</span>
-          <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className={SELECT} />
+          <input type="date" value={from} max={to || undefined} onChange={(e) => filter(setFrom)(e.target.value)} className={SELECT} />
         </label>
         <label className="block space-y-1">
           <span className="text-[12px] font-semibold text-ink-faint">To</span>
-          <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className={SELECT} />
+          <input type="date" value={to} min={from || undefined} onChange={(e) => filter(setTo)(e.target.value)} className={SELECT} />
         </label>
         <button
           type="button"
@@ -147,6 +155,7 @@ export function AuditConsole() {
             setAction("");
             setFrom("");
             setTo("");
+            setPage(1);
           }}
           disabled={!filtered}
           className="h-[38px] px-4 rounded-[10px] text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-paper disabled:opacity-40"
@@ -231,11 +240,17 @@ export function AuditConsole() {
                   </tbody>
                 </table>
               </div>
-              {state.logs.length >= 200 && (
-                <p className="px-5 py-3 text-[12.5px] text-ink-faint hairline-t">
-                  Showing the latest 200 — narrow the dates or pick a person to see older activity.
-                </p>
-              )}
+              <Pagination
+                page={page}
+                total={state.total}
+                pageSize={pageSize}
+                onPage={setPage}
+                onPageSize={(n) => {
+                  setPageSize(n);
+                  setPage(1);
+                }}
+                noun="events"
+              />
             </div>
           )}
         </>
@@ -256,21 +271,22 @@ function ReversalsReview() {
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "error"; message: string }
-    | { status: "ready"; reversals: ReversalLogEntry[]; summary: ReversalSummary }
+    | { status: "ready"; reversals: ReversalLogEntry[]; summary: ReversalSummary; total: number }
   >({ status: "loading" });
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const res = await listReversals(200);
+      const res = await listReversals(page, 25);
       if (!alive) return;
-      if (res.ok) setState({ status: "ready", reversals: res.reversals, summary: res.summary });
+      if (res.ok) setState({ status: "ready", reversals: res.reversals, summary: res.summary, total: res.total });
       else setState({ status: "error", message: res.error ?? "Could not load reversals." });
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [page]);
 
   return (
     <div className="space-y-5 pt-4">
@@ -359,6 +375,7 @@ function ReversalsReview() {
                   </tbody>
                 </table>
               </div>
+              <Pagination page={page} total={state.total} pageSize={25} onPage={setPage} noun="reversals" />
             </div>
           )}
         </>

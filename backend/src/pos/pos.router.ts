@@ -2,8 +2,9 @@ import { Router, type Request, type Response } from "express";
 import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { orderSchema, shiftCloseSchema, shiftOpenSchema } from "./pos.schema.js";
-import { returnSchema, summarizeReversals, voidSchema } from "./refunds.schema.js";
-import { ACTIVITY_ACTIONS, auditEventSchema, maskId, summarizeAudit, type ActivityAction } from "./audit.js";
+import { returnSchema, voidSchema } from "./refunds.schema.js";
+import { ACTIVITY_ACTIONS, auditEventSchema, maskId, type ActivityAction } from "./audit.js";
+import { parsePaging } from "../lib/paging.js";
 import {
   listActivityActors,
   listAuditLogs,
@@ -114,7 +115,8 @@ posRouter.post("/audit", async (req, res) => {
 
 /**
  * GET /api/v1/pos/audit — the owner/manager activity log, with a rollup.
- * Optional filters: ?action=, ?userId=, ?from=YYYY-MM-DD, ?to=YYYY-MM-DD.
+ * Optional filters: ?action=, ?userId=, ?from=YYYY-MM-DD, ?to=YYYY-MM-DD;
+ * paged with ?page=&pageSize= (response carries total, page, pageSize).
  * Fenced tighter than the rest of the POS router: a cashier may WRITE floor
  * events but can't READ the store's activity history.
  */
@@ -137,11 +139,11 @@ posRouter.get("/audit", async (req, res) => {
         userId: userId && UUID_RE.test(userId) ? userId : undefined,
         from: from && ISO_DATE.test(from) ? from : undefined,
         to: to && ISO_DATE.test(to) ? to : undefined,
-        limit: Number(req.query.limit) || 200,
-      }),
+      }, parsePaging(req.query)),
       listActivityActors(tenantId),
     ]);
-    return res.json({ ok: true, logs, actors, summary: summarizeAudit(logs) });
+    const { items, summary, ...paging } = logs;
+    return res.json({ ok: true, logs: items, ...paging, actors, summary });
   } catch (err) {
     console.error("[pos] audit list failed:", err);
     return res.status(500).json({ ok: false, error: "Could not load the audit log." });
@@ -247,8 +249,9 @@ posRouter.get("/sales", async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
   try {
-    const limit = Number(req.query.limit) || 50;
-    res.json({ ok: true, sales: await listRecentSales(tenantId, limit) });
+    const paging = parsePaging(req.query, 20);
+    const page = await listRecentSales(tenantId, paging);
+    res.json({ ok: true, sales: page.items, total: page.total, page: paging.page, pageSize: paging.pageSize });
   } catch (err) {
     console.error("[pos] list sales failed:", err);
     res.status(500).json({ ok: false, error: "Could not load recent sales." });
@@ -282,9 +285,16 @@ posRouter.get("/reversals", async (req, res) => {
     return res.status(403).json({ ok: false, error: "Only the store owner or a manager can review reversals." });
   }
   try {
-    const limit = Number(req.query.limit) || 100;
-    const reversals = await listReversals(tenantId, limit);
-    return res.json({ ok: true, reversals, summary: summarizeReversals(reversals) });
+    const paging = parsePaging(req.query);
+    const page = await listReversals(tenantId, paging);
+    return res.json({
+      ok: true,
+      reversals: page.items,
+      summary: page.summary,
+      total: page.total,
+      page: paging.page,
+      pageSize: paging.pageSize,
+    });
   } catch (err) {
     console.error("[pos] reversals list failed:", err);
     return res.status(500).json({ ok: false, error: "Could not load reversals." });

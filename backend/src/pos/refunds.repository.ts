@@ -5,6 +5,7 @@ import type { VatClass } from "./pos.schema.js";
 import type {
   Reversal,
   ReversalLogEntry,
+  ReversalSummary,
   SaleDetail,
   SaleLineDetail,
   SaleSummary,
@@ -12,8 +13,11 @@ import type {
 
 // ── Read side (drives the void/return screen) ────────────────────────────────
 
-/** Recent completed-or-reversed sales (kind='sale') for the picker, newest first. */
-export async function listRecentSales(tenantId: string, limit = 50): Promise<SaleSummary[]> {
+/** One page of completed-or-reversed sales (kind='sale') for the picker, newest first. */
+export async function listRecentSales(
+  tenantId: string,
+  paging: { page: number; pageSize: number; offset: number },
+): Promise<{ items: SaleSummary[]; total: number }> {
   const { rows } = await query<{
     id: string;
     reference: string;
@@ -28,11 +32,12 @@ export async function listRecentSales(tenantId: string, limit = 50): Promise<Sal
        FROM sales s
        LEFT JOIN users u ON u.id = s.cashier_user_id
       WHERE s.tenant_id = $1 AND s.kind = 'sale'
-      ORDER BY s.created_at DESC
-      LIMIT $2`,
-    [tenantId, Math.min(Math.max(limit, 1), 200)],
+      ORDER BY s.created_at DESC, s.id DESC
+      LIMIT $2 OFFSET $3`,
+    [tenantId, paging.pageSize, paging.offset],
   );
-  return rows.map((r) => ({
+  const count = await query<{ n: string }>(`SELECT count(*) AS n FROM sales WHERE tenant_id = $1 AND kind = 'sale'`, [tenantId]);
+  const items = rows.map((r) => ({
     id: r.id,
     reference: r.reference,
     status: r.status,
@@ -41,6 +46,7 @@ export async function listRecentSales(tenantId: string, limit = 50): Promise<Sal
     cashierName: r.cashier_name,
     createdAt: r.created_at.toISOString(),
   }));
+  return { items, total: Number(count.rows[0]?.n ?? 0) };
 }
 
 /** One sale with per-line returnable quantities (sold − already returned). */
@@ -147,7 +153,11 @@ export async function getSaleDetail(tenantId: string, saleId: string): Promise<S
  * reversed and the staffer who processed it. Money is returned as a positive
  * magnitude (the stored contra total is negative).
  */
-export async function listReversals(tenantId: string, limit = 100): Promise<ReversalLogEntry[]> {
+/** One page of voids/returns, newest first, with totals over ALL of them. */
+export async function listReversals(
+  tenantId: string,
+  paging: { page: number; pageSize: number; offset: number },
+): Promise<{ items: ReversalLogEntry[]; total: number; summary: ReversalSummary }> {
   const { rows } = await query<{
     id: string;
     reference: string;
@@ -165,11 +175,26 @@ export async function listReversals(tenantId: string, limit = 100): Promise<Reve
        LEFT JOIN sales o ON o.id = r.reverses_sale_id
        LEFT JOIN users u ON u.id = r.cashier_user_id
       WHERE r.tenant_id = $1 AND r.kind IN ('void', 'return')
-      ORDER BY r.created_at DESC
-      LIMIT $2`,
-    [tenantId, Math.min(Math.max(limit, 1), 500)],
+      ORDER BY r.created_at DESC, r.id DESC
+      LIMIT $2 OFFSET $3`,
+    [tenantId, paging.pageSize, paging.offset],
   );
-  return rows.map((r) => ({
+  const agg = await query<{ total: string; voids: string; returns: string; refunded: string }>(
+    `SELECT count(*) AS total,
+            count(*) FILTER (WHERE kind = 'void') AS voids,
+            count(*) FILTER (WHERE kind = 'return') AS returns,
+            coalesce(sum(abs(total_cents)), 0) AS refunded
+       FROM sales WHERE tenant_id = $1 AND kind IN ('void', 'return')`,
+    [tenantId],
+  );
+  const a = agg.rows[0];
+  const summary: ReversalSummary = {
+    total: Number(a?.total ?? 0),
+    voids: Number(a?.voids ?? 0),
+    returns: Number(a?.returns ?? 0),
+    refundedCents: Number(a?.refunded ?? 0),
+  };
+  const items = rows.map((r) => ({
     id: r.id,
     reference: r.reference,
     kind: r.kind,
@@ -179,6 +204,7 @@ export async function listReversals(tenantId: string, limit = 100): Promise<Reve
     amountCents: Math.abs(r.total_cents),
     createdAt: r.created_at.toISOString(),
   }));
+  return { items, total: summary.total, summary };
 }
 
 // ── Write side (the ACID reversal) ───────────────────────────────────────────

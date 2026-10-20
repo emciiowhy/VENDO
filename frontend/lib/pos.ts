@@ -508,10 +508,17 @@ export interface Reversal {
   originalStatus: "voided" | "partially_returned" | "returned";
 }
 
-/** Recent sales for the void/return picker (newest first). */
-export async function listSales(limit = 50): Promise<Result<{ sales: SaleSummary[] }>> {
+/** Server-side page info returned by every paginated list. */
+export interface PageInfo {
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** One page of sales for the void/return picker (newest first). */
+export async function listSales(page = 1, pageSize = 20): Promise<Result<{ sales: SaleSummary[] } & PageInfo>> {
   try {
-    return await readJson(await fetch(`${BASE}/sales?limit=${limit}`, { credentials: "include" }));
+    return await readJson(await fetch(`${BASE}/sales?page=${page}&pageSize=${pageSize}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }
@@ -583,10 +590,11 @@ export interface ReversalSummary {
 
 /** The owner/manager review of every committed void/return, with a rollup. */
 export async function listReversals(
-  limit = 100,
-): Promise<Result<{ reversals: ReversalLogEntry[]; summary: ReversalSummary }>> {
+  page = 1,
+  pageSize = 25,
+): Promise<Result<{ reversals: ReversalLogEntry[]; summary: ReversalSummary } & PageInfo>> {
   try {
-    return await readJson(await fetch(`${BASE}/reversals?limit=${limit}`, { credentials: "include" }));
+    return await readJson(await fetch(`${BASE}/reversals?page=${page}&pageSize=${pageSize}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }
@@ -672,8 +680,9 @@ export async function listAuditLogs(filter: {
   /** YYYY-MM-DD, inclusive (Manila). */
   from?: string;
   to?: string;
-  limit?: number;
-} = {}): Promise<Result<{ logs: AuditLog[]; actors: ActivityActor[]; summary: AuditSummary }>> {
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<Result<{ logs: AuditLog[]; actors: ActivityActor[]; summary: AuditSummary } & PageInfo>> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "") qs.set(k, String(v));
   try {

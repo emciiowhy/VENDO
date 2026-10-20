@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../Icon";
 import { getAuditTrail, type AuditAction, type AuditRow } from "@/lib/adminAudit";
+import { Pagination } from "../Pagination";
 
 /**
  * The platform control-plane audit trail — every privileged Super Admin action,
@@ -17,7 +18,7 @@ import { getAuditTrail, type AuditAction, type AuditRow } from "@/lib/adminAudit
 type State =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; rows: AuditRow[] };
+  | { status: "ready"; rows: AuditRow[]; total: number };
 
 type ActionMeta = { label: string; icon: IconName; tone: string };
 
@@ -47,21 +48,24 @@ function actionMeta(action: string): ActionMeta {
   };
 }
 
+const PAGE_SIZE = 25;
+
 export function AuditTrail() {
   const [state, setState] = useState<State>({ status: "loading" });
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const res = await getAuditTrail();
+      const res = await getAuditTrail(page, PAGE_SIZE);
       if (!alive) return;
-      if (res.ok) setState({ status: "ready", rows: res.entries });
+      if (res.ok) setState({ status: "ready", rows: res.entries, total: res.total });
       else setState({ status: "error", message: res.error ?? "Could not load the audit trail." });
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [page]);
 
   return (
     <section className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden max-w-[920px]">
@@ -69,7 +73,7 @@ export function AuditTrail() {
         <h2 className="font-extrabold tracking-tight">Control-plane activity</h2>
         <p className="text-fine text-ink-soft">
           {state.status === "ready"
-            ? `${state.rows.length} most recent privileged action${state.rows.length === 1 ? "" : "s"}`
+            ? `${state.total.toLocaleString("en-PH")} privileged action${state.total === 1 ? "" : "s"} on record`
             : "Loading the audit trail…"}
         </p>
       </div>
@@ -131,6 +135,9 @@ export function AuditTrail() {
             );
           })}
         </ul>
+      )}
+      {state.status === "ready" && (
+        <Pagination page={page} total={state.total} pageSize={PAGE_SIZE} onPage={setPage} noun="actions" />
       )}
     </section>
   );
