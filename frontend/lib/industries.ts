@@ -68,7 +68,7 @@ export const INDUSTRIES: Industry[] = [
     outcomes: [
       "Serve customers faster at peak hours with a touch-first layout",
       "See which items sell and which to retire, by day or week",
-      "BIR-ready receipts on every cup and pastry, automatically",
+      "VAT-itemized receipts on every cup and pastry, automatically",
     ],
   },
   {
@@ -80,7 +80,7 @@ export const INDUSTRIES: Industry[] = [
     intro:
       "Ring orders fast, take cash or e-wallet payments, and keep tables turning — with stock and sales that tie out at the end of the night.",
     highlights: [
-      { icon: "receipt", title: "Compliant receipts", body: "VAT-inclusive, BIR-ready receipts printed straight from checkout." },
+      { icon: "receipt", title: "Itemized receipts", body: "VAT-inclusive, itemized receipts printed straight from checkout." },
       { icon: "card", title: "Flexible payments", body: "Cash, GCash, Maya and QRPH at the counter, settled into one sale." },
       { icon: "users", title: "Staff & shifts", body: "Manage roles and tie each sale to the cashier shift on duty." },
     ],
@@ -231,18 +231,18 @@ export const INDUSTRIES: Industry[] = [
     group: "service",
     icon: "shield",
     name: "Healthcare & Pharmacies",
-    tagline: "Accurate stock, compliant receipts.",
+    tagline: "Accurate stock, itemized receipts.",
     intro:
-      "Track every unit with low-stock alerts and issue BIR-ready receipts your customers can trust — for pharmacies and clinics.",
+      "Track every unit with low-stock alerts and issue itemized receipts your customers can trust — for pharmacies and clinics.",
     photoKey: "healthcare",
     highlights: [
       { icon: "box", title: "Unit-level inventory", body: "Know exactly what's on the shelf as items sell and restocks arrive." },
-      { icon: "shield", title: "Compliant receipts", body: "VAT-inclusive, sequentially numbered receipts on every sale, automatically." },
+      { icon: "shield", title: "Itemized receipts", body: "VAT-inclusive, sequentially numbered receipts on every sale, automatically." },
       { icon: "bell", title: "Low-stock alerts", body: "Get notified before a fast-moving item runs out so you reorder in time." },
     ],
     outcomes: [
       "Keep precise, unit-level stock counts",
-      "Issue compliant receipts without thinking about it",
+      "Issue itemized, numbered receipts without thinking about it",
       "Reorder in time with proactive alerts",
     ],
   },

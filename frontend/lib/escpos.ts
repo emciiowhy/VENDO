@@ -144,9 +144,9 @@ export function buildSaleReceipt(args: BuildReceiptArgs): Uint8Array {
   if (store.phone) b.line(store.phone);
   b.line(`${store.vatLabel || "VAT REG TIN"}: ${store.tin || "________"}`);
 
-  b.feed(1).bold(true).line("SALES INVOICE").bold(false);
+  b.feed(1).bold(true).line("RECEIPT").bold(false);
   b.align("left").rule();
-  b.row("Invoice", sale.reference);
+  b.row("Receipt No.", sale.reference);
   b.row("Date", fmtDate(sale.createdAt));
   if (args.cashierName) b.row("Cashier", args.cashierName);
   b.line(`Sold to: ${args.soldTo || "Walk-in customer"}`);
@@ -188,7 +188,9 @@ export function buildSaleReceipt(args: BuildReceiptArgs): Uint8Array {
   }
 
   b.feed(1).align("center");
-  b.line(store.receiptFooter || "This serves as your Sales Invoice. Thank you!");
+  b.line(store.receiptFooter || "Thank you!");
+  // Fixed, not owner-editable: VendoPOS is not BIR-accredited.
+  b.line("Not a BIR-registered invoice. Not valid for claim of input tax.");
   b.line("Powered by VendoPOS");
 
   if (args.kickDrawer && sale.paymentMethod === "Cash") b.openDrawer();

@@ -9,11 +9,11 @@ import { ScrollReveal } from "@/app/components/ScrollReveal";
 export const metadata: Metadata = pageMetadata({
   title: "About Us — VendoPOS",
   description:
-    "VendoPOS builds the software that runs local commerce — a multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and transactional integrity for Filipino businesses.",
+    "VendoPOS builds the software that runs local commerce — a multi-tenant POS + ERP engineered around tenant isolation, tamper-evident sales records, and transactional integrity for Filipino businesses.",
   path: "/about",
   ogTitle: "About VendoPOS — We build the software that runs local commerce",
   ogDescription:
-    "A multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and transactional integrity for Filipino businesses.",
+    "A multi-tenant POS + ERP engineered around tenant isolation, tamper-evident sales records, and transactional integrity for Filipino businesses.",
 });
 
 /** Core engineering pillars — the heart of the bento grid. */
@@ -36,15 +36,15 @@ const PILLARS: {
     icon: "receipt",
     eyebrow: "Philippine-first",
     title: "Compliance Ready",
-    body: "Engineered directly around local BIR sequence-integrity controls — gapless invoice numbering, tamper-evident records, and audit trails built into the core, not stapled on at year-end.",
-    points: ["Gapless BIR sequence integrity", "Tamper-evident, auditable records"],
+    body: "Engineered around sales-record integrity — gapless invoice numbering, tamper-evident records, and audit trails built into the core, not stapled on at year-end.",
+    points: ["Gapless invoice numbering", "Tamper-evident, auditable records"],
     featured: true,
   },
   {
     icon: "bolt",
     eyebrow: "Reliability",
     title: "Correctness Under Load",
-    body: "Atomic, race-free checkout keeps stock and BIR serials consistent even when many cashiers sell at once. Every sale, void, and return settles as one indivisible transaction.",
+    body: "Atomic, race-free checkout keeps stock and invoice serials consistent even when many cashiers sell at once. Every sale, void, and return settles as one indivisible transaction.",
     points: ["Atomic, race-free checkout", "Collision-free invoice serials"],
   },
 ];
@@ -52,7 +52,7 @@ const PILLARS: {
 /** Proof points for the slim credibility strip. */
 const STATS: { value: string; label: string }[] = [
   { value: "5", label: "ERP pillars in one platform" },
-  { value: "100%", label: "Peso-first & BIR-ready" },
+  { value: "100%", label: "Peso-first" },
   { value: "1", label: "Login for your whole business" },
 ];
 

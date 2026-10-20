@@ -43,7 +43,7 @@ const FEATURE_PITCH: Record<
   // STARTER (included everywhere — these rarely render a callout)
   pos_terminal: { icon: "pos", title: "Point of Sale", description: "Ring up sales at the register." },
   inventory_basic: { icon: "box", title: "Inventory", description: "Items, prices and stock." },
-  bir_receipts: { icon: "receipt", title: "BIR receipts", description: "Compliant receipts with gap-free serial invoicing." },
+  bir_receipts: { icon: "receipt", title: "Receipts", description: "VAT-itemized receipts with gap-free serial numbering." },
   digital_payments_qrph: { icon: "wallet", title: "Digital payments", description: "Accept QRPH and e-wallet payments." },
   // BUSINESS
   procurement_supply_chain: {

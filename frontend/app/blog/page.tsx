@@ -13,7 +13,7 @@ import { listPosts, formatPostDate } from "@/lib/blog";
 export const metadata: Metadata = pageMetadata({
   title: "Blog — VendoPOS",
   description:
-    "Practical guides on BIR compliance, payments, inventory, and running a Filipino business on one platform.",
+    "Practical guides on VAT and sales records, payments, inventory, and running a Filipino business on one platform.",
   path: "/blog",
   ogTitle: "VendoPOS Blog",
 });
@@ -40,7 +40,7 @@ export default function BlogIndex() {
                 Real stories. Real businesses. Real wins.
               </h1>
               <p className="mt-5 mx-auto max-w-[58ch] text-[1.1rem] leading-relaxed text-ink-soft">
-                Practical writing on BIR compliance, payments, inventory, and the day-to-day of
+                Practical writing on VAT and sales records, payments, inventory, and the day-to-day of
                 running a Filipino business on one platform.
               </p>
             </div>

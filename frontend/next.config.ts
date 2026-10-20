@@ -28,6 +28,8 @@ const nextConfig: NextConfig = {
       { source: "/dashboard/manufacturing", destination: "/dashboard", permanent: false },
       { source: "/products/procurement", destination: "/products", permanent: false },
       { source: "/products/manufacturing", destination: "/products", permanent: false },
+      // VendoPOS is not BIR-accredited, so the old "BIR Accreditation" page is gone.
+      { source: "/products/bir-accreditation", destination: "/products", permanent: false },
     ];
   },
 

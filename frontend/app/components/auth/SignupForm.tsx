@@ -16,7 +16,7 @@ import { validatePassword, MIN_PASSWORD_LENGTH } from "@/lib/passwordPolicy";
  */
 
 const PLAN_COPY: Record<SignupPlan, { label: string; price: string; blurb: string }> = {
-  starter: { label: "Starter", price: "₱299/mo", blurb: "POS, inventory & BIR receipts." },
+  starter: { label: "Starter", price: "₱299/mo", blurb: "POS, product management & VAT receipts." },
   business: { label: "Business", price: "₱499/mo", blurb: "Adds CRM, finance & multi-staff roles." },
 };
 

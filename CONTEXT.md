@@ -75,7 +75,7 @@ _Avoid_: calling this a schedule — it reflects who *is* on the till, not who i
 The subscription tiers a Tenant can be on. Tiers differ by which Modules are unlocked. All prices in Philippine peso (₱), billed monthly; these mirror the figures shown on the landing-page pricing section (`frontend/app/components/Pricing.tsx`).
 
 **Starter** — ₱299/mo:
-POS + Inventory + BIR-ready receipts + GCash/Maya/QRPH + Senior/PWD discounts. For single-location coffee shops and small retailers.
+POS + Product Management + VAT-itemized receipts + GCash/Maya/QRPH + Senior/PWD discounts. For single-location coffee shops and small retailers.
 
 **Business** — ₱499/mo:
 Starter plus CRM (with discount management), Finance & Accounting, multi-staff roles, and custom branding. For growing multi-staff retailers and restaurants.

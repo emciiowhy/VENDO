@@ -243,7 +243,7 @@ function Ambient() {
 const IDLE_MESSAGES = [
   "Your order will appear here as it's rung up.",
   "We accept Cash, GCash, Maya & QRPH.",
-  "Every sale comes with a BIR-ready receipt.",
+  "Every sale comes with an itemized receipt.",
 ];
 
 function IdleScreen({

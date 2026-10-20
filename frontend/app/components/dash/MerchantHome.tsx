@@ -36,7 +36,7 @@ import { MERCHANT_EVENTS_URL, type LowStockEvent } from "@/lib/merchantEvents";
 const MODULES: { icon: IconName; label: string; desc: string; href?: string }[] = [
   { icon: "pos", label: "Point of Sale", desc: "Ring up & take payment", href: "/pos" },
   { icon: "box", label: "Inventory", desc: "Items, prices & stock", href: "/dashboard/inventory" },
-  { icon: "file", label: "Compliance", desc: "BIR sales ledger & VAT", href: "/dashboard/compliance" },
+  { icon: "file", label: "Compliance", desc: "Sales ledger & VAT", href: "/dashboard/compliance" },
   { icon: "chart", label: "Finance", desc: "Profit, loss & expenses", href: "/dashboard/finance" },
   { icon: "users", label: "HR", desc: "Staff & payroll", href: "/dashboard/hr" },
   { icon: "heart", label: "CRM", desc: "Customers & loyalty", href: "/dashboard/crm" },
@@ -801,7 +801,7 @@ function TaxCard({ pulse }: { pulse: DashboardPulse }) {
         className="mt-4 inline-flex items-center justify-center gap-1.5 bg-paper hairline text-ink font-semibold text-note py-2.5 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition duration-150"
       >
         <Icon name="file" className="w-[16px] h-[16px]" strokeWidth={1.7} />
-        BIR sales ledger
+        Sales ledger
       </Link>
     </div>
   );

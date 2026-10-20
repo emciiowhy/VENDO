@@ -63,7 +63,7 @@ const SECTIONS: Section[] = [
         points: [
           "Platform uptime targets, with monitored availability and incident response.",
           "Hard tenant isolation, encrypted storage, and routine backups.",
-          "Security patching, and gapless BIR-aligned invoice sequencing.",
+          "Security patching, and gapless invoice sequencing.",
         ],
       },
       yours: {

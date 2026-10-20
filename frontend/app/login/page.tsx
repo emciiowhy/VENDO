@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 const HIGHLIGHTS = [
   { icon: "shield", text: "Each store is its own tenant — tills and data stay isolated." },
   { icon: "wallet", text: "Cash, GCash, Maya & QRPH at the point of sale." },
-  { icon: "file", text: "BIR-ready receipts and e-invoicing built in." },
+  { icon: "file", text: "VAT-itemized receipts and serial invoicing built in." },
 ] as const;
 
 /**

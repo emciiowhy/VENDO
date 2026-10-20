@@ -178,7 +178,7 @@ returns a clean `403 { code:"plan_limit_exceeded" }` once a Starter/Business Ten
   events — **shift-variance security flags** raised the moment a Z-Read closes with an un-reconciled
   drawer overage/shortage (surfaced as a flag card + toast on the System Health overview).
 
-**Merchant analytics & BIR compliance** (`/api/v1/merchant/*`, `/api/v1/inventory/alerts`) — fenced to
+**Merchant analytics & sales ledger** (`/api/v1/merchant/*`, `/api/v1/inventory/alerts`) — fenced to
 `MERCHANT_OWNER` / `MANAGER`, tenant-scoped from the session. "Today" and monthly buckets are evaluated
 in Manila time so figures line up with the local retail day.
 
@@ -190,7 +190,7 @@ in Manila time so figures line up with the local retail day.
 - `GET /api/v1/merchant/events/stream` — the merchant real-time alert feed (SSE). Pushes a `low-stock`
   event the moment a sale drops a product to/below its threshold, which the dashboard turns into a
   warning toast (and live-merges into the low-stock panel).
-- `GET /api/v1/merchant/compliance/export?month=YYYY-MM` — the BIR sales ledger for one calendar month:
+- `GET /api/v1/merchant/compliance/export?month=YYYY-MM` — the sales ledger (VAT breakdown) for one calendar month:
   serialized invoices with gross (VAT-inclusive), net taxable, 12% output VAT, discounts and the
   e-wallet reference. Returns JSON for the on-screen audit tray, or a tax-prep **CSV** with `&format=csv`.
 

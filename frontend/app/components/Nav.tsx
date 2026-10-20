@@ -110,7 +110,6 @@ const PRODUCTS: MenuDef = {
         icon: "store",
         accent: true,
         links: [
-          { label: "BIR-Accreditation", href: "/products/bir-accreditation" },
           { label: "Inventory Management", href: "/products/inventory-management" },
           { label: "Reporting & Analytics", href: "/products/reporting-and-analytics" },
           { label: "Employee Management", href: "/products/employee-management" },

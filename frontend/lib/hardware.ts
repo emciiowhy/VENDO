@@ -26,11 +26,11 @@ export const HARDWARE: MarketingEntry[] = [
     eyebrow: "Hardware",
     icon: "printer",
     name: "Receipt Printer",
-    tagline: "Crisp, BIR-ready receipts in a snap.",
+    tagline: "Crisp, itemized receipts in a snap.",
     intro:
-      "Thermal receipt printing that pairs with VendoPOS for fast, compliant receipts on every sale.",
+      "Thermal receipt printing that pairs with VendoPOS for fast, itemized receipts on every sale.",
     cards: [
-      { icon: "receipt", title: "Compliant receipts", body: "Prints VAT-inclusive, BIR-ready receipts straight from checkout." },
+      { icon: "receipt", title: "Itemized receipts", body: "Prints VAT-inclusive, itemized receipts straight from checkout." },
       { icon: "bolt", title: "Fast thermal printing", body: "Quiet, quick prints that keep the line moving." },
       { icon: "check", title: "Plug-and-play", body: "Connects to your setup with minimal fuss." },
     ],
@@ -114,7 +114,7 @@ export const HARDWARE_BUNDLES: HardwareBundle[] = [
     icon: "store",
     name: "Counter Starter",
     forWho: "New & small shops",
-    blurb: "Everything to ring sales and print compliant receipts from day one.",
+    blurb: "Everything to ring sales and print itemized receipts from day one.",
     includes: ["pos-terminal", "receipt-printer", "cash-drawer"],
     photoKey: "hardware-bundle",
   },

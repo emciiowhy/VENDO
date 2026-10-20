@@ -39,7 +39,7 @@ export const PRODUCTS: ProductPage[] = [
     name: "Point of Sale (POS)",
     tagline: "A checkout your cashiers actually enjoy using.",
     intro:
-      "Ring up sales in seconds on any device, with a fast touch layout, shift drawers that balance to the centavo, and a receipt that's BIR-ready out of the box.",
+      "Ring up sales in seconds on any device, with a fast touch layout, shift drawers that balance to the centavo, and an itemized, VAT-inclusive receipt out of the box.",
     features: [
       {
         icon: "bolt",
@@ -53,8 +53,8 @@ export const PRODUCTS: ProductPage[] = [
       },
       {
         icon: "receipt",
-        title: "Compliant receipts",
-        body: "VAT-inclusive computation and BIR reference details print on every sale automatically.",
+        title: "Itemized receipts",
+        body: "VAT-inclusive computation and your store's TIN and permit details print on every sale automatically.",
       },
     ],
   },
@@ -81,32 +81,6 @@ export const PRODUCTS: ProductPage[] = [
         icon: "shield",
         title: "Reconciliation-ready",
         body: "Each payment is stamped to the shift and sale, so your end-of-day totals always tie out.",
-      },
-    ],
-  },
-  {
-    slug: "bir-accreditation",
-    category: "Run your store smoothly",
-    icon: "shield",
-    name: "BIR Accreditation",
-    tagline: "Stay compliant without thinking about it.",
-    intro:
-      "Collision-free invoice serials, VAT-inclusive math, and audit-ready exports keep you aligned with BIR requirements as you grow.",
-    features: [
-      {
-        icon: "file",
-        title: "Sequential invoicing",
-        body: "Every sale gets a unique, gap-free serial — even across busy multi-cashier days.",
-      },
-      {
-        icon: "receipt",
-        title: "VAT done right",
-        body: "12% VAT-inclusive computation is applied and itemized on each receipt automatically.",
-      },
-      {
-        icon: "download",
-        title: "Audit-ready exports",
-        body: "Pull compliant CSV summaries for any period when it's time to file or get inspected.",
       },
     ],
   },
@@ -275,7 +249,6 @@ const BY_SLUG = new Map(PRODUCTS.map((p) => [p.slug, p]));
 const PRODUCT_PHOTO: Record<string, string> = {
   "point-of-sale": "point-of-sale",
   payments: "payments",
-  "bir-accreditation": "payments",
   "inventory-management": "inventory",
   "reporting-and-analytics": "analytics",
   "employee-management": "staff",

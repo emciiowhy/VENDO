@@ -12,7 +12,7 @@ type Mark = "yes" | "partial" | "no";
 const COLUMNS = ["VendoPOS", "Square", "Lightspeed"] as const;
 
 const ROWS: { feature: string; marks: [Mark, Mark, Mark] }[] = [
-  { feature: "BIR-ready receipts & reports", marks: ["yes", "no", "no"] },
+  { feature: "VAT-itemized receipts & sales reports", marks: ["yes", "no", "no"] },
   { feature: "GCash · Maya · QRPH built in", marks: ["yes", "no", "partial"] },
   { feature: "Senior / PWD discounts built in", marks: ["yes", "no", "no"] },
   { feature: "Peso-first, end to end", marks: ["yes", "no", "no"] },

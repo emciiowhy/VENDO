@@ -114,7 +114,7 @@ export function ReceiptSettingsCard() {
           label="Footer message"
           value={footer}
           onChange={setFooter}
-          placeholder="This serves as your official receipt. Come again!"
+          placeholder="Thank you, come again!"
           rows={2}
         />
         <div className="hairline-t pt-2">
@@ -127,9 +127,9 @@ export function ReceiptSettingsCard() {
         </div>
 
         <div className="hairline-t pt-4">
-          <div className="text-[13px] font-bold tracking-tight">BIR accreditation</div>
+          <div className="text-[13px] font-bold tracking-tight">Your BIR permit details (optional)</div>
           <p className="mt-0.5 text-[12.5px] text-ink-soft">
-            From your BIR Permit to Use (PTU). Printed in the receipt footer for a valid invoice; leave
+            From your BIR Permit to Use (PTU). Printed in the receipt footer if your business has one; leave
             blank if you don’t have one yet.
           </p>
           <div className="mt-3 grid sm:grid-cols-3 gap-4">

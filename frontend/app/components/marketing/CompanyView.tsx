@@ -25,7 +25,7 @@ const PHOTOS: Record<string, string[]> = {
 /** A few proof points shown on the About page. */
 const ABOUT_STATS = [
   { value: "5", label: "ERP pillars in one platform" },
-  { value: "100%", label: "Peso-first & BIR-ready" },
+  { value: "100%", label: "Peso-first" },
   { value: "1", label: "Login for your whole business" },
 ];
 
@@ -106,7 +106,7 @@ export function CompanyView({ entry }: { entry: MarketingEntry }) {
                   VendoPOS is one multi-tenant POS + ERP platform — sales, stock, suppliers,
                   finances, staff, and customers in a single system. We believe the best tools
                   shouldn&rsquo;t be locked away from small businesses, so we built one that&rsquo;s
-                  peso-first, BIR-ready, and shaped around the realities of the counter.
+                  peso-first and shaped around the realities of the counter.
                 </p>
                 <p className="mt-4 text-[1.05rem] leading-relaxed text-ink-soft">
                   Instead of stitching together a dozen disconnected apps, operators get a single

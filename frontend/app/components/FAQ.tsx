@@ -12,11 +12,11 @@ const faqs = [
   },
   {
     q: "Can I apply Senior Citizen and PWD discounts?",
-    a: "Yes. The mandated 20% Senior Citizen and PWD discounts apply at the tap of a button — no manual math at the counter — and they’re logged correctly for your BIR reporting.",
+    a: "Yes. The mandated 20% Senior Citizen and PWD discounts apply at the tap of a button — no manual math at the counter — and the cardholder’s ID and name are recorded on the receipt.",
   },
   {
-    q: "Are the receipts and reports BIR-compliant?",
-    a: "VendoPOS is built peso-first with BIR-ready receipts and reports, so tax time doesn’t mean rebuilding everything by hand. We’ll confirm the specifics for your business type during onboarding.",
+    q: "Is VendoPOS BIR-accredited?",
+    a: "Not yet. VendoPOS is not BIR-accredited, so keep using your registered receipts or CAS for official invoices. What it does give you: VAT-inclusive totals itemized on every receipt, gap-free sale numbers, correct Senior/PWD computation, and a sales ledger you can export for your accountant.",
   },
   {
     q: "Can my Customers pay with GCash and Maya?",

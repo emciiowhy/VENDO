@@ -347,7 +347,7 @@ function ReceiptBody() {
       <div className="w-[70%] rounded-lg bg-paper hairline p-4">
         <div className="flex flex-col items-center">
           <span className="text-[12px] font-extrabold text-ink">VendoPOS Café</span>
-          <span className="text-[9.5px] font-semibold text-ink-faint">Official Receipt</span>
+          <span className="text-[9.5px] font-semibold text-ink-faint">Receipt</span>
         </div>
         <div className="mt-2.5 border-t border-dashed border-ink/15 pt-2.5 space-y-1.5">
           {RECEIPT_ITEMS.map((r) => (

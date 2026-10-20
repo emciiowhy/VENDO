@@ -14,7 +14,7 @@ export default function AdminCompliancePage() {
   return (
     <DashShell
       title="Compliance"
-      subtitle="Platform-wide BIR output-VAT oversight across all tenants"
+      subtitle="Platform-wide output-VAT oversight across all tenants"
       brandSub="Platform Console"
       nav={ADMIN_NAV}
       allow={["SUPER_ADMIN"]}

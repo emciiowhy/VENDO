@@ -11,9 +11,9 @@ type Advantage = {
 const advantages: Advantage[] = [
   {
     icon: "receipt",
-    title: "BIR-ready receipts & reports",
-    body: "Issue compliant receipts and generate the reports you need at tax time — no manual rebuilding, no spreadsheet gymnastics.",
-    tags: ["Compliance", "Sales reports"],
+    title: "VAT-itemized receipts & reports",
+    body: "Every receipt itemizes VAT, and your sales ledger exports in one click for your accountant — no manual rebuilding, no spreadsheet gymnastics.",
+    tags: ["VAT breakdown", "Sales reports"],
   },
   {
     icon: "card",
@@ -24,8 +24,8 @@ const advantages: Advantage[] = [
   {
     icon: "tag",
     title: "Senior & PWD discounts, built in",
-    body: "Apply the mandated 20% Senior Citizen and PWD discounts in a tap — logged correctly for your BIR reporting, with no manual math at the counter.",
-    tags: ["Senior 20%", "PWD", "BIR-logged"],
+    body: "Apply the mandated 20% Senior Citizen and PWD discounts in a tap — with the cardholder’s ID on the receipt and no manual math at the counter.",
+    tags: ["Senior 20%", "PWD", "ID recorded"],
   },
   {
     glyph: "₱",

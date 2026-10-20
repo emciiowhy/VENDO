@@ -24,7 +24,7 @@ const plans: Plan[] = [
     features: [
       "Point of Sale",
       "Product Management",
-      "BIR-ready receipts",
+      "VAT-itemized receipts",
       "GCash / Maya / QRPH",
       "Senior / PWD discounts",
     ],

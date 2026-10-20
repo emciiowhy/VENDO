@@ -123,9 +123,10 @@ function printDoc(title: string, bodyHtml: string): void {
 }
 
 /**
- * The BIR machine-accreditation footer — Permit to Use (PTU), Machine ID (MIN)
- * and serial number, plus the mandatory five-year validity statement. Renders
- * only the lines the store has configured; emits nothing when none are set.
+ * The owner's own permit details — Permit to Use (PTU), Machine ID (MIN) and
+ * serial number — exactly as they typed them in Account → Receipt. Renders only
+ * the lines the store has configured; emits nothing when none are set. VendoPOS
+ * itself is not BIR-accredited, so no validity statement is printed.
  */
 function accreditation(store: StoreBrand): string {
   const lines: string[] = [];
@@ -135,8 +136,7 @@ function accreditation(store: StoreBrand): string {
   if (lines.length === 0) return "";
   return (
     `<div class="rule"></div>` +
-    `<div class="foot muted">${lines.join("<br/>")}</div>` +
-    `<div class="foot muted">This invoice shall be valid for five (5) years from the date of the Permit to Use.</div>`
+    `<div class="foot muted">${lines.join("<br/>")}</div>`
   );
 }
 
@@ -158,8 +158,8 @@ export function printSaleReceipt(args: {
 }): void {
   const { store, sale, items } = args;
   const parts: string[] = [header(store)];
-  parts.push(`<div class="title">SALES INVOICE${args.titleNote ? ` ${esc(args.titleNote)}` : ""}</div>`);
-  parts.push(row("Invoice No.", sale.reference, { mono: true }));
+  parts.push(`<div class="title">RECEIPT${args.titleNote ? ` ${esc(args.titleNote)}` : ""}</div>`);
+  parts.push(row("Receipt No.", sale.reference, { mono: true }));
   parts.push(row("Date", fmtDate(sale.createdAt)));
   if (args.cashierName) parts.push(row("Cashier", args.cashierName));
   parts.push(`<div class="rule"></div>`);
@@ -200,8 +200,11 @@ export function printSaleReceipt(args: {
     if (sale.pointsRedeemed > 0) parts.push(row("Points redeemed", `-${sale.pointsRedeemed}`));
     if (sale.pointsEarned > 0) parts.push(row("Points earned", `+${sale.pointsEarned}`));
   }
-  const foot = store.receiptFooter || "This serves as your Sales Invoice. Thank you!";
+  const foot = store.receiptFooter || "Thank you!";
   parts.push(`<div class="foot">${esc(foot)}</div>`);
+  // Fixed, not owner-editable: VendoPOS is not BIR-accredited, so its receipt
+  // must never pass for an official invoice.
+  parts.push(`<div class="foot muted">Not a BIR-registered invoice. Not valid for claim of input tax.</div>`);
   parts.push(accreditation(store));
   parts.push(`<div class="foot muted">Powered by VendoPOS</div>`);
 

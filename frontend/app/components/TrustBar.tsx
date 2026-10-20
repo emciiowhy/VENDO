@@ -6,7 +6,7 @@ export function TrustBar() {
       <div className="max-w-[1160px] mx-auto px-6 py-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-3">
         <div className="flex items-center gap-2.5 text-[14px] font-semibold text-ink">
           <Icon name="receipt" className="w-[18px] h-[18px] text-brand-600" strokeWidth={1.6} />
-          BIR-ready receipts &amp; reports
+          VAT-itemized receipts &amp; reports
         </div>
         <div className="flex items-center gap-2.5 text-[14px] font-semibold text-ink">
           <Icon name="tag" className="w-[18px] h-[18px] text-brand-600" strokeWidth={1.6} />

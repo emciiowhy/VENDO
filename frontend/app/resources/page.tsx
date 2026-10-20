@@ -34,7 +34,7 @@ const LINKS: { icon: IconName; title: string; body: string; href: string; cta: s
   {
     icon: "heart",
     title: "Why PH businesses switch",
-    body: "Peso-first, BIR-ready, e-wallet-native — built for how you actually operate here.",
+    body: "Peso-first, VAT-aware, e-wallet-native — built for how you actually operate here.",
     href: "/#why",
     cta: "Why switch",
   },

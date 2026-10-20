@@ -12,7 +12,7 @@ import { ComplianceTray } from "../../components/dash/ComplianceTray";
 export default function CompliancePage() {
   return (
     <DashShell
-      title="BIR Compliance"
+      title="Sales & VAT Ledger"
       subtitle="Serialized monthly sales ledger, VAT breakdown & CSV export"
       brandSub="Merchant Workspace"
       nav={MERCHANT_NAV}
