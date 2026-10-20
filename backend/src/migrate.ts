@@ -1182,6 +1182,23 @@ CREATE TABLE IF NOT EXISTS promotions (
   CONSTRAINT promotions_percent_range CHECK (kind <> 'percent' OR value <= 100)
 );
 CREATE INDEX IF NOT EXISTS promotions_tenant_idx ON promotions (tenant_id, is_active);
+
+-- ---------------------------------------------------------------------------
+-- Activity log: widen pos_audit_logs from 3 floor actions to the full staff
+-- timeline. The first three are still POSTed by the register; every other
+-- action is written ONLY by the server, inside the route that performed it, so
+-- a client can't forge a "sale" or "login" row. \`ref_id\` points at the sale,
+-- timecard, shift or payroll run the event is about. Existing rows stay valid —
+-- the CHECK only widens. Owner/manager read-only; still no update/delete path.
+-- ---------------------------------------------------------------------------
+ALTER TABLE pos_audit_logs ADD COLUMN IF NOT EXISTS ref_id UUID;
+ALTER TABLE pos_audit_logs DROP CONSTRAINT IF EXISTS pos_audit_logs_action_check;
+ALTER TABLE pos_audit_logs ADD CONSTRAINT pos_audit_logs_action_check CHECK (action IN
+  ('void_item', 'cancel_transaction', 'open_drawer',
+   'sale', 'refund', 'void_sale', 'discount_applied',
+   'login', 'logout', 'clock_in', 'clock_out', 'shift_open', 'shift_close',
+   'timecard_corrected', 'payroll_approved'));
+CREATE INDEX IF NOT EXISTS pos_audit_logs_action_idx ON pos_audit_logs (tenant_id, action, created_at DESC);
 `;
 
 async function migrate() {

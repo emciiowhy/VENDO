@@ -34,6 +34,7 @@ import { DEFAULT_HOURLY_RATE_CENTS, getLaborAnalytics } from "./timecard.reposit
 import { buildPayrollExport } from "./payroll.export.repository.js";
 import { toPayrollCsv } from "./payroll.processor.js";
 import { listShiftReconciliations } from "../pos/shifts.repository.js";
+import { logActivity, type Actor } from "../pos/audit.repository.js";
 
 /**
  * Merchant HR — employees, attendance, payroll.
@@ -62,6 +63,11 @@ function tenantOf(req: Request): string | null {
 
 function noTenant(res: Response) {
   return res.status(403).json({ ok: false, error: "No store is associated with this account." });
+}
+
+/** Who is acting, for the activity log — straight from the verified session. */
+function actorOf(req: Request): Actor {
+  return { tenantId: req.user?.tenantId ?? null, userId: req.user?.userId ?? null, name: req.user?.name ?? "Staff" };
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -346,6 +352,12 @@ hrRouter.put("/attendance", async (req, res) => {
   try {
     const ok = await upsertAttendance(tenantId, parsed.data);
     if (!ok) return res.status(404).json({ ok: false, error: "Employee not found." });
+    const a = parsed.data;
+    void logActivity(actorOf(req), {
+      action: "timecard_corrected",
+      refId: a.employeeId,
+      detail: `${a.workDate} set to ${a.status}${a.hours ? ` · ${a.hours}h` : ""}`,
+    });
     res.json({ ok: true });
   } catch (err) {
     console.error("[hr] attendance upsert failed:", err);
@@ -435,6 +447,12 @@ hrRouter.post("/payroll", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
   try {
     const run = await createPayrollRun(tenantId, req.user?.userId ?? null, parsed.data);
+    void logActivity(actorOf(req), {
+      action: "payroll_approved",
+      refId: run.id,
+      valueCents: run.totalGrossCents,
+      detail: `${run.reference} · ${run.periodStart} to ${run.periodEnd} · ${run.headcount} staff`,
+    });
     res.status(201).json({ ok: true, run });
   } catch (err) {
     console.error("[hr] create payroll failed:", err);

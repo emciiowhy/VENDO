@@ -3,8 +3,14 @@ import type { ZodError } from "zod";
 import { requireRole } from "../auth/auth.middleware.js";
 import { orderSchema, shiftCloseSchema, shiftOpenSchema } from "./pos.schema.js";
 import { returnSchema, summarizeReversals, voidSchema } from "./refunds.schema.js";
-import { auditEventSchema, summarizeAudit } from "./audit.js";
-import { listAuditLogs, recordAuditLog } from "./audit.repository.js";
+import { ACTIVITY_ACTIONS, auditEventSchema, maskId, summarizeAudit, type ActivityAction } from "./audit.js";
+import {
+  listActivityActors,
+  listAuditLogs,
+  logActivity,
+  recordAuditLog,
+  type Actor,
+} from "./audit.repository.js";
 import { createOrder, getCatalog, listCashiers } from "./pos.repository.js";
 import {
   getSaleDetail,
@@ -47,6 +53,12 @@ function tenantOf(req: Request): string | null {
 function noTenant(res: Response) {
   return res.status(403).json({ ok: false, error: "No store is associated with this account." });
 }
+/** Who is acting, for the activity log — straight from the verified session. */
+function actorOf(req: Request): Actor {
+  return { tenantId: req.user?.tenantId ?? null, userId: req.user?.userId ?? null, name: req.user?.name ?? "Staff" };
+}
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** GET /api/v1/pos/catalog — the live, tenant-scoped register feed. */
 posRouter.get("/catalog", async (req, res) => {
@@ -101,20 +113,35 @@ posRouter.post("/audit", async (req, res) => {
 });
 
 /**
- * GET /api/v1/pos/audit — the owner/manager audit trail of terminal actions,
- * with a rollup. Fenced tighter than the rest of the POS router: a cashier may
- * WRITE their own events but can't READ the store's audit history.
+ * GET /api/v1/pos/audit — the owner/manager activity log, with a rollup.
+ * Optional filters: ?action=, ?userId=, ?from=YYYY-MM-DD, ?to=YYYY-MM-DD.
+ * Fenced tighter than the rest of the POS router: a cashier may WRITE floor
+ * events but can't READ the store's activity history.
  */
 posRouter.get("/audit", async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
   if (req.user?.role !== "MERCHANT_OWNER" && req.user?.role !== "MANAGER") {
-    return res.status(403).json({ ok: false, error: "Only the store owner or a manager can review the audit log." });
+    return res.status(403).json({ ok: false, error: "Only the store owner or a manager can review the activity log." });
   }
+  // Unknown or malformed filter values are ignored rather than passed to SQL.
+  const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+  const action = str(req.query.action);
+  const userId = str(req.query.userId);
+  const from = str(req.query.from);
+  const to = str(req.query.to);
   try {
-    const limit = Number(req.query.limit) || 100;
-    const logs = await listAuditLogs(tenantId, limit);
-    return res.json({ ok: true, logs, summary: summarizeAudit(logs) });
+    const [logs, actors] = await Promise.all([
+      listAuditLogs(tenantId, {
+        action: ACTIVITY_ACTIONS.includes(action as ActivityAction) ? (action as ActivityAction) : undefined,
+        userId: userId && UUID_RE.test(userId) ? userId : undefined,
+        from: from && ISO_DATE.test(from) ? from : undefined,
+        to: to && ISO_DATE.test(to) ? to : undefined,
+        limit: Number(req.query.limit) || 200,
+      }),
+      listActivityActors(tenantId),
+    ]);
+    return res.json({ ok: true, logs, actors, summary: summarizeAudit(logs) });
   } catch (err) {
     console.error("[pos] audit list failed:", err);
     return res.status(500).json({ ok: false, error: "Could not load the audit log." });
@@ -145,7 +172,25 @@ posRouter.post("/orders", async (req, res) => {
     }
     const result = await createOrder(tenantId, userId, parsed.data, shiftId);
     if (result.ok) {
-      return res.status(201).json({ ok: true, sale: result.sale });
+      const sale = result.sale;
+      const actor = actorOf(req);
+      void logActivity(actor, {
+        action: "sale",
+        refId: sale.id,
+        valueCents: sale.totalCents,
+        detail: `${sale.reference} · ${sale.paymentMethod}`,
+      });
+      if (sale.discountCents > 0 && sale.discountLabel) {
+        void logActivity(actor, {
+          action: "discount_applied",
+          refId: sale.id,
+          valueCents: sale.discountCents,
+          detail:
+            `${sale.discountLabel} · ${sale.reference}` +
+            (sale.scPwdIdNumber ? ` · ID ${maskId(sale.scPwdIdNumber)}` : ""),
+        });
+      }
+      return res.status(201).json({ ok: true, sale });
     }
     switch (result.error.code) {
       case "UNAVAILABLE":
@@ -298,6 +343,12 @@ posRouter.post("/sales/:id/void", async (req, res) => {
       shift.shiftId,
     );
     if (!result.ok) return reversalError(res, result);
+    void logActivity(actorOf(req), {
+      action: "void_sale",
+      refId: req.params.id,
+      valueCents: Math.abs(result.reversal.totalCents),
+      detail: `${result.reversal.reference}${result.reversal.reason ? ` · ${result.reversal.reason}` : ""}`,
+    });
     res.status(201).json({ ok: true, reversal: result.reversal });
   } catch (err) {
     console.error("[pos] void failed:", err);
@@ -326,6 +377,13 @@ posRouter.post("/sales/:id/returns", async (req, res) => {
       shift.shiftId,
     );
     if (!result.ok) return reversalError(res, result);
+    void logActivity(actorOf(req), {
+      action: "refund",
+      refId: req.params.id,
+      itemQty: parsed.data.lines.reduce((s, l) => s + l.qty, 0),
+      valueCents: Math.abs(result.reversal.totalCents),
+      detail: `${result.reversal.reference}${result.reversal.reason ? ` · ${result.reversal.reason}` : ""}`,
+    });
     res.status(201).json({ ok: true, reversal: result.reversal });
   } catch (err) {
     console.error("[pos] return failed:", err);
@@ -365,7 +423,15 @@ posRouter.post("/shifts/open", async (req, res) => {
 
   try {
     const result = await openShift(tenantId, userId, req.user?.name ?? "Cashier", parsed.data.openingCents);
-    if (result.ok) return res.status(201).json({ ok: true, shift: result.shift });
+    if (result.ok) {
+      void logActivity(actorOf(req), {
+        action: "shift_open",
+        refId: result.shift.id,
+        valueCents: result.shift.openingCents,
+        detail: "Opening float",
+      });
+      return res.status(201).json({ ok: true, shift: result.shift });
+    }
     return res.status(409).json({ ok: false, error: "A shift is already open on this account." });
   } catch (err) {
     console.error("[pos] open shift failed:", err);
@@ -385,7 +451,17 @@ posRouter.post("/shifts/close", async (req, res) => {
 
   try {
     const result = await closeShift(tenantId, userId, parsed.data.countedCents, parsed.data.note ?? null);
-    if (result.ok) return res.json({ ok: true, zread: result.zread });
+    if (result.ok) {
+      const z = result.zread;
+      const variance = z.cashVarianceCents;
+      void logActivity(actorOf(req), {
+        action: "shift_close",
+        refId: z.id,
+        valueCents: z.totalSalesCents,
+        detail: `Z-Read · ${z.txnCount} txn · variance ${variance >= 0 ? "+" : "−"}${formatPeso(Math.abs(variance))}`,
+      });
+      return res.json({ ok: true, zread: z });
+    }
     return res.status(409).json({ ok: false, error: "No open shift to close." });
   } catch (err) {
     console.error("[pos] close shift failed:", err);

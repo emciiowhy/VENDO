@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { auditEventSchema, summarizeAudit, type AuditLog } from "./audit.js";
+import { auditEventSchema, maskId, summarizeAudit, type AuditLog } from "./audit.js";
 
 // Pure audit contracts + rollup maths — no database. The repository feeds
 // `summarizeAudit` the same row shapes read back from pos_audit_logs.
@@ -9,6 +9,7 @@ function row(p: Partial<AuditLog> & { action: AuditLog["action"] }): AuditLog {
     id: "x",
     cashierUserId: null,
     cashierName: "Cashier",
+    refId: null,
     itemName: null,
     itemQty: null,
     valueCents: 0,
@@ -53,7 +54,7 @@ describe("summarizeAudit", () => {
       row({ action: "open_drawer", valueCents: 0 }),
     ]);
     expect(s.total).toBe(4);
-    expect(s.byAction).toEqual({ void_item: 2, cancel_transaction: 1, open_drawer: 1 });
+    expect(s.byAction).toMatchObject({ void_item: 2, cancel_transaction: 1, open_drawer: 1, sale: 0 });
     // Voids (5000 + 2500) + cancel (18000); the drawer pop adds nothing.
     expect(s.flaggedValueCents).toBe(25500);
   });
@@ -62,6 +63,31 @@ describe("summarizeAudit", () => {
     const s = summarizeAudit([]);
     expect(s.total).toBe(0);
     expect(s.flaggedValueCents).toBe(0);
-    expect(s.byAction).toEqual({ void_item: 0, cancel_transaction: 0, open_drawer: 0 });
+    expect(Object.values(s.byAction).every((n) => n === 0)).toBe(true);
+  });
+});
+
+describe("activity log — server-only actions", () => {
+  it("refuses a client POSTing a server action (sale/login can't be forged)", () => {
+    for (const action of ["sale", "login", "clock_in", "payroll_approved", "discount_applied"]) {
+      expect(auditEventSchema.safeParse({ action }).success, action).toBe(false);
+    }
+  });
+
+  it("flags voided sales and refunds alongside cart voids, but not plain sales", () => {
+    const s = summarizeAudit([
+      row({ action: "sale", valueCents: 99_999 }),
+      row({ action: "void_sale", valueCents: 1_000 }),
+      row({ action: "refund", valueCents: 500 }),
+      row({ action: "login", valueCents: 0 }),
+    ]);
+    expect(s.flaggedValueCents).toBe(1_500);
+    expect(s.byAction.sale).toBe(1);
+    expect(s.byAction.login).toBe(1);
+  });
+
+  it("masks Senior/PWD IDs to the last 4 characters", () => {
+    expect(maskId("OSCA-123456")).toBe("••••3456");
+    expect(maskId("12")).toBe("••••");
   });
 });
