@@ -61,8 +61,8 @@ async function punchesFor(tenantId: string, userId: string, from: string, to: st
   const { rows } = await query<{ id: string; clock_in: Date; clock_out: Date | null; needs_review: boolean }>(
     `SELECT id, clock_in, clock_out, needs_review FROM timecards
       WHERE tenant_id = $1 AND user_id = $2
-        AND clock_in >= ($3::date AT TIME ZONE '${MNL}')
-        AND clock_in <  (($4::date + 1) AT TIME ZONE '${MNL}')
+        AND clock_in >= ($3::date::timestamp AT TIME ZONE '${MNL}')
+        AND clock_in <  ((($4::date + 1)::timestamp) AT TIME ZONE '${MNL}')
       ORDER BY clock_in ASC`,
     [tenantId, userId, from, to],
   );
@@ -186,8 +186,8 @@ export async function countTimecardsNeedingReview(tenantId: string, from: string
   const { rows } = await query<{ n: string }>(
     `SELECT count(*) AS n FROM timecards
       WHERE tenant_id = $1
-        AND clock_in >= ($2::date AT TIME ZONE '${MNL}')
-        AND clock_in <  (($3::date + 1) AT TIME ZONE '${MNL}')
+        AND clock_in >= ($2::date::timestamp AT TIME ZONE '${MNL}')
+        AND clock_in <  ((($3::date + 1)::timestamp) AT TIME ZONE '${MNL}')
         AND (needs_review
              OR (status = 'ACTIVE' AND (clock_in AT TIME ZONE '${MNL}')::date < (now() AT TIME ZONE '${MNL}')::date))`,
     [tenantId, from, to],

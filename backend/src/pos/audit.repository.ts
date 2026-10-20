@@ -119,8 +119,8 @@ export async function listAuditLogs(tenantId: string, filter: ActivityFilter = {
   };
   if (filter.action) add("action = ?", filter.action);
   if (filter.userId) add("cashier_user_id = ?", filter.userId);
-  if (filter.from) add("created_at >= (?::date AT TIME ZONE 'Asia/Manila')", filter.from);
-  if (filter.to) add("created_at < ((?::date + 1) AT TIME ZONE 'Asia/Manila')", filter.to);
+  if (filter.from) add("created_at >= (?::date::timestamp AT TIME ZONE 'Asia/Manila')", filter.from);
+  if (filter.to) add("created_at < (((?::date + 1)::timestamp) AT TIME ZONE 'Asia/Manila')", filter.to);
   vals.push(Math.min(Math.max(filter.limit ?? 200, 1), 500));
   const { rows } = await query<AuditRow>(
     `SELECT ${COLS} FROM pos_audit_logs
