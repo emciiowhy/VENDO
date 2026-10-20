@@ -3,8 +3,8 @@ import type { NavGroup } from "./DashShell";
 /**
  * Sidebar for the Merchant workspace (owners/managers). Shared by every
  * /dashboard route so the active item highlights correctly as you navigate.
- * All five ERP pillars (Finance, Procurement, Manufacturing, HR, CRM) are now
- * live alongside the core POS/Inventory tools — nothing is "soon" anymore.
+ * The ERP modules (Finance, HR, CRM) sit beside the core POS/Inventory tools.
+ * Procurement and Manufacturing are retired (their old URLs redirect).
  */
 export const MERCHANT_NAV: NavGroup[] = [
   {
@@ -23,8 +23,6 @@ export const MERCHANT_NAV: NavGroup[] = [
     // renders locked (muted + lock badge) and the page shows the upgrade card.
     items: [
       { label: "Finance", icon: "chart", href: "/dashboard/finance", feature: "finance_accounting" },
-      { label: "Procurement", icon: "truck", href: "/dashboard/procurement", feature: "procurement_supply_chain" },
-      { label: "Manufacturing", icon: "factory", href: "/dashboard/manufacturing", feature: "manufacturing_bom" },
       { label: "HR", icon: "users", href: "/dashboard/hr", feature: "human_resources_payroll" },
       { label: "CRM", icon: "heart", href: "/dashboard/crm", feature: "customer_relationship_crm" },
     ],

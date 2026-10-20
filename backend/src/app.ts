@@ -24,8 +24,6 @@ import { stockMovementsRouter } from "./inventory/stockMovements.router.js";
 import { paymentQrRouter } from "./merchant/paymentQr.router.js";
 import { staffRouter } from "./staff/staff.router.js";
 import { financeRouter } from "./finance/finance.router.js";
-import { procurementRouter } from "./procurement/procurement.router.js";
-import { manufacturingRouter } from "./manufacturing/manufacturing.router.js";
 import { hrRouter } from "./hr/hr.router.js";
 import { essRouter } from "./hr/ess.router.js";
 import { timecardRouter } from "./hr/timecard.router.js";
@@ -142,8 +140,9 @@ export function createApp() {
   app.use("/api/v1/inventory", stockMovementsRouter);
   app.use("/api/v1/staff", staffRouter);
   app.use("/api/v1/finance", financeRouter);
-  app.use("/api/v1/procurement", procurementRouter);
-  app.use("/api/v1/manufacturing", manufacturingRouter);
+  // Procurement and Manufacturing are retired (capstone scope): their routers are
+  // no longer mounted, so those APIs 404. The code and every table/row are kept —
+  // nothing is deleted — and Finance still reads past purchase orders.
   app.use("/api/v1/hr", hrRouter);
   app.use("/api/v1/ess", essRouter);
   app.use("/api/v1/crm", crmRouter);

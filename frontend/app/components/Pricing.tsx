@@ -23,7 +23,7 @@ const plans: Plan[] = [
     signupPlan: "starter",
     features: [
       "Point of Sale",
-      "Inventory",
+      "Product Management",
       "BIR-ready receipts",
       "GCash / Maya / QRPH",
       "Senior / PWD discounts",
@@ -39,7 +39,6 @@ const plans: Plan[] = [
     signupPlan: "business",
     features: [
       "Everything in Starter",
-      "Procurement & Supply Chain",
       "Customer Relationship (CRM)",
       "Finance & Accounting",
       "Multi-staff roles",
@@ -48,14 +47,13 @@ const plans: Plan[] = [
   },
   {
     name: "Enterprise",
-    forWho: "For larger operations that need manufacturing and payroll.",
+    forWho: "For teams that need attendance and payroll in one place.",
     price: "₱799",
     per: "/mo",
     indicative: false,
     features: [
       "Everything in Business",
-      "Manufacturing (recipes / BOM)",
-      "Human Resources & payroll",
+      "People & Payroll (attendance + payroll)",
       "Priority support",
     ],
   },

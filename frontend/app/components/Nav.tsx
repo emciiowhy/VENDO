@@ -123,8 +123,6 @@ const PRODUCTS: MenuDef = {
         icon: "layers",
         links: [
           { label: "Finance & P&L", href: "/products/finance" },
-          { label: "Procurement", href: "/products/procurement" },
-          { label: "Manufacturing", href: "/products/manufacturing" },
         ],
       },
       {

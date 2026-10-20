@@ -32,16 +32,15 @@ The functional areas a Tenant operates inside its dashboard. Each module owns ex
 **Point of Sale (POS)**:
 Ringing up a Customer and taking payment. The front-of-house sales surface.
 
-**Inventory**:
-How much stock a Tenant has and where it sits. The current state of goods on hand.
-_Avoid_: folding this into Procurement or Supply Chain — Inventory is what you *have*.
+**Inventory** (shown in the UI as **Product Management**):
+How much stock a Tenant has and where it sits. The current state of goods on hand. Restocking is a logged stock adjustment on the product.
+_Avoid_: renaming the code, routes or `inventory_basic` feature key — only the user-facing label changed.
 
-**Procurement & Supply Chain**:
-Getting stock in — suppliers, purchase orders, and receiving. How goods *arrive*.
-_Avoid_: bundling with Manufacturing.
+**Procurement & Supply Chain** — *retired*:
+Getting stock in — suppliers, purchase orders, and receiving. Switched off for the capstone scope: the API is unmounted and the UI redirects, but the code and every `suppliers` / `purchase_orders` row are kept, and Finance still reads past POs.
 
-**Manufacturing**:
-Making products from raw materials via recipes / bill-of-materials. How goods are *produced*.
+**Manufacturing** — *retired*:
+Making products from raw materials via recipes / bill-of-materials. Switched off like Procurement; `recipes`, `ingredients` and `production_runs` rows are kept.
 
 **Finance & Accounting**:
 Money in and out — sales reports, expenses, tax, profit & loss.
@@ -79,7 +78,7 @@ The subscription tiers a Tenant can be on. Tiers differ by which Modules are unl
 POS + Inventory + BIR-ready receipts + GCash/Maya/QRPH + Senior/PWD discounts. For single-location coffee shops and small retailers.
 
 **Business** — ₱499/mo:
-Starter plus Procurement & Supply Chain, CRM, Finance & Accounting, multi-staff roles, and custom branding. For growing multi-staff retailers and restaurants.
+Starter plus CRM (with discount management), Finance & Accounting, multi-staff roles, and custom branding. For growing multi-staff retailers and restaurants.
 
 **Enterprise** — ₱799/mo:
-The full ERP — adds Manufacturing (recipes/BOM), HR & payroll, and priority support. (Multi-location is on the roadmap and advertised as "coming soon" — it is not yet shipped.) The landing CTA routes to a contact-sales/demo funnel rather than self-serve signup.
+Adds People & Payroll (attendance + payroll) and priority support. (Multi-location is on the roadmap and advertised as "coming soon" — it is not yet shipped.) The landing CTA routes to a contact-sales/demo funnel rather than self-serve signup.

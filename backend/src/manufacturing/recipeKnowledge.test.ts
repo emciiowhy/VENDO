@@ -167,17 +167,12 @@ describe("recipeSuggestSchema", () => {
   });
 });
 
-describe("Recipe assistant routes require store-management auth", () => {
+describe("Recipe assistant is switched off with Manufacturing", () => {
   const app = createApp();
 
-  it("blocks the status check for the unauthenticated with 401", async () => {
-    expect((await request(app).get("/api/v1/manufacturing/assistant")).status).toBe(401);
-  });
-
-  it("blocks suggestions for the unauthenticated with 401", async () => {
-    const res = await request(app)
-      .post("/api/v1/manufacturing/assistant/suggest")
-      .send({ product: "Pandesal", piecesPerBatch: 20 });
-    expect(res.status).toBe(401);
+  it("404s the status check and suggestions", async () => {
+    expect((await request(app).get("/api/v1/manufacturing/assistant")).status).toBe(404);
+    const res = await request(app).post("/api/v1/manufacturing/assistant/suggest").send({ product: "Pandesal" });
+    expect(res.status).toBe(404);
   });
 });

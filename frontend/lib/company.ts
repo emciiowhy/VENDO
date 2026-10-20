@@ -14,7 +14,7 @@ export const COMPANY: MarketingEntry[] = [
     name: "About Us",
     tagline: "Built for how Filipino businesses actually run.",
     intro:
-      "VendoPOS is one multi-tenant POS + ERP platform — sales, stock, suppliers, finances, staff, and customers in a single system, peso-first and BIR-ready.",
+      "VendoPOS is one multi-tenant POS + ERP platform — sales, stock, finances, staff, and customers in a single system, peso-first and BIR-ready.",
     cardsHeading: "What we stand for",
     cards: [
       {

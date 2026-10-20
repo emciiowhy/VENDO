@@ -5,27 +5,17 @@ import { poCreateSchema, supplierCreateSchema } from "./procurement.schema.js";
 
 const app = createApp();
 
-describe("Procurement routes require store-management auth", () => {
-  it("blocks the summary for the unauthenticated with 401", async () => {
-    const res = await request(app).get("/api/v1/procurement/summary");
-    expect(res.status).toBe(401);
-  });
-
-  it("blocks listing suppliers for the unauthenticated with 401", async () => {
-    const res = await request(app).get("/api/v1/procurement/suppliers");
-    expect(res.status).toBe(401);
-  });
-
-  it("blocks listing purchase orders for the unauthenticated with 401", async () => {
-    const res = await request(app).get("/api/v1/procurement/purchase-orders");
-    expect(res.status).toBe(401);
-  });
-
-  it("blocks receiving a purchase order for the unauthenticated with 401", async () => {
-    const res = await request(app).post(
-      "/api/v1/procurement/purchase-orders/00000000-0000-0000-0000-000000000000/receive",
-    );
-    expect(res.status).toBe(401);
+// Procurement was retired from VendoPOS (capstone scope): the router is no
+// longer mounted, so every endpoint is gone. Suppliers / POs stay in the DB
+// (Finance still reads past POs); restocking is a Product Management edit.
+describe("Procurement is switched off", () => {
+  it.each([
+    ["get", "/api/v1/procurement/summary"],
+    ["get", "/api/v1/procurement/suppliers"],
+    ["get", "/api/v1/procurement/purchase-orders"],
+    ["post", "/api/v1/procurement/purchase-orders/00000000-0000-0000-0000-000000000000/receive"],
+  ] as const)("%s %s → 404", async (method, path) => {
+    expect((await request(app)[method](path)).status).toBe(404);
   });
 });
 

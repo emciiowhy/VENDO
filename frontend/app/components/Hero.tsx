@@ -23,7 +23,7 @@ export function Hero() {
               </span>
             </h1>
             <p className="mt-6 text-[1.16rem] leading-relaxed text-ink-soft max-w-[52ch]">
-              VendoPOS brings your sales, stock, suppliers, finances, and staff into a single
+              VendoPOS brings your sales, stock, customers, finances, and staff into a single
               system — designed for how Filipino coffee shops, restaurants, and retailers actually
               operate.
             </p>

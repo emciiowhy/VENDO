@@ -76,7 +76,7 @@ export default function AboutPage() {
             </h1>
             <p className="reveal mt-6 mx-auto max-w-[60ch] text-[1.1rem] leading-relaxed text-ink-soft">
               VendoPOS is one multi-tenant POS + ERP platform for Filipino businesses — sales, stock,
-              suppliers, finances, and staff in a single system. We obsess over the unglamorous
+              customers, finances, and staff in a single system. We obsess over the unglamorous
               engineering that keeps a counter running: isolation, compliance, and resilience.
             </p>
           </div>
@@ -206,7 +206,7 @@ export default function AboutPage() {
                   6+
                 </div>
                 <p className="mt-2 text-[0.95rem] font-semibold text-ink-soft leading-snug">
-                  Connected modules — POS, inventory, procurement, finance, HR, and CRM — sharing one
+                  Connected modules — POS, product management, finance, people & payroll, and CRM — sharing one
                   source of truth.
                 </p>
               </div>
