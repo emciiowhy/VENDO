@@ -9,7 +9,16 @@ import {
   employeeUpdateSchema,
   payrollRunSchema,
   tillAccessSchema,
+  timecardCorrectionSchema,
 } from "./hr.schema.js";
+import {
+  clearManualAttendance,
+  correctTimecard,
+  getAttendanceReport,
+  getTeamAttendance,
+} from "./attendance.repository.js";
+import { monthBounds } from "./hr.repository.js";
+import { logActivity } from "../pos/audit.repository.js";
 import {
   adoptCashier,
   createEmployee,
@@ -68,6 +77,8 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_MONTH = /^\d{4}-\d{2}$/;
 
 /** Read & validate a YYYY-MM query param, defaulting to the current Manila month. */
+const UUID = new RegExp("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "i");
+
 function monthParam(req: Request): string {
   const m = req.query.month;
   return typeof m === "string" && ISO_MONTH.test(m) ? m : new Date().toISOString().slice(0, 7);
@@ -350,6 +361,100 @@ hrRouter.put("/attendance", async (req, res) => {
   } catch (err) {
     console.error("[hr] attendance upsert failed:", err);
     res.status(500).json({ ok: false, error: "Could not save attendance." });
+  }
+});
+
+/** GET /hr/attendance/month?month=YYYY-MM — every employee's month totals, for the Attendance tab. */
+hrRouter.get("/attendance/month", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const { start, end } = monthBounds(monthParam(req));
+    res.json({ ok: true, month: start.slice(0, 7), rows: await getTeamAttendance(tenantId, start, end) });
+  } catch (err) {
+    console.error("[hr] team attendance failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load attendance." });
+  }
+});
+
+/** DELETE /hr/attendance?employeeId=&date= — drop a manual entry; the day goes back to the timecards. */
+hrRouter.delete("/attendance", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const employeeId = typeof req.query.employeeId === "string" ? req.query.employeeId : "";
+  const date = typeof req.query.date === "string" && ISO_DATE.test(req.query.date) ? req.query.date : null;
+  if (!UUID.test(employeeId) || !date) {
+    return res.status(400).json({ ok: false, error: "A valid employeeId and date are required." });
+  }
+  try {
+    await clearManualAttendance(tenantId, employeeId, date);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[hr] attendance clear failed:", err);
+    res.status(500).json({ ok: false, error: "Could not clear the entry." });
+  }
+});
+
+/**
+ * GET /hr/employees/:id/attendance?month=YYYY-MM — the month derived from the
+ * employee's schedule + Shift In/Out timecards + manual entries: one status per
+ * day (with Time In / Time Out, break and worked minutes) and the totals.
+ */
+hrRouter.get("/employees/:id/attendance", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID.test(req.params.id)) return res.status(404).json({ ok: false, error: "Employee not found." });
+  try {
+    const { start, end } = monthBounds(monthParam(req));
+    const report = await getAttendanceReport(tenantId, req.params.id, start, end);
+    if (!report) return res.status(404).json({ ok: false, error: "Employee not found." });
+    res.json({ ok: true, month: start.slice(0, 7), ...report });
+  } catch (err) {
+    console.error("[hr] attendance report failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load attendance." });
+  }
+});
+
+/**
+ * PATCH /hr/timecards/:id — set a timecard's real Time In / Time Out (the fix
+ * for a forgotten Shift Out). Owner/manager only, like the rest of this router;
+ * tenant-fenced; recorded on the activity log with the before/after times.
+ */
+hrRouter.patch("/timecards/:id", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID.test(req.params.id)) return res.status(404).json({ ok: false, error: "Timecard not found." });
+  const parsed = timecardCorrectionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const result = await correctTimecard(tenantId, req.params.id, parsed.data);
+    if (!result.ok) {
+      return result.code === "NOT_FOUND"
+        ? res.status(404).json({ ok: false, error: "Timecard not found." })
+        : res.status(400).json({ ok: false, error: result.detail });
+    }
+    const t = (iso: string | null) =>
+      iso
+        ? new Date(iso).toLocaleString("en-PH", {
+            timeZone: "Asia/Manila",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "open";
+    void logActivity(
+      { tenantId, userId: req.user?.userId ?? null, name: req.user?.name ?? "Manager" },
+      {
+        action: "timecard_corrected",
+        refId: req.params.id,
+        detail: `${t(result.before.clockIn)} – ${t(result.before.clockOut)} → ${t(result.after.clockIn)} – ${t(result.after.clockOut)}`,
+      },
+    );
+    res.json({ ok: true, timecard: result.after });
+  } catch (err) {
+    console.error("[hr] timecard correction failed:", err);
+    res.status(500).json({ ok: false, error: "Could not save the correction." });
   }
 });
 

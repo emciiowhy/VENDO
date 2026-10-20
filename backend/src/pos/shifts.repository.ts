@@ -1,6 +1,5 @@
 import { pool, query } from "../db.js";
 import { notifyVariance } from "../notifications/notifications.repository.js";
-import { markPresentFromShift } from "../hr/hr.repository.js";
 import {
   buildAuditSnapshot,
   reconcile,
@@ -119,12 +118,9 @@ export async function openShift(
       [tenantId, userId, cashierName, openingCents],
     );
     const row = rows[0];
-    // Opening the till auto-logs HR attendance (Present, today/Manila) for the
-    // cashier's linked employee record. Best-effort: a derived side-effect must
-    // never block or fail the shift open, mirroring notifyVariance below.
-    void markPresentFromShift(tenantId, userId).catch((err) =>
-      console.error("[shifts] auto-attendance mark failed:", err),
-    );
+    // Attendance no longer comes from the cash drawer: Shift In / Shift Out on
+    // the labor clock (timecards) is the Time In / Time Out source, so opening
+    // the till writes nothing to HR.
     return {
       ok: true,
       shift: {

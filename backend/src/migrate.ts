@@ -1199,6 +1199,30 @@ ALTER TABLE pos_audit_logs ADD CONSTRAINT pos_audit_logs_action_check CHECK (act
    'login', 'logout', 'clock_in', 'clock_out', 'shift_open', 'shift_close',
    'timecard_corrected', 'payroll_approved'));
 CREATE INDEX IF NOT EXISTS pos_audit_logs_action_idx ON pos_audit_logs (tenant_id, action, created_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- Attendance from Shift In / Shift Out (the labor clock).
+--
+-- Each employee gets a fixed weekly schedule, so a day's status is DERIVED, not
+-- assumed: a rest day is grey, a scheduled day with no punch is absent, and
+-- worked hours are the timecard minutes less the unpaid break.
+--   work_days            ISO-ish weekday numbers the employee is scheduled
+--                        (0 = Sun … 6 = Sat). Default Mon–Sat, the common PH week.
+--   standard_daily_hours the full day (divisor for the hourly rate; half-day
+--                        cutoff is under 50% of it).
+--   unpaid_break_minutes deducted once from a day whose punches total ≥ 5 hours
+--                        (Labor Code Art. 85 meal break).
+-- timecards.needs_review flags a card the system had to close because the worker
+-- forgot to clock out; it counts 0 hours until a manager enters the real time
+-- out, and blocks payroll approval for its period.
+-- All additive with safe defaults — no existing row changes meaning.
+-- ---------------------------------------------------------------------------
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS work_days SMALLINT[] NOT NULL DEFAULT '{1,2,3,4,5,6}';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS standard_daily_hours NUMERIC(4,2) NOT NULL DEFAULT 8
+  CHECK (standard_daily_hours > 0 AND standard_daily_hours <= 24);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS unpaid_break_minutes SMALLINT NOT NULL DEFAULT 60
+  CHECK (unpaid_break_minutes BETWEEN 0 AND 240);
+ALTER TABLE timecards ADD COLUMN IF NOT EXISTS needs_review BOOLEAN NOT NULL DEFAULT FALSE;
 `;
 
 async function migrate() {

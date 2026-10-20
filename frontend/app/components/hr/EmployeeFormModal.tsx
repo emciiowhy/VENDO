@@ -49,6 +49,10 @@ export function EmployeeFormModal({
   const [bankAccountName, setBankAccountName] = useState(() => employee?.bankAccountName ?? "");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [ptoBalanceDays, setPtoBalanceDays] = useState(() => (employee ? String(employee.ptoBalanceDays) : ""));
+  // Work schedule — drives attendance status (rest day vs absent) and payroll.
+  const [workDays, setWorkDays] = useState<number[]>(() => employee?.workDays ?? [1, 2, 3, 4, 5, 6]);
+  const [stdHours, setStdHours] = useState(() => String(employee?.standardDailyHours ?? 8));
+  const [breakMinutes, setBreakMinutes] = useState(() => String(employee?.unpaidBreakMinutes ?? 60));
   const [showMore, setShowMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +67,7 @@ export function EmployeeFormModal({
 
   async function submit() {
     if (!name.trim()) return setError("Name is required.");
+    if (workDays.length === 0) return setError("Pick at least one work day.");
     setBusy(true);
     setError(null);
     const fields: EmployeeFields = {
@@ -81,6 +86,9 @@ export function EmployeeFormModal({
       emergencyContactPhone: emergencyPhone,
       bankName,
       bankAccountName,
+      workDays,
+      standardDailyHours: Number(stdHours) || 8,
+      unpaidBreakMinutes: Math.round(Number(breakMinutes) || 0),
     };
     // Account number is write-only — send only when newly typed so we never
     // overwrite the stored value with a blank. Same for PTO (blank would zero it).
@@ -165,6 +173,44 @@ export function EmployeeFormModal({
               <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5" />
             </label>
           </div>
+
+          <fieldset className="rounded-[12px] bg-paper hairline p-3.5 space-y-3">
+            <legend className="px-1 text-[12px] font-bold text-ink-soft">Work schedule</legend>
+            <div>
+              <span className="text-[12px] font-semibold text-ink-soft">Work days</span>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label, d) => {
+                  const on = workDays.includes(d);
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setWorkDays((cur) => (on ? cur.filter((x) => x !== d) : [...cur, d].sort((a, b) => a - b)))}
+                      className={
+                        "min-w-[44px] rounded-[9px] px-2.5 py-1.5 text-[12.5px] font-bold transition " +
+                        (on ? "bg-brand-500 text-white" : "bg-surface hairline text-ink-soft hover:border-brand-200")
+                      }
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="block mt-1 text-[11.5px] text-ink-faint">Unselected days are rest days (grey on the calendar).</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-[12px] font-semibold text-ink-soft">Standard hours per day</span>
+                <input inputMode="decimal" value={stdHours} onChange={(e) => setStdHours(e.target.value.replace(/[^\d.]/g, ""))} className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5 tabular-nums" />
+              </label>
+              <label className="block">
+                <span className="text-[12px] font-semibold text-ink-soft">Unpaid break (minutes)</span>
+                <input inputMode="numeric" value={breakMinutes} onChange={(e) => setBreakMinutes(e.target.value.replace(/[^\d]/g, ""))} className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5 tabular-nums" />
+              </label>
+            </div>
+            <span className="block text-[11.5px] text-ink-faint">The break is deducted on days of 5 hours or more on the clock.</span>
+          </fieldset>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Phone" value={phone} onChange={setPhone} placeholder="0917 000 0000" />

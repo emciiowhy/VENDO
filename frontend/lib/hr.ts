@@ -37,14 +37,68 @@ export interface Employee {
   bankAccountName: string | null;
   bankAccountLast4: string | null;
   ptoBalanceDays: number;
+  /** Scheduled weekdays, 0 = Sunday … 6 = Saturday. */
+  workDays: number[];
+  standardDailyHours: number;
+  unpaidBreakMinutes: number;
   createdAt: string;
   updatedAt: string;
 }
 
+/** A day's derived attendance status (see backend hr/attendance.ts). */
+export type DayStatus =
+  | "present"
+  | "half_day"
+  | "absent"
+  | "leave"
+  | "rest_day"
+  | "unscheduled"
+  | "pending"
+  | "needs_review";
+
+export interface PunchView {
+  id: string;
+  /** Shift In (ISO). */
+  timeIn: string;
+  /** Shift Out (ISO), null while on the clock or if forgotten. */
+  timeOut: string | null;
+  minutes: number;
+  open: boolean;
+  needsReview: boolean;
+}
+
+/** One day of attendance, derived from the schedule + Shift In/Out + manual entries. */
 export interface AttendanceDay {
   date: string;
-  status: string;
-  hours: number;
+  weekday: number;
+  scheduled: boolean;
+  status: DayStatus;
+  punches: PunchView[];
+  grossMinutes: number;
+  breakMinutes: number;
+  workedMinutes: number;
+  manual: boolean;
+  note: string | null;
+  restDayWorked: boolean;
+}
+
+export interface AttendanceSummary {
+  scheduledDays: number;
+  presentDays: number;
+  halfDays: number;
+  absentDays: number;
+  leaveDays: number;
+  restDays: number;
+  needsReviewDays: number;
+  workedMinutes: number;
+}
+
+export interface TeamAttendanceRow {
+  employeeId: string;
+  name: string;
+  position: string | null;
+  hasTillAccess: boolean;
+  summary: AttendanceSummary;
 }
 
 export interface EmployeePayslip {
@@ -117,6 +171,7 @@ export interface HrOverview {
 export interface EmployeeDetail extends Employee {
   month: string;
   attendanceMonth: AttendanceDay[];
+  attendanceSummary: AttendanceSummary;
   hours: HoursBreakdown;
   ptoUsedYtd: number;
   payslips: EmployeePayslip[];
@@ -305,6 +360,10 @@ export interface EmployeeFields {
   bankAccountName?: string;
   bankAccountNumber?: string; // write-only; never returned by the API
   ptoBalanceDays?: string; // days
+  // Work schedule (sent as numbers).
+  workDays?: number[];
+  standardDailyHours?: number;
+  unpaidBreakMinutes?: number;
 }
 
 export type Result<T> =
@@ -613,6 +672,59 @@ export async function runPayroll(input: {
         credentials: "include",
         body: JSON.stringify(input),
       }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+// ── Attendance (Shift In / Shift Out) ────────────────────────────────────────
+
+/** Every employee's totals for a month — the Attendance tab. */
+export async function getTeamAttendance(month: string): Promise<Result<{ month: string; rows: TeamAttendanceRow[] }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/attendance/month?month=${month}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** One employee's month, day by day, with the totals. */
+export async function getEmployeeAttendance(
+  id: string,
+  month: string,
+): Promise<Result<{ month: string; days: AttendanceDay[]; summary: AttendanceSummary }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/employees/${id}/attendance?month=${month}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Manager sets a timecard's real Time In / Time Out (ISO instants). */
+export async function correctTimecard(
+  id: string,
+  body: { clockIn?: string; clockOut: string },
+): Promise<Result<{ timecard: { clockIn: string; clockOut: string } }>> {
+  try {
+    return await readJson(
+      await fetch(`${BASE}/timecards/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Remove a manual entry for a day, so it goes back to the timecards. */
+export async function clearAttendance(employeeId: string, date: string): Promise<Result<Record<string, never>>> {
+  try {
+    return await readJson(
+      await fetch(`${BASE}/attendance?employeeId=${employeeId}&date=${date}`, { method: "DELETE", credentials: "include" }),
     );
   } catch {
     return NETWORK_ERR;

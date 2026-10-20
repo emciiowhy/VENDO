@@ -1,5 +1,7 @@
 import { pool, query } from "../db.js";
 import { computeDeductions } from "./deductions.js";
+import { getAttendanceReport } from "./attendance.repository.js";
+import type { AttendanceDay as DerivedDay } from "./attendance.js";
 import { hashPin } from "../auth/auth.crypto.js";
 import type {
   AttendanceDay,
@@ -85,6 +87,9 @@ interface EmployeeRow {
   bank_account_name: string | null;
   bank_account_number: string | null;
   pto_balance_days: string | number;
+  work_days: number[];
+  standard_daily_hours: string | number;
+  unpaid_break_minutes: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -123,6 +128,9 @@ function toEmployee(row: EmployeeRow): Employee {
     bankAccountName: row.bank_account_name,
     bankAccountLast4: last4(row.bank_account_number),
     ptoBalanceDays: Number(row.pto_balance_days),
+    workDays: (row.work_days ?? []).map(Number),
+    standardDailyHours: Number(row.standard_daily_hours),
+    unpaidBreakMinutes: row.unpaid_break_minutes,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -131,7 +139,7 @@ function toEmployee(row: EmployeeRow): Employee {
 const EMP_COLUMNS = `id, user_id, name, position, employment_type, pay_type, pay_rate_cents,
   hire_date, phone, email, note, is_active, separated_on, address, emergency_contact_name,
   emergency_contact_phone, bank_name, bank_account_name, bank_account_number, pto_balance_days,
-  created_at, updated_at`;
+  work_days, standard_daily_hours, unpaid_break_minutes, created_at, updated_at`;
 
 export async function listEmployees(tenantId: string): Promise<Employee[]> {
   const { rows } = await query<EmployeeRow>(
@@ -155,8 +163,10 @@ export async function createEmployee(tenantId: string, input: EmployeeCreateInpu
     `INSERT INTO employees
        (tenant_id, name, position, employment_type, pay_type, pay_rate_cents, hire_date, phone, email, note,
         is_active, address, emergency_contact_name, emergency_contact_phone,
-        bank_name, bank_account_name, bank_account_number, pto_balance_days)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        bank_name, bank_account_name, bank_account_number, pto_balance_days,
+        work_days, standard_daily_hours, unpaid_break_minutes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+             coalesce($19::smallint[], '{1,2,3,4,5,6}'), coalesce($20::numeric, 8), coalesce($21::smallint, 60))
      RETURNING ${EMP_COLUMNS}`,
     [
       tenantId,
@@ -177,6 +187,9 @@ export async function createEmployee(tenantId: string, input: EmployeeCreateInpu
       input.bankAccountName ?? null,
       input.bankAccountNumber ?? null,
       input.ptoBalanceDays ?? 0,
+      input.workDays ?? null,
+      input.standardDailyHours ?? null,
+      input.unpaidBreakMinutes ?? null,
     ],
   );
   return toEmployee(rows[0]);
@@ -210,6 +223,9 @@ export async function updateEmployee(
   // Account number is write-only: only overwrite when a new value is supplied.
   if (input.bankAccountNumber !== undefined) set("bank_account_number", input.bankAccountNumber ?? null);
   if (input.ptoBalanceDays !== undefined) set("pto_balance_days", input.ptoBalanceDays);
+  if (input.workDays !== undefined) set("work_days", input.workDays);
+  if (input.standardDailyHours !== undefined) set("standard_daily_hours", input.standardDailyHours);
+  if (input.unpaidBreakMinutes !== undefined) set("unpaid_break_minutes", input.unpaidBreakMinutes);
   if (input.isActive !== undefined) {
     set("is_active", input.isActive);
     // Stamp/clear the separation date so monthly retention stays truthful.
@@ -763,49 +779,31 @@ export function monthBounds(month: string): { start: string; end: string } {
 const STD_DAY_HOURS = 8; // PH standard working day; hours past it on a day are OT.
 
 /**
- * Roll daily attendance into worked / regular / overtime hours. Hourly staff log
- * real hours; Daily/Monthly staff don't, so a Present day counts as a standard
- * 8h day and a Half-day as 4h. Attendance rate excludes approved Leave from the
- * denominator (you're not "unreliable" for taking sanctioned time off).
+ * The hours rollup for derived attendance days: worked time split at the
+ * employee's own standard day (anything past it on a day is overtime).
+ * Attendance rate excludes approved Leave from the denominator.
  */
-function summarizeHours(rows: { status: string; hours: number }[]): HoursBreakdown {
-  let daysPresent = 0;
+function hoursFromDays(days: DerivedDay[], standardDailyHours: number): HoursBreakdown {
+  const std = standardDailyHours * 60;
   let regular = 0;
   let overtime = 0;
-  let scheduled = 0; // Present + Absent + Half-day (the days you were expected)
-  for (const r of rows) {
-    if (r.status === "Present") {
-      daysPresent += 1;
-      scheduled += 1;
-    } else if (r.status === "Half-day") {
-      daysPresent += 0.5;
-      scheduled += 1;
-    } else if (r.status === "Absent") {
-      scheduled += 1;
-    }
-    const eff = r.hours > 0 ? r.hours : r.status === "Present" ? STD_DAY_HOURS : r.status === "Half-day" ? 4 : 0;
-    regular += Math.min(eff, STD_DAY_HOURS);
-    overtime += Math.max(eff - STD_DAY_HOURS, 0);
+  let present = 0;
+  let expected = 0;
+  for (const d of days) {
+    regular += Math.min(d.workedMinutes, std);
+    overtime += Math.max(d.workedMinutes - std, 0);
+    if (d.status === "present") present += 1;
+    if (d.status === "half_day") present += 0.5;
+    if (d.scheduled && d.status !== "leave") expected += 1;
   }
-  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const h = (m: number) => Math.round((m / 60) * 10) / 10;
   return {
-    daysPresent: round1(daysPresent),
-    hoursWorked: round1(regular + overtime),
-    regularHours: round1(regular),
-    overtimeHours: round1(overtime),
-    attendanceRatePct: scheduled > 0 ? Math.round((daysPresent / scheduled) * 100) : 0,
+    daysPresent: present,
+    hoursWorked: h(regular + overtime),
+    regularHours: h(regular),
+    overtimeHours: h(overtime),
+    attendanceRatePct: expected > 0 ? Math.min(100, Math.round((present / expected) * 100)) : 0,
   };
-}
-
-async function attendanceMonthFor(tenantId: string, employeeId: string, month: string): Promise<AttendanceDay[]> {
-  const { start, end } = monthBounds(month);
-  const { rows } = await query<{ work_date: Date; status: string; hours: string }>(
-    `SELECT work_date, status, hours FROM attendance
-      WHERE tenant_id = $1 AND employee_id = $2 AND work_date BETWEEN $3 AND $4
-      ORDER BY work_date ASC`,
-    [tenantId, employeeId, start, end],
-  );
-  return rows.map((r) => ({ date: toIsoDate(r.work_date), status: r.status, hours: Number(r.hours) }));
 }
 
 /** Days of approved 'Leave' the employee has drawn so far this Manila year. */
@@ -863,17 +861,19 @@ export async function getEmployeeDetail(
   const employee = await getEmployee(tenantId, id);
   if (!employee) return null;
   const { start, end } = monthBounds(month);
-  const [attendanceMonth, ptoUsedYtd, payslips, perf] = await Promise.all([
-    attendanceMonthFor(tenantId, id, month),
+  const [report, ptoUsedYtd, payslips, perf] = await Promise.all([
+    getAttendanceReport(tenantId, id, start, end),
     ptoUsedYtdFor(tenantId, id),
     payslipsFor(tenantId, id),
     getPerformance(tenantId, start, end, id),
   ]);
+  const days = report?.days ?? [];
   return {
     ...employee,
-    month: monthBounds(month).start.slice(0, 7),
-    attendanceMonth,
-    hours: summarizeHours(attendanceMonth.map((a) => ({ status: a.status, hours: a.hours }))),
+    month: start.slice(0, 7),
+    attendanceMonth: days,
+    attendanceSummary: report!.summary,
+    hours: hoursFromDays(days, employee.standardDailyHours),
     ptoUsedYtd,
     payslips,
     performance: perf.rows[0] ?? null,
@@ -1124,11 +1124,13 @@ export async function getEssProfile(tenantId: string, userId: string, month: str
   const e = rows[0];
   if (!e) return null;
 
-  const [attendanceMonth, ptoUsedYtd, payslips] = await Promise.all([
-    attendanceMonthFor(tenantId, e.id, month),
+  const { start, end } = monthBounds(month);
+  const [report, ptoUsedYtd, payslips] = await Promise.all([
+    getAttendanceReport(tenantId, e.id, start, end),
     ptoUsedYtdFor(tenantId, e.id),
     payslipsFor(tenantId, e.id),
   ]);
+  const days = report?.days ?? [];
 
   return {
     employee: {
@@ -1142,9 +1144,10 @@ export async function getEssProfile(tenantId: string, userId: string, month: str
       ptoBalanceDays: Number(e.pto_balance_days),
     },
     storeName: e.store_name,
-    month: monthBounds(month).start.slice(0, 7),
-    attendanceMonth,
-    hours: summarizeHours(attendanceMonth.map((a) => ({ status: a.status, hours: a.hours }))),
+    month: start.slice(0, 7),
+    attendanceMonth: days,
+    attendanceSummary: report!.summary,
+    hours: hoursFromDays(days, report?.schedule.standardDailyHours ?? 8),
     ptoUsedYtd,
     payslips,
   };

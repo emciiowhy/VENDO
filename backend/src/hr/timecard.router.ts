@@ -50,10 +50,15 @@ timecardRouter.post("/clock-in", async (req, res) => {
     if (!result.ok) {
       return res.status(409).json({ ok: false, error: "You're already clocked in.", timecard: result.timecard });
     }
-    void logActivity(
-      { tenantId: s.tenantId, userId: s.userId, name: req.user?.name ?? "Staff" },
-      { action: "clock_in", refId: result.timecard.id },
-    );
+    const actor = { tenantId: s.tenantId, userId: s.userId, name: req.user?.name ?? "Staff" };
+    if (result.autoClosedId) {
+      void logActivity(actor, {
+        action: "clock_out",
+        refId: result.autoClosedId,
+        detail: "Missed Shift Out — auto-closed at 0 hours, needs manager review",
+      });
+    }
+    void logActivity(actor, { action: "clock_in", refId: result.timecard.id });
     res.status(201).json({ ok: true, timecard: result.timecard });
   } catch (err) {
     console.error("[timecard] clock-in failed:", err);

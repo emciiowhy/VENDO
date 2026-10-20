@@ -78,6 +78,16 @@ export const employeeCreateSchema = z.object({
   bankAccountName: optionalText(120),
   bankAccountNumber: optionalText(40),
   ptoBalanceDays: daysField.optional(),
+  // Work schedule — drives attendance status (rest day vs absent) and payroll.
+  // Weekdays are 0 = Sunday … 6 = Saturday.
+  workDays: z
+    .array(z.number().int().min(0).max(6))
+    .min(1, "Pick at least one work day.")
+    .max(7)
+    .transform((d) => [...new Set(d)].sort((a, b) => a - b))
+    .optional(),
+  standardDailyHours: z.number().min(1, "At least 1 hour.").max(24, "At most 24 hours.").optional(),
+  unpaidBreakMinutes: z.number().int().min(0).max(240, "At most 240 minutes.").optional(),
 });
 
 export const employeeUpdateSchema = employeeCreateSchema.partial();
@@ -91,6 +101,16 @@ export const attendanceUpsertSchema = z.object({
   hours: hoursField.default(0),
   note: optionalText(240),
 });
+
+/**
+ * A manager's correction of one timecard — the fix for a forgotten Shift Out.
+ * ISO instants with an offset (the browser sends its local time as UTC).
+ */
+export const timecardCorrectionSchema = z.object({
+  clockIn: z.string().datetime({ offset: true, message: "Enter a valid time in." }).optional(),
+  clockOut: z.string().datetime({ offset: true, message: "Enter a valid time out." }),
+});
+export type TimecardCorrectionInput = z.infer<typeof timecardCorrectionSchema>;
 
 // ── Payroll ──────────────────────────────────────────────────────────────────
 
@@ -179,16 +199,16 @@ export interface Employee {
   /** Last 4 digits only — the raw account number never leaves the database. */
   bankAccountLast4: string | null;
   ptoBalanceDays: number;
+  workDays: number[];
+  standardDailyHours: number;
+  unpaidBreakMinutes: number;
   createdAt: string;
   updatedAt: string;
 }
 
-/** One day of an employee's attendance, for the profile/ESS calendar. */
-export interface AttendanceDay {
-  date: string;
-  status: string;
-  hours: number;
-}
+/** One derived day of attendance (see attendance.ts for the rules). */
+export type { AttendanceDay, AttendanceSummary } from "./attendance.js";
+import type { AttendanceDay, AttendanceSummary } from "./attendance.js";
 
 /** A single line an employee earned in a past payroll run (their paystub). */
 export interface EmployeePayslip {
@@ -220,6 +240,7 @@ export interface HoursBreakdown {
 export interface EmployeeDetail extends Employee {
   month: string;
   attendanceMonth: AttendanceDay[];
+  attendanceSummary: AttendanceSummary;
   hours: HoursBreakdown;
   ptoUsedYtd: number;
   payslips: EmployeePayslip[];
@@ -315,6 +336,7 @@ export interface EssProfile {
   storeName: string | null;
   month: string;
   attendanceMonth: AttendanceDay[];
+  attendanceSummary: AttendanceSummary;
   hours: HoursBreakdown;
   ptoUsedYtd: number;
   payslips: EmployeePayslip[];

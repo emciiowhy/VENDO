@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../Icon";
-import { AttendanceCalendar } from "../hr/AttendanceCalendar";
+import { AttendanceCalendar, fmtHours } from "../hr/AttendanceCalendar";
+import { AttendanceDayPanel } from "../hr/AttendanceDayPanel";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
 import { getMyEssProfile, type EssErrorKind, type EssProfile } from "@/lib/ess";
 import type { Role } from "@/lib/auth";
@@ -21,6 +22,7 @@ function thisMonth(): string {
 export function EssPortal({ greetingName, role }: { greetingName: string; role: Role }) {
   const [month, setMonth] = useState(thisMonth());
   const [reload, setReload] = useState(0);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "error"; kind: EssErrorKind; message: string }
@@ -127,8 +129,8 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat icon="clock" label="Hours this month" value={`${p.hours.hoursWorked}h`} sub={`${p.hours.regularHours} reg · ${p.hours.overtimeHours} OT`} />
-        <Stat icon="check" label="Attendance" value={`${p.hours.attendanceRatePct}%`} sub={`${p.hours.daysPresent} days present`} tone="good" />
+        <Stat icon="clock" label="Hours worked this month" value={fmtHours(p.attendanceSummary.workedMinutes)} sub={`after unpaid breaks`} />
+        <Stat icon="check" label="Attendance" value={`${p.hours.attendanceRatePct}%`} sub={`${p.attendanceSummary.presentDays} present · ${p.attendanceSummary.absentDays} absent`} tone="good" />
         <Stat icon="heart" label="PTO balance" value={`${p.employee.ptoBalanceDays}d`} sub={`${p.ptoUsedYtd} used this year`} />
         <Stat icon="peso" label="Pay rate" value={formatCentsWhole(p.employee.payRateCents)} sub={`per ${rateUnit(p.employee.payType)}`} />
       </div>
@@ -137,18 +139,35 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div>
             <h3 className="font-extrabold tracking-tight">My attendance</h3>
-            <p className="text-[12.5px] text-ink-soft">Your shift history for the month.</p>
+            <p className="text-[12.5px] text-ink-soft">From your Shift In / Shift Out. Tap a date for its times.</p>
           </div>
           <input
             type="month"
             value={month}
             max={thisMonth()}
-            onChange={(e) => setMonth(e.target.value)}
+            onChange={(e) => {
+              setMonth(e.target.value);
+              setSelectedDate(null);
+            }}
             className="field-input rounded-[10px] px-3 py-2 text-[14px]"
           />
         </div>
-        <div className="border-t border-ink/8 p-5">
-          <AttendanceCalendar month={month} days={p.attendanceMonth} />
+        <div className="border-t border-ink/8 p-5 grid gap-5 lg:grid-cols-2">
+          <AttendanceCalendar
+            month={month}
+            days={p.attendanceMonth}
+            selected={selectedDate}
+            onSelect={setSelectedDate}
+          />
+          {(() => {
+            const day = p.attendanceMonth.find((d) => d.date === selectedDate);
+            // Read-only: no employeeId, so no fixes — staff see their own times only.
+            return day ? (
+              <AttendanceDayPanel day={day} />
+            ) : (
+              <p className="text-[13px] text-ink-soft">Tap a date to see your Time In, Time Out and hours.</p>
+            );
+          })()}
         </div>
       </div>
 
