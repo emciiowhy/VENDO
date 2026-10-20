@@ -42,7 +42,7 @@ const FEATURE_PITCH: Record<
 > = {
   // STARTER (included everywhere — these rarely render a callout)
   pos_terminal: { icon: "pos", title: "Point of Sale", description: "Ring up sales at the register." },
-  inventory_basic: { icon: "box", title: "Inventory", description: "Items, prices and stock." },
+  inventory_basic: { icon: "box", title: "Product Management", description: "Products, prices and stock." },
   bir_receipts: { icon: "receipt", title: "Receipts", description: "VAT-itemized receipts with gap-free serial numbering." },
   digital_payments_qrph: { icon: "wallet", title: "Digital payments", description: "Accept QRPH and e-wallet payments." },
   // BUSINESS
@@ -84,9 +84,9 @@ const FEATURE_PITCH: Record<
   },
   human_resources_payroll: {
     icon: "users",
-    title: "HR & payroll",
+    title: "People & Payroll",
     description:
-      "Manage your employee roster, daily attendance and gross-pay payroll runs, with employee self-service.",
+      "Employees, attendance from Shift In / Shift Out, and payroll you review and approve — with staff self-service.",
   },
   priority_support: {
     icon: "shield",

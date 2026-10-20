@@ -88,7 +88,7 @@ export const PRODUCTS: ProductPage[] = [
     slug: "inventory-management",
     category: "Run your store smoothly",
     icon: "box",
-    name: "Inventory Management",
+    name: "Product Management",
     tagline: "Know exactly what you have, in real time.",
     intro:
       "Track stock to the unit, get low-stock alerts before you run out, and watch quantities move automatically as you sell and restock.",

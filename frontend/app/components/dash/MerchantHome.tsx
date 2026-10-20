@@ -35,10 +35,10 @@ import { MERCHANT_EVENTS_URL, type LowStockEvent } from "@/lib/merchantEvents";
 
 const MODULES: { icon: IconName; label: string; desc: string; href?: string }[] = [
   { icon: "pos", label: "Point of Sale", desc: "Ring up & take payment", href: "/pos" },
-  { icon: "box", label: "Inventory", desc: "Items, prices & stock", href: "/dashboard/inventory" },
+  { icon: "box", label: "Product Management", desc: "Products, prices & stock", href: "/dashboard/inventory" },
   { icon: "file", label: "Compliance", desc: "Sales ledger & VAT", href: "/dashboard/compliance" },
   { icon: "chart", label: "Finance", desc: "Profit, loss & expenses", href: "/dashboard/finance" },
-  { icon: "users", label: "HR", desc: "Staff & payroll", href: "/dashboard/hr" },
+  { icon: "users", label: "People & Payroll", desc: "Employees, attendance & payroll", href: "/dashboard/hr" },
   { icon: "heart", label: "CRM", desc: "Customers & loyalty", href: "/dashboard/crm" },
 ];
 

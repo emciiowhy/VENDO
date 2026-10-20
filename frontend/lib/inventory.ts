@@ -81,7 +81,12 @@ export interface ProductFields {
   isActive: boolean;
   vatClass: VatClass;
   scPwdEligible: boolean;
+  /** Why stock changed, when it did (saved on the stock ledger entry). */
+  stockReason?: StockReason;
 }
+
+export const STOCK_REASONS = ["Restock", "Damaged / expired", "Count correction", "Other"] as const;
+export type StockReason = (typeof STOCK_REASONS)[number];
 
 function toFormData(fields: Partial<ProductFields>, image: File | null, removeImage = false): FormData {
   const fd = new FormData();

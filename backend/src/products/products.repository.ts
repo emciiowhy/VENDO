@@ -299,7 +299,7 @@ export async function updateProduct(
       productId: id,
       qtyDelta: delta,
       reason: "adjust",
-      note: "Manual stock edit",
+      note: input.stockReason ? `${input.stockReason} (manual stock edit)` : "Manual stock edit",
       createdBy: editedBy,
     });
     if (!moved.ok) {

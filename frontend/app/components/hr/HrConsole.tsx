@@ -6,9 +6,6 @@ import { Icon, type IconName } from "../Icon";
 import { Pagination, usePagination } from "../Pagination";
 import { useToast } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
-import { HrOverview } from "./HrOverview";
-import { PerformanceMatrix } from "./PerformanceMatrix";
-import { LaborAnalytics } from "./LaborAnalytics";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
 import {
   deleteEmployee,
@@ -24,14 +21,14 @@ import {
 import { EmployeeFormModal } from "./EmployeeFormModal";
 import { PayrollRunModal } from "./PayrollRunModal";
 import { PayrollDetailDrawer } from "./PayrollDetailDrawer";
-import { ShiftDiscrepancyMatrix } from "./ShiftDiscrepancyMatrix";
 
 /**
  * Merchant HR console — employees, attendance and payroll over one tenant-scoped
  * dataset. Attendance is marked per day; payroll derives gross pay from rates +
  * that attendance. Builds on the same staff the cashier/shift ledger uses.
  */
-type Tab = "overview" | "employees" | "attendance" | "payroll" | "performance" | "labor" | "reconciliation";
+/** People & Payroll is three simple sections; nothing else. */
+type Tab = "employees" | "attendance" | "payroll";
 
 const PAY_TAG: Record<string, string> = {
   Monthly: "bg-brand-50 text-brand-600",
@@ -47,7 +44,7 @@ type State =
 export function HrConsole() {
   const { push } = useToast();
   const [state, setState] = useState<State>({ status: "loading" });
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("employees");
   const [form, setForm] = useState<{ employee: Employee | null } | null>(null);
   const [confirm, setConfirm] = useState<Employee | null>(null);
   const [payrollModal, setPayrollModal] = useState(false);
@@ -58,7 +55,7 @@ export function HrConsole() {
     if (s.ok && e.ok && r.ok) {
       setState({ status: "ready", summary: s.summary, employees: e.employees, runs: r.runs });
     } else {
-      setState({ status: "error", message: (!s.ok && s.error) || (!e.ok && e.error) || (!r.ok && r.error) || "Could not load HR." });
+      setState({ status: "error", message: (!s.ok && s.error) || (!e.ok && e.error) || (!r.ok && r.error) || "Could not load People & Payroll." });
     }
   }
 
@@ -68,7 +65,7 @@ export function HrConsole() {
       const [s, e, r] = await Promise.all([getHrSummary(), listEmployees(), listPayrollRuns()]);
       if (!alive) return;
       if (s.ok && e.ok && r.ok) setState({ status: "ready", summary: s.summary, employees: e.employees, runs: r.runs });
-      else setState({ status: "error", message: (!s.ok && s.error) || (!e.ok && e.error) || (!r.ok && r.error) || "Could not load HR." });
+      else setState({ status: "error", message: (!s.ok && s.error) || (!e.ok && e.error) || (!r.ok && r.error) || "Could not load People & Payroll." });
     })();
     return () => {
       alive = false;
@@ -121,20 +118,15 @@ export function HrConsole() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Kpi icon="users" label="Employees" value={String(state.summary.headcount)} />
             <Kpi icon="refresh" label="Payroll runs this month" value={String(state.summary.payrollRunsThisMonth)} />
-            <Kpi icon="peso" label="Last payroll (gross)" value={formatCentsWhole(state.summary.lastPayrollGrossCents)} />
+            <Kpi icon="peso" label="Last approved payroll" value={formatCentsWhole(state.summary.lastPayrollGrossCents)} />
           </div>
 
           <div className="flex items-center gap-1 border-b border-ink/8 overflow-x-auto overflow-y-hidden scrollbar-none">
-            <TabButton active={tab === "overview"} onClick={() => setTab("overview")} label="Overview" />
             <TabButton active={tab === "employees"} onClick={() => setTab("employees")} label={`Employees (${state.employees.length})`} />
             <TabButton active={tab === "attendance"} onClick={() => setTab("attendance")} label="Attendance" />
             <TabButton active={tab === "payroll"} onClick={() => setTab("payroll")} label={`Payroll (${state.runs.length})`} />
-            <TabButton active={tab === "performance"} onClick={() => setTab("performance")} label="Performance" />
-            <TabButton active={tab === "labor"} onClick={() => setTab("labor")} label="Labor analytics" />
-            <TabButton active={tab === "reconciliation"} onClick={() => setTab("reconciliation")} label="Drawer audit" />
           </div>
 
-          {tab === "overview" && <HrOverview />}
           {tab === "employees" && (
             <EmployeesTable
               employees={state.employees}
@@ -147,9 +139,6 @@ export function HrConsole() {
           {tab === "payroll" && (
             <PayrollTable runs={state.runs} onOpen={setDetailId} onRun={() => setPayrollModal(true)} />
           )}
-          {tab === "performance" && <PerformanceMatrix />}
-          {tab === "labor" && <LaborAnalytics />}
-          {tab === "reconciliation" && <ShiftDiscrepancyMatrix />}
         </>
       )}
 

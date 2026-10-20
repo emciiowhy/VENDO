@@ -11,8 +11,8 @@ import { InventoryMatrix } from "../../components/inventory/InventoryMatrix";
 export default function InventoryPage() {
   return (
     <DashShell
-      title="Inventory"
-      subtitle="Items, categories & stock levels"
+      title="Product Management"
+      subtitle="Products, categories, prices & stock"
       brandSub="Merchant Workspace"
       nav={MERCHANT_NAV}
       allow={["MERCHANT_OWNER", "MANAGER"]}

@@ -11,7 +11,7 @@ import { exportUrl, type ExportDataset } from "@/lib/account";
  */
 const DATASETS: { key: ExportDataset; label: string; sub: string; icon: IconName }[] = [
   { key: "sales", label: "Sales", sub: "Every receipt with VAT breakdown", icon: "receipt" },
-  { key: "inventory", label: "Inventory", sub: "Products, prices and stock levels", icon: "box" },
+  { key: "inventory", label: "Product Management", sub: "Products, prices and stock levels", icon: "box" },
   { key: "customers", label: "Customers", sub: "Loyalty book and contact details", icon: "heart" },
 ];
 

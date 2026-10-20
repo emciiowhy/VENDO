@@ -99,3 +99,11 @@ describe("Category payload validation", () => {
     expect(parsed.success).toBe(true);
   });
 });
+
+describe("stock edit reason", () => {
+  it("accepts a known reason and rejects free text", async () => {
+    const { productUpdateSchema } = await import("./products.schema.js");
+    expect(productUpdateSchema.safeParse({ stock: "40", stockReason: "Restock" }).success).toBe(true);
+    expect(productUpdateSchema.safeParse({ stock: "40", stockReason: "because I said so" }).success).toBe(false);
+  });
+});

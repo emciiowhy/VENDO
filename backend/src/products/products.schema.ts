@@ -66,6 +66,9 @@ export const productCreateSchema = z.object({
     .optional(),
   // Whether the Senior Citizen / PWD benefit covers this item. Absent → TRUE.
   scPwdEligible: booleanField,
+  // Why on-hand stock was changed (restock, damage, recount). Saved as the
+  // stock ledger note on the adjustment; ignored when stock isn't changed.
+  stockReason: z.enum(["Restock", "Damaged / expired", "Count correction", "Other"]).optional(),
 });
 
 /** Update: every field optional, but at least the shape is validated. */

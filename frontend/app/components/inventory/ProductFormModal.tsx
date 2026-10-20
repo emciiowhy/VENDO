@@ -10,6 +10,8 @@ import {
   type Category,
   type Product,
   type ProductFields,
+  type StockReason,
+  STOCK_REASONS,
 } from "@/lib/inventory";
 import { VAT_CLASS_HINTS, VAT_CLASS_LABELS, type VatClass } from "@/lib/pos";
 
@@ -37,6 +39,9 @@ export function ProductFormModal({
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? "");
   const [price, setPrice] = useState(product ? String(product.price) : "");
   const [stock, setStock] = useState(product ? String(product.stock) : "0");
+  // Editing on-hand stock is a logged adjustment; the reason goes on the ledger.
+  const [stockReason, setStockReason] = useState<StockReason>("Restock");
+  const stockChanged = editing && Number(stock || 0) !== product.stock;
   const [threshold, setThreshold] = useState(product ? String(product.lowStockThreshold) : "0");
   const [vatClass, setVatClass] = useState<VatClass>(product?.vatClass ?? "VATABLE");
   const [isActive, setIsActive] = useState(product?.isActive ?? true);
@@ -61,6 +66,7 @@ export function ProductFormModal({
       categoryId,
       price,
       stock,
+      ...(stockChanged ? { stockReason } : {}),
       lowStockThreshold: threshold,
       vatClass,
       isActive,
@@ -214,6 +220,26 @@ export function ProductFormModal({
               />
             </Field>
           </div>
+
+          {stockChanged && (
+            <Field label="Reason for the stock change" error={fieldErrors.stockReason}>
+              <select
+                value={stockReason}
+                onChange={(e) => setStockReason(e.target.value as StockReason)}
+                className={FIELD_INPUT}
+              >
+                {STOCK_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <span className="block mt-1 text-[12px] text-ink-faint">
+                {Number(stock || 0) > product.stock ? "+" : "−"}
+                {Math.abs(Number(stock || 0) - product.stock)} units · saved in the stock history with your name.
+              </span>
+            </Field>
+          )}
 
           {/* Active toggle */}
           <button

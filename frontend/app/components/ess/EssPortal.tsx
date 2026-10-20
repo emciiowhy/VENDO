@@ -81,7 +81,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
           : {
               icon: "users",
               title: "Your login isn't linked yet",
-              body: "Ask your store owner to open HR → Employees, pick your profile, and link this login. Your hours and paystubs will appear here.",
+              body: "Ask your store owner to open People & Payroll → Employees, pick your profile, and link this login. Your hours and paystubs will appear here.",
             }
         : state.kind === "plan"
           ? { icon: "lock", title: "Paystubs aren't on this plan", body: state.message }

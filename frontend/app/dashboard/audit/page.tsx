@@ -3,6 +3,7 @@
 import { DashShell } from "../../components/dash/DashShell";
 import { MERCHANT_NAV } from "../../components/dash/merchantNav";
 import { AuditConsole } from "../../components/dash/AuditConsole";
+import { ShiftDiscrepancyMatrix } from "../../components/hr/ShiftDiscrepancyMatrix";
 
 /**
  * Merchant — POS terminal audit log. Owners/managers review the sensitive
@@ -19,6 +20,17 @@ export default function AuditPage() {
       allow={["MERCHANT_OWNER", "MANAGER"]}
     >
       <AuditConsole />
+      {/* Cash-drawer reconciliation (X/Z-Read variance) — the POS side of staff
+          accountability, so it lives here rather than in People & Payroll. */}
+      <div className="mt-10 max-w-[1180px] space-y-4">
+        <div>
+          <h2 className="text-[1.3rem] font-extrabold tracking-tightest">Drawer audit</h2>
+          <p className="text-[13.5px] text-ink-soft">
+            Every closed cash-drawer shift with its Z-Read variance — counted cash vs. what the drawer should hold.
+          </p>
+        </div>
+        <ShiftDiscrepancyMatrix />
+      </div>
     </DashShell>
   );
 }

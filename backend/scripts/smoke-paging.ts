@@ -64,6 +64,14 @@ async function main() {
   const s = await pages("/api/v1/pos/sales", c, "sales");
   check("sales picker: total matches; pages don't overlap", s.p1.body.total === realSales && s.ids2.every((id: string) => !s.ids1.includes(id)), `${s.p1.body.total} vs ${realSales}`);
 
+  // Drawer audit, now served by the POS router
+  const realShifts = Number(
+    (await query<{ n: string }>(`SELECT count(*) AS n FROM cashier_shifts WHERE tenant_id = $1 AND status = 'closed' AND closed_at >= now() - interval '30 days'`, [tenantId])).rows[0].n,
+  );
+  const d = await request(app).get("/api/v1/pos/shift-reconciliations").set("Cookie", c);
+  check("drawer audit: served from POS for the owner", d.status === 200 && Array.isArray(d.body.report?.rows), `status ${d.status}`);
+  check("drawer audit: covers the last 30 days of closed shifts", d.body.report?.rows?.length === realShifts, `${d.body.report?.rows?.length} vs ${realShifts}`);
+
   // Super Admin audit trail
   const admin = await query<{ id: string }>(`SELECT id FROM users WHERE role = 'SUPER_ADMIN' LIMIT 1`);
   if (admin.rows[0]) {

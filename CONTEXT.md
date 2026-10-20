@@ -45,8 +45,19 @@ Making products from raw materials via recipes / bill-of-materials. Switched off
 **Finance & Accounting**:
 Money in and out — sales reports, expenses, tax, profit & loss.
 
-**Human Resources (HR)**:
-Employees, shifts, and payroll for a Tenant's own staff.
+**People & Payroll** (code: `hr`):
+Employees, attendance and payroll for a Tenant's own staff — three sections only. Attendance is derived from Shift In / Shift Out; payroll is computed from it and approved by the owner/manager.
+_Avoid_: renaming the `/dashboard/hr` URL, `/api/v1/hr` API or `human_resources_payroll` feature key — only the label changed.
+
+**Shift In / Shift Out**:
+Clocking in and out on the labor clock (`timecards`). Shift In is an Employee's Time In; Shift Out is their Time Out.
+_Avoid_: confusing this with opening or closing the cash drawer (`cashier_shifts`, X/Z-Read), which is about cash, not hours.
+
+**Work schedule**:
+The weekly pattern on an Employee — `work_days`, `standard_daily_hours`, `unpaid_break_minutes`. A day's status (present / absent / half-day / rest day) is derived from it plus the timecards, never assumed.
+
+**Payroll run**:
+A payroll period. Starts as a **Draft** (base pay = daily rate ÷ standard hours × regular hours; overtime and paid leave are suggested adjustments), becomes **Approved** (locked) once the owner/manager approves it. A manager can't approve a run containing their own pay. Statutory contributions are not computed.
 
 **Customer Relationship Management (CRM)**:
 Tracking Customers and loyalty over time.
@@ -56,18 +67,18 @@ Tracking Customers and loyalty over time.
 The Tenant's own workers. Two distinct records exist for the same real person and must not be conflated — they live in different tables and are unlocked by different Plans.
 
 **Employee**:
-A person on the Tenant's payroll — the full HR record (position, pay, attendance, PTO). Lives in the `employees` table. HR is an Enterprise-only Module, so Employees exist only on Enterprise Tenants.
+A person on the Tenant's payroll — the full People & Payroll record (position, daily rate, schedule, attendance, PTO). Lives in the `employees` table. People & Payroll is an Enterprise-only Module, so Employees exist only on Enterprise Tenants.
 _Avoid_: using "Employee" to mean a till login — that is a Cashier.
 
 **Cashier**:
-A till login — a `users` row with `role = 'CASHIER'` and a 4-digit PIN that opens shifts and rings up sales. Managed in the owner's Cashiers console; unlocked by `multi_staff_roles` (Business+). A Cashier may exist with no Employee record (Business Tenants have no HR).
+A till login — a `users` row with `role = 'CASHIER'` and a 4-digit PIN that opens shifts and rings up sales. Managed in the owner's Cashiers console; unlocked by `multi_staff_roles` (Business+). A Cashier may exist with no Employee record (Business Tenants have no People & Payroll).
 _Avoid_: Staff member, user.
 
 **Till access**:
-The capability that links an Employee to a Cashier login (`employees.user_id → users.id`), so one real person is both on payroll and able to work the till. The link already drives auto-attendance and the performance report. Only meaningful on Enterprise, where both records coexist.
+The capability that links an Employee to a Cashier login (`employees.user_id → users.id`), so one real person is both on payroll and able to work the till. The link is how that person's Shift In / Shift Out becomes their attendance. Only meaningful on Enterprise, where both records coexist.
 
 **Duty roster**:
-Who is on the clock right now — derived live from open `cashier_shifts`. Surfaced in the cashier sign-in picker ("Who's on duty right now?"), the POS activation wizard, and the HR overview. Always data-driven; the only hardcoded roster is the marketing illustration.
+Who is on the clock right now — derived live from open `cashier_shifts`. Surfaced in the cashier sign-in picker ("Who's on duty right now?") and the POS activation wizard. Always data-driven; the only hardcoded roster is the marketing illustration.
 _Avoid_: calling this a schedule — it reflects who *is* on the till, not who is *rostered to be*.
 
 ### Plans

@@ -77,3 +77,15 @@ describe("sign-out is recorded", () => {
     expect(insert?.params.slice(0, 4)).toEqual([TENANT, "33333333-3333-3333-3333-333333333333", "Test CASHIER", "logout"]);
   });
 });
+
+describe("drawer audit (moved to the POS router)", () => {
+  it("403s a CASHIER and serves an owner on any plan", async () => {
+    const cashier = await request(app).get("/api/v1/pos/shift-reconciliations").set("Cookie", cookieFor("CASHIER"));
+    expect(cashier.status).toBe(403);
+  });
+
+  it("is no longer served from People & Payroll", async () => {
+    const res = await request(app).get("/api/v1/hr/shift-reconciliations").set("Cookie", cookieFor("MANAGER"));
+    expect(res.status).toBe(404);
+  });
+});

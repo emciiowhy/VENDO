@@ -25,6 +25,7 @@ import {
   closeShift,
   getActiveShift,
   getActiveShiftId,
+  listShiftReconciliations,
   openShift,
 } from "./shifts.repository.js";
 import { getDefaultFloatCents } from "../staff/staff.repository.js";
@@ -298,6 +299,31 @@ posRouter.get("/reversals", async (req, res) => {
   } catch (err) {
     console.error("[pos] reversals list failed:", err);
     return res.status(500).json({ ok: false, error: "Could not load reversals." });
+  }
+});
+
+/**
+ * GET /api/v1/pos/shift-reconciliations?from&to — every closed drawer shift in
+ * the window with its variance and short/over status (the "Drawer audit").
+ * Lives with the POS, not People & Payroll, so any store with cashiers can use
+ * it (not just Enterprise). Owner/manager only; tenant-fenced. Defaults to the
+ * last 30 days.
+ */
+posRouter.get("/shift-reconciliations", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (req.user?.role !== "MERCHANT_OWNER" && req.user?.role !== "MANAGER") {
+    return res.status(403).json({ ok: false, error: "Only the store owner or a manager can review the drawer audit." });
+  }
+  const day = (v: unknown, fallback: string) => (typeof v === "string" && ISO_DATE.test(v) ? v : fallback);
+  const to = day(req.query.to, new Date().toISOString().slice(0, 10));
+  const from = day(req.query.from, new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10));
+  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
+  try {
+    res.json({ ok: true, report: await listShiftReconciliations(tenantId, from, to) });
+  } catch (err) {
+    console.error("[pos] shift reconciliations failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load the drawer audit." });
   }
 });
 

@@ -53,7 +53,6 @@ import {
   setAdjustmentApproved,
   setLineRate,
 } from "./payroll.repository.js";
-import { listShiftReconciliations } from "../pos/shifts.repository.js";
 
 /**
  * Merchant HR — employees, attendance, payroll.
@@ -183,25 +182,6 @@ hrRouter.get("/labor-analytics", async (req, res) => {
 });
 
 // ── Shift discrepancy matrix (drawer reconciliation audit) ─────────────────────
-
-/**
- * GET /api/v1/hr/shift-reconciliations?from&to — every closed cashier shift in
- * the window with its drawer variance + short/over status, for the manager audit
- * matrix. Reuses the cashier_shifts ledger the POS close paths already write;
- * read-only and tenant-fenced (OWNER/MANAGER via the router-level guards).
- */
-hrRouter.get("/shift-reconciliations", async (req, res) => {
-  const tenantId = tenantOf(req);
-  if (!tenantId) return noTenant(res);
-  const { from, to } = windowParams(req);
-  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
-  try {
-    res.json({ ok: true, report: await listShiftReconciliations(tenantId, from, to) });
-  } catch (err) {
-    console.error("[hr] shift reconciliations failed:", err);
-    res.status(500).json({ ok: false, error: "Could not load shift reconciliations." });
-  }
-});
 
 // ── Employees ────────────────────────────────────────────────────────────────
 

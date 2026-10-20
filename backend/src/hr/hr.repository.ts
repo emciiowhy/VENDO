@@ -586,8 +586,9 @@ export async function getHrSummary(tenantId: string): Promise<HrSummary> {
         (SELECT count(*)::int FROM payroll_runs
            WHERE tenant_id = $1
              AND (created_at AT TIME ZONE $2) >= date_trunc('month', now() AT TIME ZONE $2)) AS runs_month,
-        (SELECT total_gross_cents FROM payroll_runs
-           WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1) AS last_gross`,
+        -- The last APPROVED run's final payable (a draft isn't pay yet).
+        (SELECT coalesce(total_payable_cents, total_gross_cents) FROM payroll_runs
+           WHERE tenant_id = $1 AND status = 'approved' ORDER BY period_end DESC, created_at DESC LIMIT 1) AS last_gross`,
     [tenantId, MNL],
   );
   const r = res.rows[0];

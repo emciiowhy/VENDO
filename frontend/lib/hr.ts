@@ -456,7 +456,10 @@ export async function getShiftReconciliations(
   if (to) qs.set("to", to);
   const suffix = qs.toString() ? `?${qs}` : "";
   try {
-    return await readJson(await fetch(`${BASE}/shift-reconciliations${suffix}`, { credentials: "include" }));
+    // Served by the POS router (any plan with cashiers), not People & Payroll.
+    return await readJson(
+      await fetch(`${API_BASE_URL}/api/v1/pos/shift-reconciliations${suffix}`, { credentials: "include" }),
+    );
   } catch {
     return NETWORK_ERR;
   }
