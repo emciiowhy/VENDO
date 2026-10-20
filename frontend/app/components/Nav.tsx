@@ -147,7 +147,7 @@ const HARDWARE: MenuDef = {
         title: "Front-of-counter gear",
         icon: "pos",
         links: [
-          { label: "POS Terminal & Tablet Stand", href: "/hardware/pos-terminal" },
+          { label: "POS Terminal", href: "/hardware/pos-terminal" },
           { label: "Receipt Printer", href: "/hardware/receipt-printer" },
           { label: "Cash Drawer", href: "/hardware/cash-drawer" },
         ],

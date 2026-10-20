@@ -11,14 +11,13 @@ export const HARDWARE: MarketingEntry[] = [
     slug: "pos-terminal",
     eyebrow: "Hardware",
     icon: "pos",
-    name: "POS Terminal & Tablet Stand",
+    name: "POS Terminal",
     tagline: "A sturdy home for your checkout.",
     intro:
       "A tablet stand and terminal setup that anchors your counter and runs VendoPOS smoothly all day.",
     cards: [
       { icon: "pos", title: "Counter-ready", body: "A stable, professional checkout station built for daily use." },
       { icon: "bolt", title: "Fast & reliable", body: "Runs VendoPOS responsively through the busiest shifts." },
-      { icon: "gear", title: "Works with your tablet", body: "Pairs with the devices your team already uses." },
     ],
   },
   {
