@@ -19,6 +19,7 @@ export interface EssProfile {
     payRateCents: number;
     hireDate: string | null;
     ptoBalanceDays: number;
+    dailyRateCents: number | null;
   };
   storeName: string | null;
   month: string;

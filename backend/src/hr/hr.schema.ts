@@ -88,6 +88,9 @@ export const employeeCreateSchema = z.object({
     .optional(),
   standardDailyHours: z.number().min(1, "At least 1 hour.").max(24, "At most 24 hours.").optional(),
   unpaidBreakMinutes: z.number().int().min(0).max(240, "At most 240 minutes.").optional(),
+  // The confirmed daily rate (pesos on the wire → centavos). Payroll pays
+  // Hourly rate = Daily rate ÷ Standard daily hours.
+  dailyRate: pesosToCents.optional(),
 });
 
 export const employeeUpdateSchema = employeeCreateSchema.partial();
@@ -124,6 +127,21 @@ export const payrollRunSchema = z
     message: "The period end must be on or after the start.",
     path: ["periodEnd"],
   });
+
+/** The manager enters or confirms a daily rate (integer centavos). */
+export const dailyRateSchema = z.object({
+  dailyRateCents: z.number().int("Enter a whole centavo amount.").min(0).max(10_000_000, "That daily rate is too large."),
+});
+
+/** A manual payroll adjustment: positive adds pay, negative deducts it. */
+export const payrollAdjustmentSchema = z.object({
+  label: z.string().trim().min(1, "Describe the adjustment.").max(80),
+  amountCents: z
+    .number()
+    .int("Enter a whole centavo amount.")
+    .refine((n) => n !== 0, "Enter an amount other than zero.")
+    .refine((n) => Math.abs(n) <= 100_000_000, "That amount is too large."),
+});
 
 // ── Till access (link an Employee to a Cashier login) ─────────────────────────
 
@@ -202,6 +220,8 @@ export interface Employee {
   workDays: number[];
   standardDailyHours: number;
   unpaidBreakMinutes: number;
+  /** Confirmed daily rate in centavos; null until the owner/manager sets one. */
+  dailyRateCents: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -219,7 +239,12 @@ export interface EmployeePayslip {
   payType: string;
   payRateCents: number;
   basisQty: number;
+  /** Base earnings (legacy runs: gross). */
   grossCents: number;
+  /** What was approved for payment: base + approved adjustments. */
+  payableCents: number;
+  /** From the attendance-based payroll (basis = regular hours at a daily rate). */
+  attendanceBased: boolean;
   createdAt: string;
 }
 
@@ -332,6 +357,7 @@ export interface EssProfile {
     payRateCents: number;
     hireDate: string | null;
     ptoBalanceDays: number;
+    dailyRateCents: number | null;
   };
   storeName: string | null;
   month: string;
@@ -352,38 +378,4 @@ export interface AttendanceRow {
   hours: number;
 }
 
-export interface PayrollItem {
-  id: string;
-  employeeId: string | null;
-  name: string;
-  payType: string;
-  payRateCents: number;
-  basisQty: number;
-  grossCents: number;
-  // Employee-side statutory deductions, derived from gross (see deductions.ts).
-  sssCents: number;
-  philhealthCents: number;
-  pagibigCents: number;
-  withholdingTaxCents: number;
-  totalDeductionsCents: number;
-  netCents: number;
-}
-
-export interface PayrollRunSummary {
-  id: string;
-  reference: string;
-  periodStart: string;
-  periodEnd: string;
-  totalGrossCents: number;
-  headcount: number;
-  createdAt: string;
-}
-
-export interface PayrollRunDetail extends PayrollRunSummary {
-  note: string | null;
-  items: PayrollItem[];
-  /** Σ employee statutory deductions across the run (centavos). */
-  totalDeductionsCents: number;
-  /** Σ take-home net pay across the run (centavos). */
-  totalNetCents: number;
-}
+// Payroll run shapes live in payroll.repository.ts.

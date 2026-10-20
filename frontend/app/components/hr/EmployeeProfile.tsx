@@ -177,7 +177,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
         <Stat icon="clock" label="Hours worked this month" value={fmtHours(e.attendanceSummary.workedMinutes)} sub={`${e.hours.regularHours}h regular · ${e.hours.overtimeHours}h past the standard day`} />
         <Stat icon="check" label="Attendance" value={`${e.hours.attendanceRatePct}%`} sub={`${e.attendanceSummary.presentDays} present · ${e.attendanceSummary.absentDays} absent · ${e.attendanceSummary.halfDays} half-day`} tone="good" />
         <Stat icon="heart" label="PTO balance" value={`${e.ptoBalanceDays}d`} sub={`${e.ptoUsedYtd} used this year`} />
-        <Stat icon="peso" label="Pay rate" value={formatCentsWhole(e.payRateCents)} sub={`per ${e.payType.toLowerCase() === "monthly" ? "month" : e.payType.toLowerCase() === "daily" ? "day" : "hour"}`} />
+        <Stat icon="peso" label="Daily rate" value={e.dailyRateCents != null ? formatCentsWhole(e.dailyRateCents) : "Not set"} sub={`per ${e.payType.toLowerCase() === "monthly" ? "month" : e.payType.toLowerCase() === "daily" ? "day" : "hour"}`} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -195,7 +195,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
 
         {/* Financial suite */}
         <Card title="Financial suite" icon="wallet">
-          <Detail label="Pay basis" value={`${e.payType} · ${formatCents(e.payRateCents)}`} />
+          <Detail label="Daily rate" value={e.dailyRateCents != null ? `${formatCents(e.dailyRateCents)} per day` : "Not set — confirm it in payroll"} />
           <Detail label="PTO balance" value={`${e.ptoBalanceDays} days`} />
           <div className="pt-2 mt-1 border-t border-ink/8">
             <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Direct deposit</span>
@@ -325,7 +325,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
       <div className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden">
         <div className="px-5 py-4">
           <h3 className="font-extrabold tracking-tight">Paystub archive</h3>
-          <p className="text-[12.5px] text-ink-soft">Every payroll run this employee was part of.</p>
+          <p className="text-[12.5px] text-ink-soft">Every approved payroll run this employee was paid in.</p>
         </div>
         {e.payslips.length === 0 ? (
           <p className="px-5 pb-6 text-[13px] text-ink-soft border-t border-ink/8 pt-4">No payslips yet — they appear here after a payroll run includes this employee.</p>
@@ -336,8 +336,8 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
                 <tr className="text-left text-[12px] font-semibold text-ink-faint border-b border-ink/8 bg-paper/40">
                   <th className="px-5 py-2.5">Run #</th>
                   <th className="px-3 py-2.5">Period</th>
-                  <th className="px-3 py-2.5">Basis</th>
-                  <th className="px-3 py-2.5 text-right">Gross</th>
+                  <th className="px-3 py-2.5 text-right">Base</th>
+                  <th className="px-3 py-2.5 text-right">Final payable</th>
                   <th className="px-5 py-2.5 text-right">·</th>
                 </tr>
               </thead>
@@ -348,11 +348,8 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
                     <td className="px-3 py-3 text-ink-soft tabular-nums whitespace-nowrap">
                       {formatDate(p.periodStart)} – {formatDate(p.periodEnd)}
                     </td>
-                    <td className="px-3 py-3 text-ink-soft">
-                      {p.payType} · {p.basisQty}
-                      {p.payType === "Hourly" ? "h" : p.payType === "Daily" ? "d" : ""}
-                    </td>
-                    <td className="px-3 py-3 text-right font-bold tabular-nums whitespace-nowrap">{formatCents(p.grossCents)}</td>
+                    <td className="px-3 py-3 text-right text-ink-soft tabular-nums whitespace-nowrap">{formatCents(p.grossCents)}</td>
+                    <td className="px-3 py-3 text-right font-bold tabular-nums whitespace-nowrap">{formatCents(p.payableCents)}</td>
                     <td className="px-5 py-3 text-right">
                       <button
                         type="button"

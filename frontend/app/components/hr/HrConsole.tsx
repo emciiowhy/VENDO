@@ -23,7 +23,6 @@ import {
 import { EmployeeFormModal } from "./EmployeeFormModal";
 import { PayrollRunModal } from "./PayrollRunModal";
 import { PayrollDetailDrawer } from "./PayrollDetailDrawer";
-import { PayrollExportCard } from "./PayrollExportCard";
 import { ShiftDiscrepancyMatrix } from "./ShiftDiscrepancyMatrix";
 
 /**
@@ -98,7 +97,7 @@ export function HrConsole() {
         <div className="flex items-center gap-2.5">
           <button type="button" onClick={() => setPayrollModal(true)} className="inline-flex items-center gap-2 bg-paper hairline text-ink font-semibold text-[14px] px-4 py-2.5 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition duration-150">
             <Icon name="peso" className="w-[18px] h-[18px]" strokeWidth={1.7} />
-            Run payroll
+            Start payroll
           </button>
           <button type="button" onClick={() => setForm({ employee: null })} className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn tracking-tight transition duration-150">
             <Icon name="plus" className="w-[18px] h-[18px]" strokeWidth={2} />
@@ -145,10 +144,7 @@ export function HrConsole() {
           )}
           {tab === "attendance" && <AttendanceTab hasEmployees={state.employees.some((e) => e.isActive)} />}
           {tab === "payroll" && (
-            <div className="space-y-6">
-              <PayrollExportCard employees={state.employees} />
-              <PayrollTable runs={state.runs} onOpen={setDetailId} onRun={() => setPayrollModal(true)} />
-            </div>
+            <PayrollTable runs={state.runs} onOpen={setDetailId} onRun={() => setPayrollModal(true)} />
           )}
           {tab === "performance" && <PerformanceMatrix />}
           {tab === "labor" && <LaborAnalytics />}
@@ -176,7 +172,7 @@ export function HrConsole() {
           }}
         />
       )}
-      {detailId && <PayrollDetailDrawer id={detailId} onClose={() => setDetailId(null)} />}
+      {detailId && <PayrollDetailDrawer id={detailId} onClose={() => setDetailId(null)} onChanged={() => void load()} />}
       {confirm && (
         <ConfirmDialog
           title={`Remove ${confirm.name}?`}
@@ -431,8 +427,8 @@ function PayrollTable({
       <EmptyState
         icon="peso"
         title="No payroll runs yet"
-        body="Run payroll for a period and we'll compute each employee's gross from their rate and attendance."
-        cta="Run payroll"
+        body="Start a payroll run for a period. Base pay comes from each employee's daily rate and their Shift In / Shift Out hours; you review and approve it."
+        cta="Start payroll"
         onCta={onRun}
       />
     );
@@ -445,8 +441,9 @@ function PayrollTable({
             <tr className="text-left text-[12px] font-semibold text-ink-faint border-b border-ink/8 bg-paper/40">
               <th className="px-5 py-2.5 font-semibold">Run #</th>
               <th className="px-3 py-2.5 font-semibold">Period</th>
+              <th className="px-3 py-2.5 font-semibold">Status</th>
               <th className="px-3 py-2.5 font-semibold text-center">Employees</th>
-              <th className="px-3 py-2.5 font-semibold text-right">Gross total</th>
+              <th className="px-3 py-2.5 font-semibold text-right">Final payable</th>
               <th className="px-5 py-2.5 font-semibold text-right">·</th>
             </tr>
           </thead>
@@ -457,8 +454,18 @@ function PayrollTable({
                 <td className="px-3 py-3 text-ink-soft tabular-nums whitespace-nowrap">
                   {formatDate(run.periodStart)} – {formatDate(run.periodEnd)}
                 </td>
+                <td className="px-3 py-3">
+                  {run.status === "approved" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-0.5 text-[11.5px] font-bold text-accent-700">
+                      <Icon name="lock" className="w-3.5 h-3.5" strokeWidth={1.9} />
+                      Approved
+                    </span>
+                  ) : (
+                    <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-0.5 text-[11.5px] font-bold text-amber-700">Draft — review</span>
+                  )}
+                </td>
                 <td className="px-3 py-3 text-center tabular-nums">{run.headcount}</td>
-                <td className="px-3 py-3 text-right font-bold tracking-tight tabular-nums whitespace-nowrap">{formatCents(run.totalGrossCents)}</td>
+                <td className="px-3 py-3 text-right font-bold tracking-tight tabular-nums whitespace-nowrap">{formatCents(run.totalPayableCents)}</td>
                 <td className="px-5 py-3" onClick={(ev) => ev.stopPropagation()}>
                   <div className="flex items-center justify-end">
                     <RowAction icon="eye" label="View" onClick={() => onOpen(run.id)} />

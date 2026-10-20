@@ -1223,6 +1223,58 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS standard_daily_hours NUMERIC(4,2)
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS unpaid_break_minutes SMALLINT NOT NULL DEFAULT 60
   CHECK (unpaid_break_minutes BETWEEN 0 AND 240);
 ALTER TABLE timecards ADD COLUMN IF NOT EXISTS needs_review BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ---------------------------------------------------------------------------
+-- Payroll from attendance: daily rate, Draft → Approved, adjustments.
+--
+--   employees.daily_rate_cents  the rate the owner/manager confirmed. NULL until
+--                               set; payroll then suggests one from the legacy
+--                               pay_type/pay_rate_cents (kept, untouched) and
+--                               refuses approval until it is confirmed.
+--   payroll_runs.status         'draft' while being reviewed, 'approved' when
+--                               locked. Every pre-existing run defaults to
+--                               'approved', so history becomes read-only and
+--                               nothing about it changes.
+--   payroll_items.*             the attendance + rate snapshot each line was paid
+--                               on. NULL on legacy lines (they keep gross_cents).
+--   payroll_adjustments         overtime / paid-leave suggestions (unapproved
+--                               until the manager ticks them) and manual +/-
+--                               lines. Only approved ones are paid.
+-- Money is integer centavos. All additive; legacy rows keep their meaning.
+-- ---------------------------------------------------------------------------
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS daily_rate_cents INTEGER CHECK (daily_rate_cents >= 0);
+
+ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'approved'
+  CHECK (status IN ('draft', 'approved'));
+ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS approved_by   UUID REFERENCES users (id) ON DELETE SET NULL;
+ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS approved_at   TIMESTAMPTZ;
+ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS total_payable_cents INTEGER;
+
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS daily_rate_cents     INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS rate_confirmed       BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS standard_daily_hours NUMERIC(4,2);
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS present_days         INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS half_days            INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS absent_days          INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS leave_days           INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS worked_minutes       INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS regular_minutes      INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS overtime_minutes     INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS base_cents           INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS payable_cents        INTEGER;
+
+CREATE TABLE IF NOT EXISTS payroll_adjustments (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id       UUID        NOT NULL REFERENCES payroll_runs (id) ON DELETE CASCADE,
+  item_id      UUID        NOT NULL REFERENCES payroll_items (id) ON DELETE CASCADE,
+  kind         TEXT        NOT NULL CHECK (kind IN ('overtime', 'paid_leave', 'manual')),
+  label        TEXT        NOT NULL,
+  amount_cents INTEGER     NOT NULL,              -- signed: a deduction is negative
+  approved     BOOLEAN     NOT NULL DEFAULT FALSE,
+  created_by   UUID        REFERENCES users (id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS payroll_adjustments_run_idx ON payroll_adjustments (run_id);
 `;
 
 async function migrate() {

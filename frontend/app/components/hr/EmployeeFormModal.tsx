@@ -5,19 +5,17 @@ import { Icon } from "../Icon";
 import { useToast } from "../Toast";
 import {
   EMPLOYMENT_TYPES,
-  PAY_TYPES,
   createEmployee,
   updateEmployee,
   type Employee,
   type EmployeeFields,
 } from "@/lib/hr";
 
-/** Add / edit an employee. Pay rate is keyed in pesos; the backend stores centavos. */
-const RATE_HINT: Record<string, string> = {
-  Monthly: "per month",
-  Daily: "per day",
-  Hourly: "per hour",
-};
+/**
+ * Add / edit an employee. The daily rate is keyed in pesos (the backend stores
+ * centavos); payroll pays Hourly rate = Daily rate ÷ Standard hours. The legacy
+ * pay basis / rate fields are no longer edited here and stay as they were.
+ */
 
 export function EmployeeFormModal({
   employee,
@@ -34,8 +32,9 @@ export function EmployeeFormModal({
   const [name, setName] = useState(() => employee?.name ?? "");
   const [position, setPosition] = useState(() => employee?.position ?? "");
   const [employmentType, setEmploymentType] = useState(() => employee?.employmentType ?? "Full-time");
-  const [payType, setPayType] = useState(() => employee?.payType ?? "Monthly");
-  const [payRate, setPayRate] = useState(() => (employee ? String(employee.payRate) : ""));
+  const [dailyRate, setDailyRate] = useState(() =>
+    employee?.dailyRateCents != null ? String(employee.dailyRateCents / 100) : "",
+  );
   const [hireDate, setHireDate] = useState(() => employee?.hireDate ?? "");
   const [phone, setPhone] = useState(() => employee?.phone ?? "");
   const [email, setEmail] = useState(() => employee?.email ?? "");
@@ -74,8 +73,6 @@ export function EmployeeFormModal({
       name,
       position,
       employmentType,
-      payType,
-      payRate: payRate || "0",
       hireDate,
       phone,
       email,
@@ -94,6 +91,10 @@ export function EmployeeFormModal({
     // overwrite the stored value with a blank. Same for PTO (blank would zero it).
     if (bankAccountNumber.trim()) fields.bankAccountNumber = bankAccountNumber.trim();
     if (ptoBalanceDays.trim()) fields.ptoBalanceDays = ptoBalanceDays.trim();
+    // Only send the rate when typed, so editing someone else's record never
+    // clears a confirmed rate (and a manager editing their own record without
+    // touching pay isn't refused by the self-pay guard).
+    if (dailyRate.trim() && Number(dailyRate) * 100 !== (employee?.dailyRateCents ?? -1)) fields.dailyRate = dailyRate.trim();
     const res = editing ? await updateEmployee(employee.id, fields) : await createEmployee(fields);
     if (res.ok) {
       push({ variant: "success", title: editing ? "Employee updated" : "Employee added" });
@@ -145,29 +146,21 @@ export function EmployeeFormModal({
               </select>
             </label>
             <label className="block">
-              <span className="text-[12px] font-semibold text-ink-soft">Pay basis</span>
-              <select value={payType} onChange={(e) => setPayType(e.target.value)} className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5">
-                {PAY_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
+              <span className="text-[12px] font-semibold text-ink-soft">Daily rate (₱ per day)</span>
+              <input
+                inputMode="decimal"
+                value={dailyRate}
+                onChange={(e) => {
+                  setDailyRate(e.target.value.replace(/[^\d.]/g, ""));
+                  setError(null);
+                }}
+                placeholder="e.g. 610.00"
+                className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5 tabular-nums"
+              />
             </label>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-[12px] font-semibold text-ink-soft">Pay rate (₱ {RATE_HINT[payType]})</span>
-              <input
-                inputMode="decimal"
-                value={payRate}
-                onChange={(e) => {
-                  setPayRate(e.target.value);
-                  setError(null);
-                }}
-                placeholder="0.00"
-                className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5 tabular-nums"
-              />
-            </label>
             <label className="block">
               <span className="text-[12px] font-semibold text-ink-soft">Hire date</span>
               <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} className="field-input w-full rounded-[10px] px-3 py-2.5 text-[14px] mt-1.5" />

@@ -132,7 +132,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
         <Stat icon="clock" label="Hours worked this month" value={fmtHours(p.attendanceSummary.workedMinutes)} sub={`after unpaid breaks`} />
         <Stat icon="check" label="Attendance" value={`${p.hours.attendanceRatePct}%`} sub={`${p.attendanceSummary.presentDays} present · ${p.attendanceSummary.absentDays} absent`} tone="good" />
         <Stat icon="heart" label="PTO balance" value={`${p.employee.ptoBalanceDays}d`} sub={`${p.ptoUsedYtd} used this year`} />
-        <Stat icon="peso" label="Pay rate" value={formatCentsWhole(p.employee.payRateCents)} sub={`per ${rateUnit(p.employee.payType)}`} />
+        <Stat icon="peso" label="Daily rate" value={p.employee.dailyRateCents != null ? formatCentsWhole(p.employee.dailyRateCents) : "—"} sub="set by your employer" />
       </div>
 
       <div className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden">
@@ -187,7 +187,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
                 <tr className="text-left text-[12px] font-semibold text-ink-faint border-b border-ink/8 bg-paper/40">
                   <th className="px-5 py-2.5">Payslip</th>
                   <th className="px-3 py-2.5">Period</th>
-                  <th className="px-3 py-2.5 text-right">Gross</th>
+                  <th className="px-3 py-2.5 text-right">Final pay</th>
                   <th className="px-5 py-2.5 text-right">·</th>
                 </tr>
               </thead>
@@ -198,7 +198,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
                     <td className="px-3 py-3 text-ink-soft tabular-nums whitespace-nowrap">
                       {formatDate(slip.periodStart)} – {formatDate(slip.periodEnd)}
                     </td>
-                    <td className="px-3 py-3 text-right font-bold tabular-nums whitespace-nowrap">{formatCents(slip.grossCents)}</td>
+                    <td className="px-3 py-3 text-right font-bold tabular-nums whitespace-nowrap">{formatCents(slip.payableCents)}</td>
                     <td className="px-5 py-3 text-right">
                       <button
                         type="button"
@@ -241,6 +241,8 @@ function printPayslip(p: EssProfile, slip: EmployeePayslip) {
   const row = (label: string, value: string) =>
     `<tr><td style="padding:6px 0;color:#555">${esc(label)}</td><td style="padding:6px 0;text-align:right;font-weight:600">${esc(value)}</td></tr>`;
   const basisUnit = slip.payType === "Hourly" ? "hours" : slip.payType === "Daily" ? "days" : "month";
+  // Lines from the attendance-based payroll are Daily with regular HOURS as the basis.
+  const daily = slip.attendanceBased;
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Payslip ${esc(slip.reference)}</title>
   <style>
@@ -258,11 +260,15 @@ function printPayslip(p: EssProfile, slip: EmployeePayslip) {
     <table>
       ${row("Employee", p.employee.name)}
       ${row("Position", p.employee.position ?? "—")}
-      ${row("Pay basis", `${slip.payType} @ ${formatCents(slip.payRateCents)} / ${rateUnit(slip.payType)}`)}
-      ${row(`Worked (${basisUnit})`, String(slip.basisQty))}
+      ${daily
+        ? row("Daily rate", formatCents(slip.payRateCents)) + row("Regular hours worked", `${slip.basisQty} h`)
+        : row("Pay basis", `${slip.payType} @ ${formatCents(slip.payRateCents)} / ${rateUnit(slip.payType)}`) +
+          row(`Worked (${basisUnit})`, String(slip.basisQty))}
+      ${row("Base earnings", formatCents(slip.grossCents))}
+      ${row("Approved adjustments", formatCents(slip.payableCents - slip.grossCents))}
     </table>
-    <table class="total"><tr><td>Gross pay</td><td style="text-align:right">${esc(formatCents(slip.grossCents))}</td></tr></table>
-    <p class="muted" style="margin-top:20px">Gross pay only. Statutory deductions are not itemised on this payslip.</p>
+    <table class="total"><tr><td>Final pay</td><td style="text-align:right">${esc(formatCents(slip.payableCents))}</td></tr></table>
+    <p class="muted" style="margin-top:20px">SSS, PhilHealth, Pag-IBIG and withholding tax are not computed by VendoPOS; your employer handles them separately.</p>
   </body></html>`;
 
   const w = window.open("", "_blank", "width=640,height=800");
