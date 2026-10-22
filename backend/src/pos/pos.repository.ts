@@ -46,6 +46,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
     tin: string | null;
     business_style: string | null;
     vat_label: string | null;
+    vat_registered: boolean;
     receipt_header: string | null;
     receipt_footer: string | null;
     logo_url: string | null;
@@ -54,7 +55,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
     receipt_min: string | null;
     receipt_serial: string | null;
   }>(
-    `SELECT name, slug, address, phone, tin, business_style, vat_label, receipt_header, receipt_footer,
+    `SELECT name, slug, address, phone, tin, business_style, vat_label, vat_registered, receipt_header, receipt_footer,
             logo_url, receipt_show_logo, receipt_ptu, receipt_min, receipt_serial
        FROM tenants WHERE id = $1`,
     [tenantId],
@@ -102,6 +103,7 @@ export async function getCatalog(tenantId: string): Promise<Catalog> {
       tin: s?.tin ?? null,
       businessStyle: s?.business_style ?? null,
       vatLabel: s?.vat_label ?? null,
+      vatRegistered: s?.vat_registered ?? true,
       receiptHeader: s?.receipt_header ?? null,
       receiptFooter: s?.receipt_footer ?? null,
       logoUrl: s?.receipt_show_logo === false ? null : s?.logo_url ?? null,
@@ -128,9 +130,10 @@ export async function getPricingSettings(tenantId: string): Promise<PricingSetti
     loyalty_point_value_cents: number;
     member_discount_pct: number;
     member_discount_min_spend_cents: number;
+    vat_registered: boolean;
   }>(
     `SELECT loyalty_pesos_per_point, loyalty_point_value_cents,
-            member_discount_pct, member_discount_min_spend_cents
+            member_discount_pct, member_discount_min_spend_cents, vat_registered
        FROM tenants WHERE id = $1`,
     [tenantId],
   );
@@ -140,6 +143,7 @@ export async function getPricingSettings(tenantId: string): Promise<PricingSetti
     pointValueCents: r?.loyalty_point_value_cents ?? 100,
     memberDiscountPct: r?.member_discount_pct ?? 0,
     memberMinSpendCents: r?.member_discount_min_spend_cents ?? 0,
+    vatRegistered: r?.vat_registered ?? true,
   };
 }
 
@@ -189,6 +193,10 @@ export async function createOrder(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
+    // A non-VAT store books every line with no VAT (and snapshots it that way).
+    const pricing = await getPricingSettings(tenantId);
+    const vatRegistered = pricing.vatRegistered;
 
     // Merge any duplicate productIds so locks/decrements are applied once.
     const wanted = new Map<string, number>();
@@ -243,7 +251,7 @@ export async function createOrder(
         qty,
         lineTotal,
         threshold: row.low_stock_threshold,
-        vatClass: row.vat_class,
+        vatClass: vatRegistered ? row.vat_class : "EXEMPT",
         scPwdEligible: row.sc_pwd_eligible,
       });
     }
@@ -272,7 +280,6 @@ export async function createOrder(
     // CATEGORY; the amount comes from the law (Senior/PWD) or the owner's CRM
     // settings (member %), and points are clamped to the live balance. Every
     // peso figure is server-authoritative; a tampered client cannot set its own.
-    const pricing = await getPricingSettings(tenantId);
     let discount: CartDiscount | null = null;
     let scPwdIdNumber: string | null = null;
     let scPwdName: string | null = null;
@@ -329,6 +336,7 @@ export async function createOrder(
       requestedPoints: customerId ? (input.redeemPoints ?? 0) : 0,
       pointsBalance: loyaltyBalance,
       pointValueCents: pricing.pointValueCents,
+      vatRegistered: pricing.vatRegistered,
     });
     if (scPwdType && priced.eligibleLineCount === 0) {
       await client.query("ROLLBACK");
@@ -336,7 +344,7 @@ export async function createOrder(
     }
     const { grossCents, discountCents, pointsRedeemed, netCents } = priced;
     const { vatCents, subtotalCents, vatableSalesCents, vatExemptCents, zeroRatedCents } = priced;
-    const discountLabel = discountLabelFor(discount, pointsRedeemed);
+    const discountLabel = discountLabelFor(discount, pointsRedeemed, pricing.vatRegistered);
 
     // Cash settlement must cover the net total.
     let tenderedCents: number | null = null;

@@ -124,6 +124,8 @@ export interface ReceiptSettings {
   header: string | null;
   footer: string | null;
   vatLabel: string | null;
+  /** False for a non-VAT store: no VAT on the register or receipts. */
+  vatRegistered: boolean;
   invoicePrefix: string | null;
   showLogo: boolean;
   /** BIR machine-accreditation footer fields. */
@@ -136,6 +138,8 @@ export interface ReceiptSettingsInput {
   header?: string;
   footer?: string;
   vatLabel?: string;
+  /** Owner only — the server refuses a manager changing it. */
+  vatRegistered?: boolean;
   invoicePrefix?: string;
   showLogo: boolean;
   ptu?: string;

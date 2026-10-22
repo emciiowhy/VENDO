@@ -1275,6 +1275,16 @@ CREATE TABLE IF NOT EXISTS payroll_adjustments (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS payroll_adjustments_run_idx ON payroll_adjustments (run_id);
+
+-- ---------------------------------------------------------------------------
+-- VAT registration. Most small PH businesses (under ₱3M a year) are NON-VAT:
+-- they pay percentage tax instead and must not show VAT on receipts. When a
+-- store is non-VAT, every sale line is booked as having no VAT (vat_cents = 0,
+-- lines snapshotted as EXEMPT, so refunds reverse correctly) and the receipt
+-- says NON-VAT. Prices and totals don't change — VAT was always inside the
+-- price. Defaults TRUE, so every existing store keeps behaving as before.
+-- ---------------------------------------------------------------------------
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS vat_registered BOOLEAN NOT NULL DEFAULT TRUE;
 `;
 
 async function migrate() {

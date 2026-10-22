@@ -106,7 +106,23 @@ const toCartDiscount = (d: TillDiscount | null): CartDiscount | null => {
   if (d.type === "promo") return { kind: "promo", name: d.promo.name, promoKind: d.promo.kind, value: d.promo.value };
   return { kind: d.type };
 };
-const discountText = (d: TillDiscount | null) => discountLabel(toCartDiscount(d));
+const discountText = (d: TillDiscount | null, vatRegistered = true) =>
+  discountLabel(toCartDiscount(d), vatRegistered);
+
+/**
+ * The VAT inside a price, shown UNDER the total as information — never as a
+ * line between the discount and the total, where it reads like an extra
+ * charge. Philippine prices are VAT-inclusive, so the total already contains
+ * it. Renders nothing when the sale has no VAT (a non-VAT store, or exempt items).
+ */
+function VatIncludedNote({ vatCents }: { vatCents: number }) {
+  if (vatCents <= 0) return null;
+  return (
+    <p className="text-right text-[11.5px] text-ink-faint tabular-nums">
+      Includes {peso(vatCents)} VAT (12%)
+    </p>
+  );
+}
 
 /** What checkout sends: the category or promo id only, never an amount. */
 const toOrderDiscount = (d: TillDiscount): Discount =>
@@ -311,8 +327,9 @@ export function PosTerminal() {
         requestedPoints: 0,
         pointsBalance: 0,
         pointValueCents: pricing.pointValueCents,
+        vatRegistered: pricing.vatRegistered,
       }),
-    [discount, lines, pricing.pointValueCents],
+    [discount, lines, pricing.pointValueCents, pricing.vatRegistered],
   );
   const { discountCents, netCents, vatCents } = cartPreview;
   const count = lines.reduce((s, l) => s + l.qty, 0);
@@ -345,7 +362,7 @@ export function PosTerminal() {
       })),
       grossCents,
       discountCents,
-      discountLabel: discountText(discount),
+      discountLabel: discountText(discount, pricing.vatRegistered),
       vatCents,
       netCents,
       count,
@@ -368,7 +385,7 @@ export function PosTerminal() {
         : null,
     };
     // discountText is a module-level pure helper.
-  }, [storeName, lines, grossCents, discountCents, discount, vatCents, netCents, count, checkoutOpen, checkoutMethod, receipt, paymentQrs, session]);
+  }, [storeName, lines, grossCents, discountCents, discount, vatCents, netCents, count, checkoutOpen, checkoutMethod, receipt, paymentQrs, session, pricing.vatRegistered]);
 
   const snapshotRef = useRef(snapshot);
 
@@ -570,7 +587,7 @@ export function PosTerminal() {
     lines,
     grossCents,
     discountCents,
-    discountLabel: discountText(discount),
+    discountLabel: discountText(discount, pricing.vatRegistered),
     netCents,
     vatCents,
     count,
@@ -885,6 +902,7 @@ export function PosTerminal() {
           lines={lines}
           promotions={promotions}
           pointValueCents={pricing.pointValueCents}
+          vatRegistered={pricing.vatRegistered}
           current={discount}
           onClose={() => setDiscountOpen(false)}
           onApply={(d) => {
@@ -1185,11 +1203,11 @@ function CartPanel({
               <span className="tabular-nums">−{peso(discountCents)}</span>
             </div>
           )}
-          <Row label={vatCents > 0 ? "VAT (12% incl.)" : "VAT (none)"} value={peso(vatCents)} muted />
           <div className="flex items-end justify-between pt-2 mt-1 hairline-t">
             <span className="text-[14px] font-bold">Total</span>
             <span className="text-stat font-extrabold tracking-tightest tabular-nums">{peso(netCents)}</span>
           </div>
+          <VatIncludedNote vatCents={vatCents} />
         </div>
 
         <button
@@ -1272,6 +1290,7 @@ function CheckoutOverlay({
       requestedPoints: points,
       pointsBalance: points,
       pointValueCents: pricing.pointValueCents,
+      vatRegistered: pricing.vatRegistered,
     });
   const base = pricedWith(0);
   const withAllPoints = customer ? pricedWith(customer.loyaltyPoints) : base;
@@ -1341,7 +1360,7 @@ function CheckoutOverlay({
             <Row label={`Items (${count})`} value={peso(grossCents)} />
             {discountCents > 0 && (
               <div className="flex items-center justify-between text-accent-600 font-semibold">
-                <span>{discountLabel(cartDiscount) ?? "Discount"}</span>
+                <span>{discountLabel(cartDiscount, pricing.vatRegistered) ?? "Discount"}</span>
                 <span className="tabular-nums">−{peso(discountCents)}</span>
               </div>
             )}
@@ -1354,11 +1373,11 @@ function CheckoutOverlay({
                 <span className="tabular-nums">−{peso(redeemCents)}</span>
               </div>
             )}
-            <Row label={dueVatCents > 0 ? "VAT (12% incl.)" : "VAT (none)"} value={peso(dueVatCents)} muted />
             <div className="flex items-center justify-between pt-1.5 mt-1 hairline-t">
               <span className="text-[14px] font-bold">Total due</span>
               <span className="text-[1.35rem] font-extrabold tracking-tightest">{peso(dueCents)}</span>
             </div>
+            <VatIncludedNote vatCents={dueVatCents} />
           </div>
 
           {/* Customer (optional) — attach for loyalty + purchase history */}
@@ -1601,7 +1620,7 @@ function ReceiptOverlay({
           {sale.discountCents > 0 && (
             <RcptRow label={sale.discountLabel ?? "Discount"} value={`−${peso(sale.discountCents)}`} />
           )}
-          <RcptRow label={sale.vatCents > 0 ? "VAT (12% incl.)" : "VAT (none)"} value={peso(sale.vatCents)} />
+          {sale.vatCents > 0 && <RcptRow label="Includes VAT (12%)" value={peso(sale.vatCents)} />}
           {sale.paymentRef && <RcptRow label={`${sale.paymentMethod} ref`} value={`••${sale.paymentRef}`} mono />}
           {sale.paymentMethod === "Cash" && sale.tenderedCents !== null && (
             <>
@@ -1710,6 +1729,7 @@ function DiscountModal({
   lines,
   promotions,
   pointValueCents,
+  vatRegistered,
   current,
   onClose,
   onApply,
@@ -1717,6 +1737,7 @@ function DiscountModal({
   lines: Line[];
   promotions: Promotion[];
   pointValueCents: number;
+  vatRegistered: boolean;
   current: TillDiscount | null;
   onClose: () => void;
   onApply: (d: TillDiscount | null) => void;
@@ -1736,6 +1757,7 @@ function DiscountModal({
         requestedPoints: 0,
         pointsBalance: 0,
         pointValueCents,
+        vatRegistered,
       })
     : null;
   const noneEligible = preview !== null && preview.eligibleLineCount === 0;
@@ -1809,7 +1831,7 @@ function DiscountModal({
           {kind && (
             <>
               <div className="rounded-[10px] bg-brand-50 px-3.5 py-2.5 text-[12.5px] text-ink-soft leading-snug">
-                VAT is removed first, then 20% is taken off the eligible items. The ID number and name are
+                {vatRegistered ? "VAT is removed first, then 20% is taken off the eligible items." : "20% is taken off the eligible items (your store is non-VAT)."} The ID number and name are
                 required and appear on the receipt. The amount is fixed by law and can&rsquo;t be changed.
               </div>
               <label className="block space-y-1.5">

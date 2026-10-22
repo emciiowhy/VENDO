@@ -48,6 +48,8 @@ export interface PricingSettings {
   /** 0 = member discount off. */
   memberDiscountPct: number;
   memberMinSpendCents: number;
+  /** False for a non-VAT store: no VAT shown or booked. */
+  vatRegistered: boolean;
 }
 
 export const DEFAULT_PRICING: PricingSettings = {
@@ -55,6 +57,7 @@ export const DEFAULT_PRICING: PricingSettings = {
   pesosPerPoint: 100,
   memberDiscountPct: 0,
   memberMinSpendCents: 0,
+  vatRegistered: true,
 };
 
 export interface CatalogCategory {
@@ -77,6 +80,8 @@ export interface StoreBrand {
   /** BIR "Business Style" — the store's trade name / line of business. */
   businessStyle: string | null;
   vatLabel: string | null;
+  /** False for a non-VAT store: receipts say NON-VAT and show no VAT lines. */
+  vatRegistered?: boolean;
   receiptHeader: string | null;
   receiptFooter: string | null;
   logoUrl: string | null;
@@ -201,11 +206,13 @@ export function promoAmountText(p: Pick<Promotion, "kind" | "value">): string {
   return `₱${(p.value / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} off`;
 }
 
-export function discountLabel(d: CartDiscount | null): string | null {
+export function discountLabel(d: CartDiscount | null, vatRegistered = true): string | null {
   if (!d) return null;
   if (d.kind === "promo") return d.name;
   if (d.kind === "member") return `Member ${d.pct}% off`;
-  return d.kind === "senior" ? "Senior Citizen (20% + VAT-exempt)" : "PWD (20% + VAT-exempt)";
+  // A non-VAT store has no VAT to exempt — the benefit is a plain 20% off.
+  const benefit = vatRegistered ? "(20% + VAT-exempt)" : "(20% off)";
+  return d.kind === "senior" ? `Senior Citizen ${benefit}` : `PWD ${benefit}`;
 }
 
 const VAT_NUM = 12;
@@ -277,13 +284,19 @@ export interface CartPreview {
  * register shows the total the receipt will print. The server re-derives every
  * figure; frontendParity.test.ts holds the two together.
  */
-export function previewCart(input: {
+export function previewCart(raw: {
   lines: (PreviewLine & { scPwdEligible: boolean })[];
   discount: CartDiscount | null;
   requestedPoints: number;
   pointsBalance: number;
   pointValueCents: number;
+  /** False for a non-VAT store: every line carries no VAT (mirrors the server). */
+  vatRegistered?: boolean;
 }): CartPreview {
+  const input =
+    raw.vatRegistered === false
+      ? { ...raw, lines: raw.lines.map((l) => ({ ...l, vatClass: "EXEMPT" as VatClass })) }
+      : raw;
   const grossCents = input.lines.reduce((s, l) => s + l.lineCents, 0);
   const pointValue = Math.max(1, Math.round(input.pointValueCents));
   const clampPoints = (payable: number) =>

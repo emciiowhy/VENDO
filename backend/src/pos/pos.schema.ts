@@ -178,6 +178,12 @@ function reductionCents(grossCents: number, kind: "percent" | "fixed", value: nu
 
 export interface PriceCartInput {
   lines: { vatClass: VatClass; grossCents: number; scPwdEligible: boolean }[];
+  /**
+   * False for a NON-VAT store: every line is treated as carrying no VAT, so the
+   * sale books ₱0 VAT and Senior/PWD is a plain 20% off (there's no VAT to
+   * remove). Defaults to true.
+   */
+  vatRegistered?: boolean;
   discount: CartDiscount | null;
   /** Points the cashier asked to redeem (clamped below). */
   requestedPoints: number;
@@ -207,7 +213,11 @@ export interface PricedCart extends VatBreakdown {
  * at the balance and at the payable — split pro-rata between the benefit and
  * non-benefit parts so neither part's VAT base goes negative.
  */
-export function priceCart(input: PriceCartInput): PricedCart {
+export function priceCart(raw: PriceCartInput): PricedCart {
+  const input: PriceCartInput =
+    raw.vatRegistered === false
+      ? { ...raw, lines: raw.lines.map((l) => ({ ...l, vatClass: "EXEMPT" as VatClass })) }
+      : raw;
   const grossCents = input.lines.reduce((s, l) => s + l.grossCents, 0);
   const pointValue = Math.max(1, Math.round(input.pointValueCents));
   const clampPoints = (payable: number) =>
@@ -273,10 +283,16 @@ export function priceCart(input: PriceCartInput): PricedCart {
 }
 
 /** Receipt label for a priced sale (e.g. "Senior Citizen (20% + VAT-exempt) + 5 pts"). */
-export function discountLabelFor(discount: CartDiscount | null, pointsRedeemed: number): string | null {
+export function discountLabelFor(
+  discount: CartDiscount | null,
+  pointsRedeemed: number,
+  vatRegistered = true,
+): string | null {
   let label: string | null = null;
-  if (discount?.kind === "senior") label = "Senior Citizen (20% + VAT-exempt)";
-  else if (discount?.kind === "pwd") label = "PWD (20% + VAT-exempt)";
+  // A non-VAT store has no VAT to exempt — the benefit is a plain 20% off.
+  const benefit = vatRegistered ? "(20% + VAT-exempt)" : "(20% off)";
+  if (discount?.kind === "senior") label = `Senior Citizen ${benefit}`;
+  else if (discount?.kind === "pwd") label = `PWD ${benefit}`;
   else if (discount?.kind === "member") label = `Member ${discount.pct}% off`;
   else if (discount?.kind === "promo") label = discount.name;
   if (pointsRedeemed > 0) {
@@ -367,6 +383,8 @@ export interface PricingSettings {
   /** 0 = member discount off. */
   memberDiscountPct: number;
   memberMinSpendCents: number;
+  /** False for a non-VAT store (no VAT shown or booked). */
+  vatRegistered: boolean;
 }
 
 export interface CatalogCategory {
@@ -389,6 +407,8 @@ export interface StoreBrand {
   /** BIR "Business Style" — the store's trade name / line of business. */
   businessStyle: string | null;
   vatLabel: string | null;
+  /** False for a non-VAT store: receipts say NON-VAT and show no VAT lines. */
+  vatRegistered: boolean;
   receiptHeader: string | null;
   receiptFooter: string | null;
   /** Logo URL for the receipt, or null when the owner hid it. */

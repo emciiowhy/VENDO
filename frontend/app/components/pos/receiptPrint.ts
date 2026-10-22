@@ -32,6 +32,11 @@ function fmtDate(iso: string): string {
 }
 
 /** Shared chrome: store header (logo, name, address, TIN) + a documented footer. */
+/** "VAT REG TIN" (or the owner's label) for a VAT store; always "NON-VAT REG TIN" otherwise. */
+export function tinLabel(store: StoreBrand): string {
+  return store.vatRegistered === false ? "NON-VAT REG TIN" : store.vatLabel || "VAT REG TIN";
+}
+
 function header(store: StoreBrand): string {
   const lines: string[] = [];
   if (store.logoUrl) {
@@ -45,7 +50,7 @@ function header(store: StoreBrand): string {
   // Style; both print as fixed labelled rows — with a blank placeholder when the
   // store hasn't filled them yet — so the ticket reads as a compliant form.
   lines.push(
-    `<div class="muted">${esc(store.vatLabel || "VAT REG TIN")}: ${esc(store.tin || "________________")}</div>`,
+    `<div class="muted">${esc(tinLabel(store))}: ${esc(store.tin || "________________")}</div>`,
   );
   lines.push(`<div class="muted">Business Style: ${esc(store.businessStyle || "________________")}</div>`);
   return `<div class="center">${lines.join("")}</div>`;
@@ -180,12 +185,15 @@ export function printSaleReceipt(args: {
     parts.push(`<div class="rule"></div>`);
   }
   // VAT summary — the per-class figures the server booked from each line's VAT
-  // classification (VATable net / exempt / zero-rated + 12% output VAT).
-  parts.push(row("VATable Sales", formatCents(sale.vatableSalesCents)));
-  parts.push(row("VAT-Exempt Sales", formatCents(sale.vatExemptCents)));
-  parts.push(row("Zero-Rated Sales", formatCents(sale.zeroRatedCents)));
-  parts.push(row("VAT (12%)", formatCents(sale.vatCents)));
-  parts.push(`<div class="rule"></div>`);
+  // classification (VATable net / exempt / zero-rated + 12% output VAT). A non-VAT
+  // store prints none of it: it must not show VAT on its receipts.
+  if (store.vatRegistered !== false) {
+    parts.push(row("VATable Sales", formatCents(sale.vatableSalesCents)));
+    parts.push(row("VAT-Exempt Sales", formatCents(sale.vatExemptCents)));
+    parts.push(row("Zero-Rated Sales", formatCents(sale.zeroRatedCents)));
+    parts.push(row("VAT (12%)", formatCents(sale.vatCents)));
+    parts.push(`<div class="rule"></div>`);
+  }
   parts.push(row("TOTAL AMOUNT DUE", formatCents(sale.totalCents), { strong: true }));
   parts.push(row("Paid via", sale.paymentMethod));
   if (sale.paymentMethod === "Cash" && sale.tenderedCents !== null) {
@@ -230,7 +238,7 @@ export function printRefundSlip(args: {
   parts.push(itemRows(items));
   parts.push(`<div class="rule"></div>`);
   if (reversal.discountCents !== 0) parts.push(row("Discount reversed", abs(reversal.discountCents)));
-  parts.push(row("VAT (12% incl.)", abs(reversal.vatCents)));
+  if (reversal.vatCents !== 0) parts.push(row("VAT (12% incl.)", abs(reversal.vatCents)));
   parts.push(row("REFUND TOTAL", abs(reversal.totalCents), { strong: true }));
   parts.push(`<div class="rule"></div>`);
   parts.push(row("Refunded via", reversal.paymentMethod));

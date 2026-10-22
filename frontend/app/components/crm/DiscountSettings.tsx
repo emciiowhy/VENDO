@@ -186,7 +186,7 @@ function StatutoryCard({ title, law, id }: { title: string; law: string; id: str
       <div className="text-[1.6rem] font-extrabold tracking-tightest text-brand-600">20% + VAT-exempt</div>
       <ul className="space-y-1 text-[13px] text-ink-soft">
         <li>{law}</li>
-        <li>VAT is removed first, then 20% off — on eligible items only.</li>
+        <li>VAT-registered stores remove VAT first, then 20% off; non-VAT stores give 20% off. Eligible items only.</li>
         <li>Requires the {id} number and cardholder name.</li>
         <li>For the cardholder&rsquo;s exclusive use; can&rsquo;t be combined with other promos.</li>
         <li>Untick ineligible items in Product Management.</li>

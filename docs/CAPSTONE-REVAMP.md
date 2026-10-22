@@ -16,6 +16,7 @@ This document is the hand-off for the revamp: what changed, how to run and deplo
 | **Procurement, Manufacturing** | Active modules. | Switched off (APIs return 404, UI redirects). Code and every row kept. |
 | **BIR** | "BIR-ready / compliant / accredited" claims; receipts titled "SALES INVOICE". | Claims removed. Receipts are titled **RECEIPT** and carry a fixed line: *"Not a BIR-registered invoice. Not valid for claim of input tax."* |
 | **People & Payroll** | "HR", 7 tabs, attendance typed by hand, SSS/PhilHealth/Pag-IBIG deductions. | 3 tabs: **Employees · Attendance · Payroll**. Attendance comes from Shift In / Shift Out and a work schedule. Payroll = daily rate ÷ standard hours × regular hours, Draft → Approved. Statutory deductions removed. |
+| **VAT** | Every store assumed VAT-registered; a "VAT (12% incl.)" line sat between the discount and the total, reading like an extra charge. | Owner setting **VAT-registered? Yes/No**. Non-VAT stores book ₱0 VAT, receipts read NON-VAT REG TIN with no VAT summary, Senior/PWD is a plain 20% off. VAT-registered stores show *"Includes ₱x VAT (12%)"* under the total. Totals never change — PH prices are VAT-inclusive. |
 | **Long lists** | Some silently cut off at 50–500 rows. | Numbered pagination everywhere (server-side for logs and sales). |
 
 ---
@@ -51,6 +52,7 @@ npx tsx scripts/smoke-attendance.ts   # schedule statuses, missing Shift Out fix
 npx tsx scripts/smoke-payroll.ts      # base pay, blockers, approval, lock
 npx tsx scripts/smoke-paging.ts       # server pagination totals
 npx tsx scripts/smoke-isolation.ts    # store A can't touch store B's data
+npx tsx scripts/smoke-vat.ts          # non-VAT store end to end
 ```
 
 Each script cleans up what it creates (activity-log rows stay — the log is append-only by design).
@@ -62,7 +64,7 @@ Each script cleans up what it creates (activity-log rows stay — the log is app
 1. Take a fresh Neon backup branch of production first.
 2. Merge `feat/capstone-revamp` → `main`. Render builds, runs the migration, and starts the API.
 3. Every migration is additive (`ADD COLUMN IF NOT EXISTS`, new tables, CHECK constraints only widened). No table or row is dropped. Existing payroll runs become *approved* history and display exactly as before.
-4. After deploy: each owner should (a) set every employee's **daily rate** and **work schedule**, (b) review promos/loyalty under CRM → Discounts, and (c) untick Senior/PWD eligibility on items the benefit doesn't cover.
+4. After deploy: each owner should set **VAT-registered** correctly under Account → Receipt (it defaults to *yes*), then (a) set every employee's **daily rate** and **work schedule**, (b) review promos/loyalty under CRM → Discounts, and (c) untick Senior/PWD eligibility on items the benefit doesn't cover.
 
 ---
 
@@ -93,6 +95,10 @@ The **Drawer audit** (Z-Read cash variance per closed shift) is on the same page
 ### 3.3 Product Management
 
 Renamed from Inventory (URLs/API unchanged). Add/edit products, categories, prices, stock, low-stock alerts. **Stock moves only through the stock ledger**: every sale deducts it inside the same database transaction as the sale, every void restores it, and a manual edit is a logged adjustment with a reason.
+
+### 3.3a VAT (Account → Receipt)
+
+Philippine retail prices **include** VAT, so the total is never increased by it. For a VAT-registered store the register notes *"Includes ₱10.61 VAT (12%)"* under the total (₱99 × 12/112) and receipts print the VATable / exempt / VAT breakdown. Most small businesses (under ₱3M a year) are **non-VAT**: the owner turns **VAT-registered** off, and from then on every sale books ₱0 VAT (lines are stored as non-VAT, so refunds reverse none), receipts read **NON-VAT REG TIN** with no VAT lines, and Senior/PWD is a plain 20% off. Only the owner can change it (a manager gets 403). Totals are identical either way.
 
 ### 3.4 People & Payroll
 
@@ -148,7 +154,7 @@ Example: ₱600/day, 8h standard, 6h worked → ₱600 ÷ 8 × 6 = ₱450
 | Check | Result |
 |---|---|
 | Backend type check | ✅ clean |
-| Backend unit + route tests (Vitest) | ✅ **498 / 498** |
+| Backend unit + route tests (Vitest) | ✅ **502 / 502** |
 | Frontend type check | ✅ clean |
 | Frontend lint | ✅ 0 errors (24 warnings, none in files added or changed by the revamp) |
 | Frontend production build | ✅ 81 pages |
@@ -158,6 +164,7 @@ Example: ₱600/day, 8h standard, 6h worked → ₱600 ÷ 8 × 6 = ₱450
 | Smoke — payroll | ✅ 26 / 26 |
 | Smoke — pagination | ✅ 11 / 11 |
 | Smoke — store isolation | ✅ 19 / 19 |
+| Smoke — VAT registration | ✅ 11 / 11 |
 
 Required scenarios from the brief:
 
@@ -182,7 +189,7 @@ Required scenarios from the brief:
 
 | Table | Change |
 |---|---|
-| `tenants` | `loyalty_pesos_per_point`, `loyalty_point_value_cents`, `member_discount_pct`, `member_discount_min_spend_cents` (defaults reproduce the old rules) |
+| `tenants` | `vat_registered` (default true), `loyalty_pesos_per_point`, `loyalty_point_value_cents`, `member_discount_pct`, `member_discount_min_spend_cents` (defaults reproduce the old rules) |
 | `products` | `sc_pwd_eligible` (default true) |
 | `sales` | `sc_pwd_type` (nullable) |
 | `promotions` | **new** — owner promos |

@@ -95,6 +95,7 @@ describe("register cart preview mirrors the server's priceCart", () => {
     requestedPoints: number;
     pointsBalance: number;
     pointValueCents: number;
+    vatRegistered?: boolean;
   }) => { netCents: number; discountCents: number; vatCents: number; pointsRedeemed: number; eligibleLineCount: number };
   const loadPreview = async () =>
     ((await import(/* @vite-ignore */ `${FRONTEND}/pos.ts`)) as { previewCart: PreviewCart }).previewCart;
@@ -123,6 +124,8 @@ describe("register cart preview mirrors the server's priceCart", () => {
         requestedPoints: i % 3 === 0 ? 0 : Math.floor(rand() * 20_000),
         pointsBalance: Math.floor(rand() * 20_000),
         pointValueCents: 1 + Math.floor(rand() * 300),
+        // Every 4th cart prices as a NON-VAT store.
+        vatRegistered: i % 4 !== 3,
       };
       const client = previewCart({ lines, discount, ...points });
       const server = priceCart({

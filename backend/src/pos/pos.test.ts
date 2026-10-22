@@ -409,3 +409,32 @@ describe("discountLabelFor", () => {
     expect(discountLabelFor(null, 0)).toBeNull();
   });
 });
+
+describe("priceCart — non-VAT store", () => {
+  const line = (grossCents: number, scPwdEligible = true) => ({ vatClass: "VATABLE" as VatClass, grossCents, scPwdEligible });
+  const base = { requestedPoints: 0, pointsBalance: 0, pointValueCents: 100, vatRegistered: false };
+
+  it("charges the same total but books no VAT", () => {
+    const r = priceCart({ ...base, lines: [line(11_000)], discount: { kind: "promo", name: "Halloween", promoKind: "percent", value: 10 } });
+    expect(r.netCents).toBe(9_900);
+    expect(r.vatCents).toBe(0);
+    expect(r.vatableSalesCents).toBe(0);
+    expect(r.vatExemptCents + r.zeroRatedCents).toBe(9_900);
+  });
+
+  it("Senior/PWD is a plain 20% off — there is no VAT to remove", () => {
+    const r = priceCart({ ...base, lines: [line(11_200)], discount: { kind: "senior" } });
+    expect(r.netCents).toBe(8_960); // ₱112 − 20%
+    expect(r.vatCents).toBe(0);
+  });
+
+  it("a VAT-registered store is unchanged (default)", () => {
+    const r = priceCart({ ...base, vatRegistered: undefined, lines: [line(11_200)], discount: { kind: "senior" } });
+    expect(r.netCents).toBe(8_000);
+  });
+
+  it("labels the benefit without 'VAT-exempt' for a non-VAT store", () => {
+    expect(discountLabelFor({ kind: "senior" }, 0, false)).toBe("Senior Citizen (20% off)");
+    expect(discountLabelFor({ kind: "pwd" }, 0, true)).toBe("PWD (20% + VAT-exempt)");
+  });
+});
