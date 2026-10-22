@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
 import { ImagePicker } from "./ImagePicker";
 import { categoryLabel } from "./categoryLabel";
@@ -13,7 +13,9 @@ import {
   type StockReason,
   STOCK_REASONS,
 } from "@/lib/inventory";
-import { VAT_CLASS_HINTS, VAT_CLASS_LABELS, type VatClass } from "@/lib/pos";
+import { VAT_CLASS_HINTS, VAT_CLASS_LABELS, previewVatCents, type VatClass } from "@/lib/pos";
+import { getReceipt } from "@/lib/account";
+import { formatPesoExact } from "@/lib/format";
 
 const FIELD_INPUT = "field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14.5px] text-ink";
 
@@ -38,6 +40,18 @@ export function ProductFormModal({
   const [sku, setSku] = useState(product?.sku ?? "");
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? "");
   const [price, setPrice] = useState(product ? String(product.price) : "");
+  // The store's VAT status, for the price helper (null until loaded).
+  const [vatRegistered, setVatRegistered] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const res = await getReceipt();
+      if (alive && res.ok) setVatRegistered(res.settings.vatRegistered !== false);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [stock, setStock] = useState(product ? String(product.stock) : "0");
   // Editing on-hand stock is a logged adjustment; the reason goes on the ledger.
   const [stockReason, setStockReason] = useState<StockReason>("Restock");
@@ -220,6 +234,7 @@ export function ProductFormModal({
               />
             </Field>
           </div>
+          <PriceVatHelper price={price} vatClass={vatClass} vatRegistered={vatRegistered} onSetPrice={setPrice} />
 
           {stockChanged && (
             <Field label="Reason for the stock change" error={fieldErrors.stockReason}>
@@ -339,5 +354,72 @@ function Field({
       {children}
       {error && <span className="block mt-1 text-[12px] font-semibold text-rose-600">{error}</span>}
     </label>
+  );
+}
+
+/**
+ * Shows what the typed price is made of, so the owner sees the price is the
+ * FINAL shelf price: PH retail prices are VAT-inclusive, so a VATable ₱140.00
+ * is ₱125.00 + ₱15.00 VAT — the customer pays ₱140.00, not ₱155. Uses the same
+ * VAT maths as the register and the server (previewVatCents). If the owner
+ * meant their number as the price BEFORE VAT, one tap converts it.
+ */
+function PriceVatHelper({
+  price,
+  vatClass,
+  vatRegistered,
+  onSetPrice,
+}: {
+  price: string;
+  vatClass: VatClass;
+  vatRegistered: boolean | null;
+  onSetPrice: (pesos: string) => void;
+}) {
+  const [converted, setConverted] = useState<string | null>(null);
+  const cents = Math.round((Number(price) || 0) * 100);
+  if (cents <= 0 || vatRegistered === null) return null;
+  const peso = (c: number) => formatPesoExact(c / 100);
+  const box = "rounded-[10px] bg-paper hairline px-3.5 py-2.5 text-[12.5px] text-ink-soft";
+
+  if (!vatRegistered) {
+    return (
+      <p className={box}>
+        Your store is <b className="text-ink">non-VAT</b>, so there&rsquo;s no VAT in this price — the customer pays{" "}
+        <b className="text-ink">{peso(cents)}</b>.
+      </p>
+    );
+  }
+  if (vatClass !== "VATABLE") {
+    return (
+      <p className={box}>
+        No VAT on this item ({vatClass === "EXEMPT" ? "VAT-exempt" : "zero-rated"}) — the customer pays{" "}
+        <b className="text-ink">{peso(cents)}</b>.
+      </p>
+    );
+  }
+  const vat = previewVatCents([{ vatClass: "VATABLE", lineCents: cents }]);
+  const grossedUp = Math.round(cents * 1.12);
+  return (
+    <div className={box + " space-y-1"}>
+      <div className="tabular-nums">
+        {peso(cents - vat)} + {peso(vat)} VAT (12%) = <b className="text-ink">{peso(cents)}</b> — the price the customer pays.
+      </div>
+      {converted !== price && (
+        <div className="text-[12px] text-ink-faint">
+          Is {peso(cents)} your price <i>before</i> VAT?{" "}
+          <button
+            type="button"
+            onClick={() => {
+              const next = (grossedUp / 100).toFixed(2);
+              setConverted(next);
+              onSetPrice(next);
+            }}
+            className="font-semibold text-brand-600 hover:text-brand-700 underline underline-offset-2"
+          >
+            Use {peso(grossedUp)} instead
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
