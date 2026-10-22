@@ -218,7 +218,7 @@ export const INDUSTRIES: Industry[] = [
     highlights: [
       { icon: "heart", title: "Client profiles & loyalty", body: "Every client's visit history and points in one place for personal service." },
       { icon: "tag", title: "Services + retail", body: "Charge a treatment and the products that go with it on one receipt." },
-      { icon: "users", title: "Staff tracking", body: "Track who served whom and manage your team's roles and attendance." },
+      { icon: "users", title: "Staff tracking", body: "See which cashier rang up each sale, and every cashier's hours from Shift In/Out." },
     ],
     outcomes: [
       "Bill services and retail together cleanly",
@@ -254,17 +254,17 @@ export const INDUSTRIES: Industry[] = [
     name: "Warehouse & Distribution",
     tagline: "Move stock and orders without losing track.",
     intro:
-      "Keep a clear trail on every unit — sales, restocks and count corrections — and run payroll for a bigger team.",
+      "Keep a clear trail on every unit — sales, restocks and count corrections — and see every cashier's hours.",
     photoKey: "warehouse",
     highlights: [
       { icon: "bell", title: "Low-stock alerts", body: "Set a floor per product and get alerted before stock runs out." },
       { icon: "box", title: "Stock ledger", body: "Every sale, restock, and adjustment is logged, so stock levels always have a trail." },
-      { icon: "users", title: "People & Payroll", body: "Attendance from Shift In/Out and owner-approved payroll for the whole team." },
+      { icon: "users", title: "Cashier attendance", body: "Hours from Shift In/Out for every cashier, on a month calendar you can export." },
     ],
     outcomes: [
       "Restock in seconds with a logged stock adjustment",
       "Get reorder suggestions before items run out",
-      "Pay your team from real attendance, not guesswork",
+      "Know every cashier's real hours — export them for payroll",
     ],
   },
 ];

@@ -19,6 +19,10 @@ const faqs = [
     a: "Not yet. VendoPOS is not BIR-accredited, so keep using your registered receipts or CAS for official invoices. What it does give you: VAT-inclusive totals itemized on every receipt, gap-free sale numbers, correct Senior/PWD computation, and a sales ledger you can export for your accountant.",
   },
   {
+    q: "Does VendoPOS run payroll?",
+    a: "No — you stay in control of pay. On the Business and Enterprise plans, every cashier’s Shift In and Shift Out is recorded and shown as hours on a month calendar. Fix a forgotten Shift Out, then export the hours to compute pay your way.",
+  },
+  {
     q: "Can my Customers pay with GCash and Maya?",
     a: "Yes — GCash, Maya, and QRPH alongside cash, all rung up the same simple way at the till.",
   },

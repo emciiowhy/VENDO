@@ -112,7 +112,7 @@ const PRODUCTS: MenuDef = {
         links: [
           { label: "Product Management", href: "/products/inventory-management" },
           { label: "Reporting & Analytics", href: "/products/reporting-and-analytics" },
-          { label: "Employee Management", href: "/products/employee-management" },
+          { label: "Cashiers & Attendance", href: "/products/employee-management" },
         ],
       },
     ],

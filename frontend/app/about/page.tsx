@@ -400,7 +400,7 @@ export default function AboutPage() {
 
                 <p className="mt-2 text-[0.95rem] font-semibold text-ink-soft leading-snug">
 
-                  Connected modules — POS, product management, finance, people & payroll, and CRM — sharing one
+                  Connected modules — POS, product management, finance, cashiers, and CRM — sharing one
 
                   source of truth.
 

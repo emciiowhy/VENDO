@@ -10,8 +10,7 @@ import { getMyTimecards, formatClock, formatMinutes, type MyTimecards, type Time
  * week and month, and a live read of any open punch. This is the cashier's
  * self-service summary: it loads from the time-clock engine (resolved from the
  * session, never an id), so it shows for ANY signed-in staff member regardless
- * of the store's tier — independent of the payroll-gated ESS profile alongside
- * it. No back-office data is reachable from here.
+ * of the store's tier. No back-office data is reachable from here.
  *
  * Hydration discipline: `nowMs` seeds to null and only ticks inside a post-mount
  * effect, so the live duration never diverges between server and first render.

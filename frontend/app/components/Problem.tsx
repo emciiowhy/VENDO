@@ -9,7 +9,7 @@ const today = [
 ];
 
 const withVendo = [
-  "One platform, seven connected tools.",
+  "One platform, five connected tools.",
   "VAT-itemized receipts and exportable sales reports.",
   "Senior & PWD discounts applied in a tap, with the ID on the receipt.",
   "Peso-first with GCash, Maya, and QRPH built in.",
@@ -28,7 +28,7 @@ export function Problem() {
             Your business runs on spreadsheets and a dozen disconnected apps.
           </h2>
           <p className="mt-5 text-[1.08rem] text-ink-soft leading-relaxed">
-            Sales here, stock there, suppliers in a chat thread, payroll in another sheet. Nothing
+            Sales here, stock there, staff hours in a paper logbook, expenses in another sheet. Nothing
             talks to each other — and none of it was built for the way you actually operate in the
             Philippines.
           </p>

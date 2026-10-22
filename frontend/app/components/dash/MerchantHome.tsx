@@ -30,7 +30,7 @@ import { MERCHANT_EVENTS_URL, type LowStockEvent } from "@/lib/merchantEvents";
  * live aggregation (no mock arrays): today's takings, hourly revenue velocity,
  * payment-channel mix and best sellers, all from the `sales`/`sale_items`
  * ledger, plus a live low-stock alert banner from the catalog. Quick access to
- * the seven Modules stays as navigation (POS + Inventory live, rest "soon").
+ * the Modules stays as navigation.
  */
 
 const MODULES: { icon: IconName; label: string; desc: string; href?: string }[] = [
@@ -38,7 +38,7 @@ const MODULES: { icon: IconName; label: string; desc: string; href?: string }[] 
   { icon: "box", label: "Product Management", desc: "Products, prices & stock", href: "/dashboard/inventory" },
   { icon: "file", label: "Compliance", desc: "Sales ledger & VAT", href: "/dashboard/compliance" },
   { icon: "chart", label: "Finance", desc: "Profit, loss & expenses", href: "/dashboard/finance" },
-  { icon: "users", label: "People & Payroll", desc: "Employees, attendance & payroll", href: "/dashboard/hr" },
+  { icon: "users", label: "Cashiers", desc: "Till logins & hours worked", href: "/dashboard/cashiers" },
   { icon: "heart", label: "CRM", desc: "Customers & loyalty", href: "/dashboard/crm" },
 ];
 

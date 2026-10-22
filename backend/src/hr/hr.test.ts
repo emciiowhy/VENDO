@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { createApp } from "../app.js";
-import { attendanceUpsertSchema, employeeCreateSchema, payrollRunSchema } from "./hr.schema.js";
+import { attendanceUpsertSchema, employeeCreateSchema } from "./hr.schema.js";
 
 const app = createApp();
 const UUID = "11111111-1111-1111-1111-111111111111";
@@ -9,6 +9,9 @@ const UUID = "11111111-1111-1111-1111-111111111111";
 describe("HR routes require store-management auth", () => {
   it("blocks the summary for the unauthenticated with 401", async () => {
     expect((await request(app).get("/api/v1/hr/summary")).status).toBe(401);
+  });
+  it("blocks the payroll preview for the unauthenticated with 401", async () => {
+    expect((await request(app).get("/api/v1/hr/payroll/preview?from=2026-10-01&to=2026-10-15")).status).toBe(401);
   });
   it("blocks listing employees for the unauthenticated with 401", async () => {
     expect((await request(app).get("/api/v1/hr/employees")).status).toBe(401);
@@ -33,9 +36,9 @@ describe("HR routes require store-management auth", () => {
   });
 });
 
-describe("ESS self-service requires auth", () => {
-  it("blocks the self-service record for the unauthenticated with 401", async () => {
-    expect((await request(app).get("/api/v1/ess/me")).status).toBe(401);
+describe("ESS self-service (paystubs) is retired with payroll", () => {
+  it("is no longer mounted", async () => {
+    expect((await request(app).get("/api/v1/ess/me")).status).toBe(404);
   });
 });
 
@@ -80,14 +83,5 @@ describe("attendanceUpsertSchema", () => {
   it("rejects an invalid status", () => {
     const r = attendanceUpsertSchema.safeParse({ employeeId: UUID, workDate: "2026-06-11", status: "Vacation" });
     expect(r.success).toBe(false);
-  });
-});
-
-describe("payrollRunSchema", () => {
-  it("accepts a valid period", () => {
-    expect(payrollRunSchema.safeParse({ periodStart: "2026-06-01", periodEnd: "2026-06-15" }).success).toBe(true);
-  });
-  it("rejects an end before the start", () => {
-    expect(payrollRunSchema.safeParse({ periodStart: "2026-06-15", periodEnd: "2026-06-01" }).success).toBe(false);
   });
 });

@@ -194,64 +194,6 @@ export interface AttendanceRow {
   hours: number;
 }
 
-export type PayrollRunStatus = "draft" | "approved";
-
-/** An adjustment on a payroll line. Only approved ones are paid. */
-export interface PayrollAdjustment {
-  id: string;
-  itemId: string;
-  /** overtime / paid_leave are system suggestions; manual are typed by the manager. */
-  kind: "overtime" | "paid_leave" | "manual";
-  label: string;
-  /** Signed centavos — a deduction is negative. */
-  amountCents: number;
-  approved: boolean;
-}
-
-/** One employee's line: attendance → base earnings → adjustments → payable. */
-export interface PayrollLine {
-  id: string;
-  employeeId: string | null;
-  name: string;
-  /** Lines from before the payroll rework (gross only, no attendance detail). */
-  legacy: boolean;
-  dailyRateCents: number;
-  rateConfirmed: boolean;
-  standardDailyHours: number;
-  presentDays: number;
-  halfDays: number;
-  absentDays: number;
-  leaveDays: number;
-  workedMinutes: number;
-  regularMinutes: number;
-  overtimeMinutes: number;
-  baseCents: number;
-  adjustments: PayrollAdjustment[];
-  approvedAdjustmentsCents: number;
-  payableCents: number;
-}
-
-export interface PayrollRunSummary {
-  id: string;
-  reference: string;
-  status: PayrollRunStatus;
-  periodStart: string;
-  periodEnd: string;
-  headcount: number;
-  totalBaseCents: number;
-  totalPayableCents: number;
-  approvedAt: string | null;
-  createdAt: string;
-}
-
-export interface PayrollRunDetail extends PayrollRunSummary {
-  note: string | null;
-  approvedByName: string | null;
-  lines: PayrollLine[];
-  /** Why a draft can't be approved yet (empty = ready). */
-  blockers: string[];
-}
-
 export interface HrSummary {
   headcount: number;
   presentToday: number;
@@ -456,26 +398,10 @@ export async function getShiftReconciliations(
   if (to) qs.set("to", to);
   const suffix = qs.toString() ? `?${qs}` : "";
   try {
-    // Served by the POS router (any plan with cashiers), not People & Payroll.
+    // Served by the POS router (any plan with cashiers), not the Cashiers module.
     return await readJson(
       await fetch(`${API_BASE_URL}/api/v1/pos/shift-reconciliations${suffix}`, { credentials: "include" }),
     );
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-export async function listPayrollRuns(): Promise<Result<{ runs: PayrollRunSummary[] }>> {
-  try {
-    return await readJson(await fetch(`${BASE}/payroll`, { credentials: "include" }));
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-export async function getPayrollRun(id: string): Promise<Result<{ run: PayrollRunDetail }>> {
-  try {
-    return await readJson(await fetch(`${BASE}/payroll/${id}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }
@@ -665,93 +591,4 @@ export async function clearAttendance(employeeId: string, date: string): Promise
   } catch {
     return NETWORK_ERR;
   }
-}
-
-// ── Payroll (Draft → Approved) ───────────────────────────────────────────────
-
-type RunResult = Promise<Result<{ run: PayrollRunDetail }>>;
-
-async function send(path: string, method: string, body?: unknown): Promise<Response> {
-  return fetch(`${BASE}${path}`, {
-    method,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-    credentials: "include",
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-}
-
-/** Start a DRAFT run for a period (priced from attendance). */
-export async function runPayroll(input: { periodStart: string; periodEnd: string; note?: string }): RunResult {
-  try {
-    return await readJson(await send("/payroll", "POST", input));
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-/** Re-read attendance for a draft (e.g. after fixing a missing Shift Out). */
-export async function recalculatePayroll(runId: string): RunResult {
-  try {
-    return await readJson(await send(`/payroll/${runId}/recalculate`, "POST"));
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-/** Enter or confirm a line's daily rate (centavos). Also saved on the employee. */
-export async function setPayrollRate(runId: string, lineId: string, dailyRateCents: number): RunResult {
-  try {
-    return await readJson(await send(`/payroll/${runId}/lines/${lineId}/rate`, "PUT", { dailyRateCents }));
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-/** A manual +/- adjustment (positive adds pay, negative deducts). */
-export async function addPayrollAdjustment(runId: string, lineId: string, label: string, amountCents: number): RunResult {
-  try {
-    return await readJson(await send(`/payroll/${runId}/lines/${lineId}/adjustments`, "POST", { label, amountCents }));
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-/** Approve / un-approve an adjustment (e.g. tick the overtime suggestion). */
-export async function setPayrollAdjustmentApproved(runId: string, adjustmentId: string, approved: boolean): RunResult {
-  try {
-    return await readJson(await send(`/payroll/${runId}/adjustments/${adjustmentId}`, "PATCH", { approved }));
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-export async function deletePayrollAdjustment(runId: string, adjustmentId: string): RunResult {
-  try {
-    return await readJson(await send(`/payroll/${runId}/adjustments/${adjustmentId}`, "DELETE"));
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-/** Lock the run. The server re-checks every blocker. */
-export async function approvePayroll(runId: string): Promise<Result<{ run: PayrollRunDetail; blockers?: string[] }>> {
-  try {
-    return await readJson(await send(`/payroll/${runId}/approve`, "POST"));
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-/** Discard a draft (approved runs can't be deleted). */
-export async function deletePayrollRun(runId: string): Promise<Result<Record<string, never>>> {
-  try {
-    return await readJson(await send(`/payroll/${runId}`, "DELETE"));
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-/** CSV download URL of an approved run (a plain link carries the session cookie). */
-export function payrollCsvUrl(runId: string): string {
-  return `${BASE}/payroll/${runId}/csv`;
 }

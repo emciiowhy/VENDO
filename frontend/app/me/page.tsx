@@ -6,12 +6,11 @@ import { BrandMark } from "@/app/components/BrandMark";
 import { ThemeToggle } from "@/app/components/theme/ThemeToggle";
 import { useTheme } from "@/app/components/theme/ThemeProvider";
 import { useSession, homeForRole } from "@/app/components/auth/useSession";
-import { EssPortal } from "@/app/components/ess/EssPortal";
 import { MyClockRecords } from "@/app/components/ess/MyClockRecords";
 
 /**
- * Employee Self-Service portal at /me. Open to ANY signed-in staff member
- * (including cashiers on a shared terminal) — so it deliberately doesn't use the
+ * "My record" at /me — the signed-in worker's own Shift In / Shift Out history.
+ * Open to ANY signed-in staff member (including cashiers on a shared terminal) — so it deliberately doesn't use the
  * merchant DashShell or its nav. The backend resolves the record from the
  * session cookie; this page never carries a tenant or employee id.
  */
@@ -41,7 +40,7 @@ export default function MyHrPage() {
             <BrandMark className="w-8 h-8" />
             <div className="leading-tight">
               <div className="font-extrabold text-[15px] tracking-tightest">My record</div>
-              <div className="text-[11px] font-semibold text-ink-faint">Employee self-service</div>
+              <div className="text-[11px] font-semibold text-ink-faint">Your hours</div>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-3">
@@ -58,9 +57,8 @@ export default function MyHrPage() {
       </header>
       <main className="max-w-[1000px] mx-auto px-5 sm:px-8 py-7 space-y-5">
         {/* Shift-clock history loads from the time-clock engine and shows for any
-            signed-in worker, independent of the payroll-gated ESS profile below. */}
+            signed-in worker, on any tier. */}
         <MyClockRecords />
-        <EssPortal greetingName={user.name} role={user.role} />
       </main>
     </div>
   );

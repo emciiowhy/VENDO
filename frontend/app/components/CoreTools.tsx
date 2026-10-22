@@ -4,7 +4,7 @@ const tools: { icon: IconName; title: string; body: string }[] = [
   { icon: "pos", title: "Point of Sale", body: "Ring up Customers and take payment — the fast front-of-house sales surface." },
   { icon: "box", title: "Product Management", body: "Products, categories, prices and stock — with low-stock alerts and automatic deduction on every sale." },
   { icon: "chart", title: "Finance & Accounting", body: "Money in and out — sales reports, expenses, tax, and profit & loss." },
-  { icon: "users", title: "People & Payroll", body: "Employees, attendance from Shift In/Out, and payroll the owner reviews and approves." },
+  { icon: "users", title: "Cashiers & Attendance", body: "Cashier logins and PINs, plus every cashier's hours from Shift In/Out on a month calendar — export them to work out pay." },
   { icon: "heart", title: "Customer Relationship", body: "Track your Customers and grow loyalty over time." },
 ];
 
@@ -14,7 +14,7 @@ export function CoreTools() {
       <div className="max-w-[1160px] mx-auto px-6">
         <div className="max-w-[60ch] reveal">
           <span className="text-[12.5px] font-bold tracking-widest uppercase text-brand-600">
-            One platform, seven core tools
+            One platform, five core tools
           </span>
           <h2 className="mt-4 text-[clamp(1.9rem,3.6vw,2.6rem)] leading-[1.1] tracking-tightest font-extrabold">
             Everything your business does, in one place.

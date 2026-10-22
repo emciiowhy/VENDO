@@ -10,6 +10,16 @@ import {
   updateCashier,
 } from "./staff.repository.js";
 import { forceCloseShiftForCashier } from "../pos/shifts.repository.js";
+import { requireFeature } from "../auth/tier.middleware.js";
+import { monthBounds } from "../hr/hr.repository.js";
+import { correctTimecard } from "../hr/attendance.repository.js";
+import { timecardCorrectionSchema } from "../hr/hr.schema.js";
+import { logActivity } from "../pos/audit.repository.js";
+import {
+  getCashierAttendance,
+  getStoreCashierAttendance,
+  isCashierTimecard,
+} from "./cashierAttendance.repository.js";
 
 const MAX_FLOAT_CENTS = 100_000_00; // ₱100,000 — mirrors the shift open/close cap.
 
@@ -205,5 +215,98 @@ staffRouter.post("/pin-requests/:id/reject", async (req, res) => {
   } catch (err) {
     console.error("[staff] reject request failed:", err);
     res.status(500).json({ ok: false, error: "Could not update the request." });
+  }
+});
+
+// ── Attendance ───────────────────────────────────────────────────────────────
+//
+// Hours each cashier worked, read from their Shift In / Shift Out (timecards).
+// No payroll: the owner works out pay from these hours themselves. Business+,
+// the same tier that unlocks cashier logins (`multi_staff_roles`).
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO_MONTH = /^d{4}-d{2}$/;
+const attendanceGate = requireFeature("multi_staff_roles");
+
+/** The ?month=YYYY-MM query, defaulting to the current Manila month. */
+function monthOf(req: Request): { start: string; end: string } {
+  const m = req.query.month;
+  const today = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 7);
+  return monthBounds(typeof m === "string" && ISO_MONTH.test(m) ? m : today);
+}
+
+/** GET /api/v1/staff/attendance?month=YYYY-MM — every cashier's month totals + the store calendar. */
+staffRouter.get("/attendance", attendanceGate, async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const { start, end } = monthOf(req);
+    res.json({ ok: true, month: start.slice(0, 7), ...(await getStoreCashierAttendance(tenantId, start, end)) });
+  } catch (err) {
+    console.error("[staff] attendance failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load attendance." });
+  }
+});
+
+/** GET /api/v1/staff/cashiers/:id/attendance?month=YYYY-MM — one cashier's days, punches and totals. */
+staffRouter.get("/cashiers/:id/attendance", attendanceGate, async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID.test(req.params.id)) return res.status(404).json({ ok: false, error: "Cashier not found." });
+  try {
+    const { start, end } = monthOf(req);
+    const report = await getCashierAttendance(tenantId, req.params.id, start, end);
+    if (!report) return res.status(404).json({ ok: false, error: "Cashier not found." });
+    res.json({ ok: true, month: start.slice(0, 7), ...report });
+  } catch (err) {
+    console.error("[staff] cashier attendance failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load attendance." });
+  }
+});
+
+/**
+ * PATCH /api/v1/staff/timecards/:id — enter a cashier's real Time In / Time Out
+ * (the fix for a forgotten Shift Out). Logged on the activity log.
+ */
+staffRouter.patch("/timecards/:id", attendanceGate, async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID.test(req.params.id)) return res.status(404).json({ ok: false, error: "Timecard not found." });
+  const parsed = timecardCorrectionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: parsed.error.issues[0]?.message ?? "Enter valid times." });
+  }
+  try {
+    if (!(await isCashierTimecard(tenantId, req.params.id))) {
+      return res.status(404).json({ ok: false, error: "Timecard not found." });
+    }
+    const result = await correctTimecard(tenantId, req.params.id, parsed.data);
+    if (!result.ok) {
+      return result.code === "NOT_FOUND"
+        ? res.status(404).json({ ok: false, error: "Timecard not found." })
+        : res.status(400).json({ ok: false, error: result.detail });
+    }
+    const t = (iso: string | null) =>
+      iso
+        ? new Date(iso).toLocaleString("en-PH", {
+            timeZone: "Asia/Manila",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "open";
+    void logActivity(
+      { tenantId, userId: req.user?.userId ?? null, name: req.user?.name ?? "Owner" },
+      {
+        action: "timecard_corrected",
+        refId: req.params.id,
+        detail: `${t(result.before.clockIn)} – ${t(result.before.clockOut)} → ${t(result.after.clockIn)} – ${t(result.after.clockOut)}`,
+      },
+    );
+    res.json({ ok: true, timecard: result.after });
+  } catch (err) {
+    console.error("[staff] timecard correction failed:", err);
+    res.status(500).json({ ok: false, error: "Could not save the correction." });
   }
 });

@@ -25,7 +25,6 @@ import { paymentQrRouter } from "./merchant/paymentQr.router.js";
 import { staffRouter } from "./staff/staff.router.js";
 import { financeRouter } from "./finance/finance.router.js";
 import { hrRouter } from "./hr/hr.router.js";
-import { essRouter } from "./hr/ess.router.js";
 import { timecardRouter } from "./hr/timecard.router.js";
 import { crmRouter } from "./crm/crm.router.js";
 import { accountRouter } from "./account/account.router.js";
@@ -143,8 +142,10 @@ export function createApp() {
   // Procurement and Manufacturing are retired (capstone scope): their routers are
   // no longer mounted, so those APIs 404. The code and every table/row are kept —
   // nothing is deleted — and Finance still reads past purchase orders.
+  // Payroll is removed: owners work out pay from the hours in the Cashiers module
+  // (/api/v1/staff/attendance). Staff self-service (paystubs) went with it, so
+  // the ESS router is unmounted; a worker's own clock stays at /merchant/shifts/me.
   app.use("/api/v1/hr", hrRouter);
-  app.use("/api/v1/ess", essRouter);
   app.use("/api/v1/crm", crmRouter);
   app.use("/api/v1/account", accountRouter);
   app.use("/api/v1/notifications", notificationsRouter);

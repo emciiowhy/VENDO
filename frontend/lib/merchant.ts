@@ -5,6 +5,7 @@
  * is integer centavos on the wire.
  */
 import { API_BASE_URL } from "./api";
+import type { SaleDetail } from "./pos";
 
 const V1 = `${API_BASE_URL}/api/v1`;
 
@@ -236,4 +237,96 @@ export async function getComplianceLedger(
 /** Absolute URL that streams the month's ledger as a downloadable CSV. */
 export function complianceCsvUrl(month: string): string {
   return `${V1}/merchant/compliance/export?month=${encodeURIComponent(month)}&format=csv`;
+}
+
+// ── Sales ledger (owner's record of every transaction) ──────────────────────
+
+export type SaleStatus = SaleDetail["status"];
+
+export interface SalesLedgerRow {
+  id: string;
+  reference: string;
+  status: SaleStatus;
+  totalCents: number;
+  discountCents: number;
+  vatCents: number;
+  paymentMethod: string;
+  cashierName: string | null;
+  customerName: string | null;
+  /** Units rung up on the sale. */
+  itemsCount: number;
+  lineCount: number;
+  /** Up to three item names for the row preview. */
+  itemNames: string[];
+  /** Money already given back on this sale (voids/returns). */
+  refundedCents: number;
+  createdAt: string;
+}
+
+export interface SalesLedgerSummary {
+  txns: number;
+  grossCents: number;
+  refundedCents: number;
+  netCents: number;
+  itemsSold: number;
+  discountCents: number;
+  vatCents: number;
+  avgCents: number;
+  byMethod: { method: string; txns: number; totalCents: number }[];
+}
+
+export interface SalesFilter {
+  from?: string;
+  to?: string;
+  status?: SaleStatus | "";
+  paymentMethod?: string;
+  cashierId?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface SaleReversalLine {
+  id: string;
+  reference: string;
+  kind: "void" | "return";
+  amountCents: number;
+  reason: string | null;
+  processedBy: string | null;
+  createdAt: string;
+}
+
+/** One sale's full record: receipt lines, payment, VAT, and any refunds. */
+export interface SaleRecord extends SaleDetail {
+  scPwdType: "senior" | "pwd" | null;
+  pointsEarned: number;
+  pointsRedeemed: number;
+  reversals: SaleReversalLine[];
+}
+
+export async function listSalesLedger(f: SalesFilter): Promise<
+  Result<{
+    sales: SalesLedgerRow[];
+    total: number;
+    page: number;
+    pageSize: number;
+    summary: SalesLedgerSummary;
+    cashiers: { userId: string; name: string }[];
+  }>
+> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== "") qs.set(k, String(v));
+  try {
+    return await readJson(await fetch(`${V1}/merchant/sales?${qs}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function getSaleRecord(id: string): Promise<Result<{ sale: SaleRecord }>> {
+  try {
+    return await readJson(await fetch(`${V1}/merchant/sales/${encodeURIComponent(id)}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
 }

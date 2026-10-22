@@ -32,6 +32,16 @@ describe("Merchant analytics & compliance require store-management auth", () => 
     expect(res.status).toBe(401);
   });
 
+  it("blocks the sales ledger for the unauthenticated with 401", async () => {
+    const res = await request(app).get("/api/v1/merchant/sales");
+    expect(res.status).toBe(401);
+  });
+
+  it("blocks a single sale record for the unauthenticated with 401", async () => {
+    const res = await request(app).get("/api/v1/merchant/sales/00000000-0000-0000-0000-000000000000");
+    expect(res.status).toBe(401);
+  });
+
   it("blocks the real-time event stream for the unauthenticated with 401", async () => {
     const res = await request(app).get("/api/v1/merchant/events/stream");
     expect(res.status).toBe(401);

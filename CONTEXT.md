@@ -45,19 +45,19 @@ Making products from raw materials via recipes / bill-of-materials. Switched off
 **Finance & Accounting**:
 Money in and out — sales reports, expenses, tax, profit & loss.
 
-**People & Payroll** (code: `hr`):
-Employees, attendance and payroll for a Tenant's own staff — three sections only. Attendance is derived from Shift In / Shift Out; payroll is computed from it and approved by the owner/manager.
-_Avoid_: renaming the `/dashboard/hr` URL, `/api/v1/hr` API or `human_resources_payroll` feature key — only the label changed.
+**Cashiers** (page: `/dashboard/cashiers`, API: `/api/v1/staff`):
+The owner's module for the people on the till — two tabs. **Cashiers**: till logins, PINs, opening float, PIN reset requests (any tier). **Attendance**: hours each Cashier worked, read from their Shift In / Shift Out, as a month table + calendar with CSV export (Business+, gated on `multi_staff_roles` like cashier logins). Owner only. Replaced People & Payroll; `/dashboard/hr` and `/dashboard/staff` redirect here.
+
+**Payroll** — *removed*:
+VendoPOS doesn't compute pay. The owner works out payroll themselves from the Attendance hours. The payroll API and UI are gone and staff self-service paystubs (`/api/v1/ess`) is unmounted, but `payroll_runs` / `payroll_items` rows are kept. The Employees API (`/api/v1/hr`) is still mounted but has no UI.
+_Avoid_: reintroducing pay calculations — it conflicts with how owners pay their staff.
 
 **Shift In / Shift Out**:
-Clocking in and out on the labor clock (`timecards`). Shift In is an Employee's Time In; Shift Out is their Time Out.
+Clocking in and out on the labor clock (`timecards`). Shift In is a Cashier's Time In; Shift Out is their Time Out. A punch counts toward the Manila day it started on; a forgotten Shift Out counts no hours until the owner enters the real Time Out in Cashiers → Attendance.
 _Avoid_: confusing this with opening or closing the cash drawer (`cashier_shifts`, X/Z-Read), which is about cash, not hours.
 
 **Work schedule**:
 The weekly pattern on an Employee — `work_days`, `standard_daily_hours`, `unpaid_break_minutes`. A day's status (present / absent / half-day / rest day) is derived from it plus the timecards, never assumed.
-
-**Payroll run**:
-A payroll period. Starts as a **Draft** (base pay = daily rate ÷ standard hours × regular hours; overtime and paid leave are suggested adjustments), becomes **Approved** (locked) once the owner/manager approves it. A manager can't approve a run containing their own pay. Statutory contributions are not computed.
 
 **Customer Relationship Management (CRM)**:
 Tracking Customers and loyalty over time.
@@ -67,15 +67,15 @@ Tracking Customers and loyalty over time.
 The Tenant's own workers. Two distinct records exist for the same real person and must not be conflated — they live in different tables and are unlocked by different Plans.
 
 **Employee**:
-A person on the Tenant's payroll — the full People & Payroll record (position, daily rate, schedule, attendance, PTO). Lives in the `employees` table. People & Payroll is an Enterprise-only Module, so Employees exist only on Enterprise Tenants.
+*Dormant.* The old People & Payroll HR record (position, daily rate, schedule, PTO) in the `employees` table. It has no UI since payroll was removed; attendance is now read per Cashier instead.
 _Avoid_: using "Employee" to mean a till login — that is a Cashier.
 
 **Cashier**:
-A till login — a `users` row with `role = 'CASHIER'` and a 4-digit PIN that opens shifts and rings up sales. Managed in the owner's Cashiers console; unlocked by `multi_staff_roles` (Business+). A Cashier may exist with no Employee record (Business Tenants have no People & Payroll).
+A till login — a `users` row with `role = 'CASHIER'` and a 4-digit PIN that opens shifts and rings up sales. Managed in the owner-only Cashiers module (`/dashboard/cashiers`, open on every tier; its Attendance tab is Business+); unlocked by `multi_staff_roles` (Business+). A Cashier may exist with no Employee record.
 _Avoid_: Staff member, user.
 
 **Till access**:
-The capability that links an Employee to a Cashier login (`employees.user_id → users.id`), so one real person is both on payroll and able to work the till. The link is how that person's Shift In / Shift Out becomes their attendance. Only meaningful on Enterprise, where both records coexist.
+*Dormant.* The old link from an Employee to a Cashier login (`employees.user_id → users.id`). No longer needed for attendance — a Cashier's own timecards are their attendance.
 
 **Duty roster**:
 Who is on the clock right now — derived live from open `cashier_shifts`. Surfaced in the cashier sign-in picker ("Who's on duty right now?") and the POS activation wizard. Always data-driven; the only hardcoded roster is the marketing illustration.
@@ -89,7 +89,7 @@ The subscription tiers a Tenant can be on. Tiers differ by which Modules are unl
 POS + Product Management + VAT-itemized receipts + GCash/Maya/QRPH + Senior/PWD discounts. For single-location coffee shops and small retailers.
 
 **Business** — ₱499/mo:
-Starter plus CRM (with discount management), Finance & Accounting, multi-staff roles, and custom branding. For growing multi-staff retailers and restaurants.
+Starter plus CRM (with discount management), Finance & Accounting, multi-staff roles, cashier attendance (hours + calendar), and custom branding. For growing multi-staff retailers and restaurants.
 
 **Enterprise** — ₱799/mo:
-Adds People & Payroll (attendance + payroll) and priority support. (Multi-location is on the roadmap and advertised as "coming soon" — it is not yet shipped.) The landing CTA routes to a contact-sales/demo funnel rather than self-serve signup.
+Adds priority support. (Multi-location is on the roadmap and advertised as "coming soon" — it is not yet shipped.) The landing CTA routes to a contact-sales/demo funnel rather than self-serve signup.

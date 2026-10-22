@@ -21,7 +21,7 @@ export default function AuditPage() {
     >
       <AuditConsole />
       {/* Cash-drawer reconciliation (X/Z-Read variance) — the POS side of staff
-          accountability, so it lives here rather than in People & Payroll. */}
+          accountability, so it lives here rather than in Cashiers. */}
       <div className="mt-10 max-w-[1180px] space-y-4">
         <div>
           <h2 className="text-[1.3rem] font-extrabold tracking-tightest">Drawer audit</h2>

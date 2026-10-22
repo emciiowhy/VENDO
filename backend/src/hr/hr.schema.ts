@@ -115,34 +115,6 @@ export const timecardCorrectionSchema = z.object({
 });
 export type TimecardCorrectionInput = z.infer<typeof timecardCorrectionSchema>;
 
-// ── Payroll ──────────────────────────────────────────────────────────────────
-
-export const payrollRunSchema = z
-  .object({
-    periodStart: isoDate,
-    periodEnd: isoDate,
-    note: optionalText(240),
-  })
-  .refine((d) => d.periodStart <= d.periodEnd, {
-    message: "The period end must be on or after the start.",
-    path: ["periodEnd"],
-  });
-
-/** The manager enters or confirms a daily rate (integer centavos). */
-export const dailyRateSchema = z.object({
-  dailyRateCents: z.number().int("Enter a whole centavo amount.").min(0).max(10_000_000, "That daily rate is too large."),
-});
-
-/** A manual payroll adjustment: positive adds pay, negative deducts it. */
-export const payrollAdjustmentSchema = z.object({
-  label: z.string().trim().min(1, "Describe the adjustment.").max(80),
-  amountCents: z
-    .number()
-    .int("Enter a whole centavo amount.")
-    .refine((n) => n !== 0, "Enter an amount other than zero.")
-    .refine((n) => Math.abs(n) <= 100_000_000, "That amount is too large."),
-});
-
 // ── Till access (link an Employee to a Cashier login) ─────────────────────────
 
 /** A 4-digit cashier PIN — the same shape the Cashiers console enforces. */
@@ -188,7 +160,6 @@ export const adoptCashierSchema = z.discriminatedUnion("mode", [
 export type EmployeeCreateInput = z.infer<typeof employeeCreateSchema>;
 export type EmployeeUpdateInput = z.infer<typeof employeeUpdateSchema>;
 export type AttendanceUpsertInput = z.infer<typeof attendanceUpsertSchema>;
-export type PayrollRunInput = z.infer<typeof payrollRunSchema>;
 export type TillAccessInput = z.infer<typeof tillAccessSchema>;
 export type AdoptCashierInput = z.infer<typeof adoptCashierSchema>;
 

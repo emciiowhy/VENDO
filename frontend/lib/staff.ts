@@ -154,3 +154,94 @@ export async function rejectPinRequest(requestId: string): Promise<Result<Record
     return NETWORK_ERR;
   }
 }
+
+// ── Attendance (hours from Shift In / Shift Out) ────────────────────────────
+
+export interface CashierPunch {
+  id: string;
+  clockIn: string;
+  clockOut: string | null;
+  minutes: number;
+  /** Still on the clock right now. */
+  open: boolean;
+  /** A forgotten Shift Out — counts no hours until the owner enters the real Time Out. */
+  needsReview: boolean;
+}
+
+export interface CashierDay {
+  date: string;
+  workedMinutes: number;
+  needsReview: boolean;
+  punches: CashierPunch[];
+}
+
+export interface CashierAttendanceTotals {
+  daysWorked: number;
+  workedMinutes: number;
+  punches: number;
+  needsReview: number;
+}
+
+export interface CashierAttendanceRow extends CashierAttendanceTotals {
+  userId: string;
+  name: string;
+  status: string;
+  onClock: boolean;
+}
+
+export interface StoreAttendanceDay {
+  date: string;
+  workedMinutes: number;
+  cashiers: number;
+  needsReview: boolean;
+}
+
+/** Every cashier's month totals plus the store-wide calendar. `month` is YYYY-MM. */
+export async function getStoreAttendance(
+  month: string,
+): Promise<Result<{ month: string; rows: CashierAttendanceRow[]; days: StoreAttendanceDay[] }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/attendance?month=${month}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** One cashier's month: each day's punches and the totals. */
+export async function getCashierAttendance(
+  cashierId: string,
+  month: string,
+): Promise<
+  Result<{
+    month: string;
+    cashier: { id: string; name: string; status: string };
+    days: CashierDay[];
+    totals: CashierAttendanceTotals;
+  }>
+> {
+  try {
+    return await readJson(
+      await fetch(`${BASE}/cashiers/${cashierId}/attendance?month=${month}`, { credentials: "include" }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Enter a punch's real Time In / Time Out (ISO instants) — the fix for a forgotten Shift Out. */
+export async function correctCashierTimecard(
+  timecardId: string,
+  times: { clockIn?: string; clockOut: string },
+): Promise<Result<Record<string, never>>> {
+  try {
+    const res = await fetch(`${BASE}/timecards/${timecardId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(times),
+    });
+    return await readJson(res);
+  } catch {
+    return NETWORK_ERR;
+  }
+}

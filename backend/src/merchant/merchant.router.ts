@@ -16,6 +16,15 @@ import {
 } from "./merchant.repository.js";
 import { DEFAULT_FORECAST_OPTIONS, type ForecastOptions } from "./forecast.js";
 import { resolveMonth, toCsv } from "./compliance.csv.js";
+import {
+  getSaleRecord,
+  listSalesLedger,
+  PAYMENT_METHODS,
+  SALE_STATUSES,
+  type PaymentMethod,
+  type SaleStatus,
+} from "./sales.repository.js";
+import { parsePaging } from "../lib/paging.js";
 
 /**
  * Merchant-side analytics + BIR compliance. Mounted at /api/v1/merchant and
@@ -152,6 +161,62 @@ merchantRouter.get("/compliance/export", async (req, res) => {
   } catch (err) {
     console.error("[merchant] compliance export failed:", err);
     res.status(500).json({ ok: false, error: "Could not compile the compliance ledger." });
+  }
+});
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * GET /api/v1/merchant/sales — the owner's Sales ledger: every sale with its
+ * items count, cashier, payment and status, plus a rollup over the filtered set.
+ *   ?from=&to=YYYY-MM-DD  ?status=  ?paymentMethod=  ?cashierId=  ?q=reference
+ *   ?page=&pageSize=
+ * Unknown or malformed filter values are ignored rather than passed to SQL.
+ */
+merchantRouter.get("/sales", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const str = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined);
+  const from = str(req.query.from);
+  const to = str(req.query.to);
+  const status = str(req.query.status);
+  const method = str(req.query.paymentMethod);
+  const cashierId = str(req.query.cashierId);
+  const q = str(req.query.q);
+  try {
+    const page = await listSalesLedger(
+      tenantId,
+      {
+        from: from && ISO_DATE.test(from) ? from : undefined,
+        to: to && ISO_DATE.test(to) ? to : undefined,
+        status: SALE_STATUSES.includes(status as SaleStatus) ? (status as SaleStatus) : undefined,
+        paymentMethod: PAYMENT_METHODS.includes(method as PaymentMethod) ? (method as PaymentMethod) : undefined,
+        cashierId: cashierId && UUID_RE.test(cashierId) ? cashierId : undefined,
+        q: q ? q.slice(0, 40) : undefined,
+      },
+      parsePaging(req.query),
+    );
+    const { items, ...rest } = page;
+    res.json({ ok: true, sales: items, ...rest });
+  } catch (err) {
+    console.error("[merchant] sales ledger failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load sales." });
+  }
+});
+
+/** GET /api/v1/merchant/sales/:id — one sale's full record (lines, payment, refunds). */
+merchantRouter.get("/sales/:id", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ ok: false, error: "Sale not found." });
+  try {
+    const sale = await getSaleRecord(tenantId, req.params.id);
+    if (!sale) return res.status(404).json({ ok: false, error: "Sale not found." });
+    res.json({ ok: true, sale });
+  } catch (err) {
+    console.error("[merchant] sale record failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load the sale." });
   }
 });
 

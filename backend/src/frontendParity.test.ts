@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { computeVatBreakdown, priceCart, type CartDiscount, type VatClass } from "./pos/pos.schema.js";
 import { FEATURE_MIN_TIER } from "./lib/tiers.js";
 
@@ -142,51 +142,6 @@ describe("register cart preview mirrors the server's priceCart", () => {
       });
       expect(pick(client), `case ${i}`).toEqual(pick(server));
     }
-  });
-});
-
-describe("My record (ESS) explains why a profile couldn't load", () => {
-  type EssModule = {
-    getMyEssProfile: (month?: string) => Promise<{ ok: boolean; kind?: string; error?: string }>;
-  };
-  const loadEss = async () => (await import(/* @vite-ignore */ `${FRONTEND}/ess.ts`)) as EssModule;
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  function stubFetch(status: number, body: unknown) {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })),
-    );
-  }
-
-  it.each([
-    [404, "not_linked"],
-    [403, "plan"],
-    [500, "other"],
-  ])("HTTP %i → %s", async (status, kind) => {
-    const { getMyEssProfile } = await loadEss();
-    stubFetch(status, { ok: false, error: "nope" });
-    const res = await getMyEssProfile("2026-10");
-    expect(res.ok).toBe(false);
-    expect(res.kind).toBe(kind);
-    expect(res.error).toBe("nope");
-  });
-
-  it("a network failure is classed as 'other' so the page offers a retry", async () => {
-    const { getMyEssProfile } = await loadEss();
-    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("offline"))));
-    const res = await getMyEssProfile();
-    expect(res).toMatchObject({ ok: false, kind: "other" });
-  });
-
-  it("a loaded profile passes through untouched", async () => {
-    const { getMyEssProfile } = await loadEss();
-    stubFetch(200, { ok: true, profile: { employee: { id: "e1" } } });
-    const res = await getMyEssProfile();
-    expect(res).toEqual({ ok: true, profile: { employee: { id: "e1" } } });
   });
 });
 

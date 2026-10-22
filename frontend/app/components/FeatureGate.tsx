@@ -84,9 +84,9 @@ const FEATURE_PITCH: Record<
   },
   human_resources_payroll: {
     icon: "users",
-    title: "People & Payroll",
+    title: "Cashier attendance",
     description:
-      "Employees, attendance from Shift In / Shift Out, and payroll you review and approve — with staff self-service.",
+      "Hours each cashier worked from their Shift In / Shift Out, on a month calendar you can export to work out pay.",
   },
   priority_support: {
     icon: "shield",

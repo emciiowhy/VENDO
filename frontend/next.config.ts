@@ -26,6 +26,11 @@ const nextConfig: NextConfig = {
     return [
       { source: "/dashboard/procurement", destination: "/dashboard/inventory", permanent: false },
       { source: "/dashboard/manufacturing", destination: "/dashboard", permanent: false },
+      // People & Payroll became Cashiers (payroll removed; the owner works out pay
+      // from the hours). The query string (?tab=…) carries over.
+      { source: "/dashboard/staff", destination: "/dashboard/cashiers", permanent: false },
+      { source: "/dashboard/hr", destination: "/dashboard/cashiers", permanent: false },
+      { source: "/dashboard/hr/:path*", destination: "/dashboard/cashiers?tab=attendance", permanent: false },
       { source: "/products/procurement", destination: "/products", permanent: false },
       { source: "/products/manufacturing", destination: "/products", permanent: false },
       // VendoPOS is not BIR-accredited, so the old "BIR Accreditation" page is gone.

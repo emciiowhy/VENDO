@@ -13,7 +13,7 @@ export function Hero() {
           {/* Left */}
           <div className="reveal">
             <span className="inline-flex items-center gap-2 text-[12.5px] font-bold tracking-wide uppercase text-brand-600 bg-brand-50 hairline px-3 py-1.5 rounded-full">
-              POS + ERP · 7 tools, one login
+              POS + ERP · 5 tools, one login
             </span>
             <h1 className="mt-6 text-[clamp(2.5rem,5.4vw,3.85rem)] leading-[1.04] tracking-tightest font-extrabold text-ink">
               One platform to run
@@ -39,7 +39,7 @@ export function Hero() {
                 href="#tools"
                 className="press inline-flex items-center gap-2 bg-white hairline text-ink font-semibold px-6 py-3.5 rounded-[11px] hover:border-brand-200 hover:text-brand-600"
               >
-                Explore the 7 Core Tools
+                Explore the 5 Core Tools
               </a>
             </div>
             <ul className="mt-8 flex flex-wrap gap-x-7 gap-y-2.5 text-[14.5px] text-ink-soft font-medium">

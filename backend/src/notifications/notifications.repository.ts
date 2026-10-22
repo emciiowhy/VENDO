@@ -161,7 +161,7 @@ export async function notifyVariance(tenantId: string, v: VarianceInfo): Promise
       severity: short ? "danger" : "warning",
       title: `Cash ${short ? "shortage" : "overage"} on ${v.cashierName}'s drawer`,
       body: `${short ? "Short" : "Over"} by ${formatPeso(Math.abs(v.varianceCents))} at Z-Read.`,
-      link: "/dashboard/staff",
+      link: "/dashboard/cashiers",
       dedupeKey: `variance:${v.shiftId}`,
     });
   } catch (err) {
@@ -182,7 +182,7 @@ export async function notifyPinRequest(
       severity: "info",
       title: `${cashierName} requested a PIN reset`,
       body: "Set a new PIN from the Cashiers console.",
-      link: "/dashboard/staff",
+      link: "/dashboard/cashiers",
       dedupeKey: `pin_request:${requestId}`,
     });
   } catch (err) {

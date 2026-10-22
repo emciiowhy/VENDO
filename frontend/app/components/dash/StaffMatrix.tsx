@@ -34,9 +34,14 @@ const peso = (cents: number) => formatPesoExact(cents / 100);
 
 const NO_CASHIERS: CashierSummary[] = [];
 
-export function StaffMatrix() {
+/** `onCount` reports the roster size so a parent's tab can show it. */
+export function StaffMatrix({ onCount }: { onCount?: (cashiers: number) => void } = {}) {
   const { push } = useToast();
   const [state, setState] = useState<State>({ status: "loading" });
+
+  useEffect(() => {
+    if (state.status === "ready") onCount?.(state.cashiers.length);
+  }, [state, onCount]);
   const [setPinFor, setSetPinFor] = useState<{ id: string; name: string } | null>(null);
   const [editing, setEditing] = useState<CashierSummary | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
