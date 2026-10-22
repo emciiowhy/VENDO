@@ -18,7 +18,7 @@ export const metadata: Metadata = pageMetadata({
 
   description:
 
-    "VendoPOS builds the software that runs local commerce — a multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and transactional integrity for Filipino businesses.",
+    "VendoPOS builds the software that runs local commerce — a multi-tenant POS + ERP engineered around tenant isolation, tamper-evident sales records, and transactional integrity for Filipino businesses.",
 
   path: "/about",
 
@@ -26,7 +26,7 @@ export const metadata: Metadata = pageMetadata({
 
   ogDescription:
 
-    "A multi-tenant POS + ERP engineered around tenant isolation, BIR compliance, and transactional integrity for Filipino businesses.",
+    "A multi-tenant POS + ERP engineered around tenant isolation, tamper-evident sales records, and transactional integrity for Filipino businesses.",
 
 });
 
@@ -68,11 +68,11 @@ const PILLARS: {
 
     eyebrow: "Philippine-first",
 
-    title: "Compliance Ready",
+    title: "Audit-Ready Records",
 
-    body: "Engineered directly around local BIR sequence-integrity controls — gapless invoice numbering, tamper-evident records, and audit trails built into the core, not stapled on at year-end.",
+    body: "Engineered around sales-record integrity — gapless receipt numbering, tamper-evident records, and audit trails built into the core, not stapled on at year-end. (VendoPOS is not BIR-accredited; receipts aren't official invoices.)",
 
-    points: ["Gapless BIR sequence integrity", "Tamper-evident, auditable records"],
+    points: ["Gapless receipt numbering", "Tamper-evident, auditable records"],
 
     featured: true,
 
@@ -86,7 +86,7 @@ const PILLARS: {
 
     title: "Correctness Under Load",
 
-    body: "Atomic, race-free checkout keeps stock and BIR serials consistent even when many cashiers sell at once. Every sale, void, and return settles as one indivisible transaction.",
+    body: "Atomic, race-free checkout keeps stock and receipt serials consistent even when many cashiers sell at once. Every sale, void, and return settles as one indivisible transaction.",
 
     points: ["Atomic, race-free checkout", "Collision-free invoice serials"],
 
@@ -100,7 +100,7 @@ const STATS: { value: string; label: string }[] = [
 
   { value: "5", label: "ERP pillars in one platform" },
 
-  { value: "100%", label: "Peso-first & BIR-ready" },
+  { value: "100%", label: "Peso-first" },
 
   { value: "1", label: "Login for your whole business" },
 
@@ -146,9 +146,9 @@ export default function AboutPage() {
 
               VendoPOS is one multi-tenant POS + ERP platform for Filipino businesses — sales, stock,
 
-              suppliers, finances, and staff in a single system. We obsess over the unglamorous
+              customers, finances, and staff in a single system. We obsess over the unglamorous
 
-              engineering that keeps a counter running: isolation, compliance, and resilience.
+              engineering that keeps a counter running: isolation, accuracy, and resilience.
 
             </p>
 
@@ -400,7 +400,7 @@ export default function AboutPage() {
 
                 <p className="mt-2 text-[0.95rem] font-semibold text-ink-soft leading-snug">
 
-                  Connected modules — POS, inventory, procurement, finance, HR, and CRM — sharing one
+                  Connected modules — POS, product management, finance, people & payroll, and CRM — sharing one
 
                   source of truth.
 
