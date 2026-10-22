@@ -30,7 +30,7 @@ const STEPS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: "building",
     title: "2 · In-person rollout mapping",
-    body: "We come to you. A hands-on session to map your setup — staff roles, catalog, suppliers, recipes and payroll — into a rollout plan tailored to your business.",
+    body: "We come to you. A hands-on session to map your setup — staff roles, catalog, discounts and payroll — into a rollout plan tailored to your business.",
   },
   {
     icon: "shield",

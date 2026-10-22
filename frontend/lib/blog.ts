@@ -61,7 +61,7 @@ export const POSTS: BlogPost[] = [
       },
       {
         paragraphs: [
-          "The test is simple: when it's time to file or you get inspected, can you produce the numbers in minutes instead of days? If the answer is no, the system is working against you. VendoPOS handles serials, VAT, and exports as a default — not a feature you have to remember to turn on.",
+          "The test is simple: when it's time to file or you get inspected, can you produce the numbers in minutes instead of days? If the answer is no, the system is working against you. (A note on VendoPOS itself: it is not yet BIR-accredited, so use your registered receipts or CAS for official invoices.) VendoPOS handles serials, VAT, and exports as a default — not a feature you have to remember to turn on.",
         ],
       },
     ],

@@ -39,6 +39,7 @@ import {
   setSessionCookie,
 } from "./auth.middleware.js";
 import { dashboardPathForRole, type Session } from "./auth.types.js";
+import { logActivity } from "../pos/audit.repository.js";
 
 /**
  * Mint a tracked session and drop the cookie. Opening a `sessions` row (and the
@@ -59,6 +60,15 @@ async function issueSession(
     console.error("[auth] could not open session row:", err);
   }
   setSessionCookie(res, signSession({ ...session, sid }));
+  // Store staff sign-ins go on the store's activity log. A Super Admin support
+  // sign-in is recorded in the platform's own admin audit instead.
+  if (method !== "impersonate") {
+    const how = method === "pin" ? "PIN" : method === "google" ? "Google" : "Password";
+    void logActivity(
+      { tenantId: session.tenantId, userId: session.userId, name: session.name },
+      { action: "login", detail: `${how} sign-in · ${session.role.replace("MERCHANT_", "").toLowerCase()}` },
+    );
+  }
 }
 
 export const authRouter = Router();
@@ -210,6 +220,11 @@ authRouter.post("/logout", async (req, res) => {
     } catch (err) {
       console.error("[auth] logout revoke failed:", err);
     }
+  }
+  // Only a valid, non-impersonated token is logged — a forged cookie can't fail
+  // verification and still write a row.
+  if (session && !session.impersonator) {
+    void logActivity({ tenantId: session.tenantId, userId: session.userId, name: session.name }, { action: "logout" });
   }
   clearSessionCookie(res);
   res.json({ ok: true });

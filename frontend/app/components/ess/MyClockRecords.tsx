@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { getMyTimecards, formatClock, formatMinutes, type MyTimecards, type Timecard } from "@/lib/timecard";
 
 /**
@@ -21,6 +22,8 @@ function fmtDate(iso: string): string {
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
+
+const NO_CARDS: Timecard[] = [];
 
 export function MyClockRecords() {
   const [state, setState] = useState<
@@ -57,6 +60,7 @@ export function MyClockRecords() {
     };
   }, [active]);
 
+  const pager = usePagination(state.status === "ready" ? state.data.timecards : NO_CARDS, null, 10);
   if (state.status === "loading") {
     return <div className="h-[260px] rounded-xl2 bg-surface hairline shadow-card animate-pulse" />;
   }
@@ -118,11 +122,12 @@ export function MyClockRecords() {
               </tr>
             </thead>
             <tbody>
-              {data.timecards.map((t) => (
+              {pager.pageItems.map((t) => (
                 <ClockRow key={t.id} t={t} nowMs={nowMs} />
               ))}
             </tbody>
           </table>
+          <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} noun="shifts" />
         </div>
       )}
     </div>

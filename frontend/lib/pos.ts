@@ -37,7 +37,28 @@ export interface CatalogProduct {
   lowStockThreshold: number;
   imageUrl: string | null;
   vatClass: VatClass;
+  /** Whether the Senior/PWD benefit covers this item. */
+  scPwdEligible: boolean;
 }
+
+/** The store's discount rules (CRM → Discounts), for the register preview. */
+export interface PricingSettings {
+  pointValueCents: number;
+  pesosPerPoint: number;
+  /** 0 = member discount off. */
+  memberDiscountPct: number;
+  memberMinSpendCents: number;
+  /** False for a non-VAT store: no VAT shown or booked. */
+  vatRegistered: boolean;
+}
+
+export const DEFAULT_PRICING: PricingSettings = {
+  pointValueCents: 100,
+  pesosPerPoint: 100,
+  memberDiscountPct: 0,
+  memberMinSpendCents: 0,
+  vatRegistered: true,
+};
 
 export interface CatalogCategory {
   id: string;
@@ -59,6 +80,8 @@ export interface StoreBrand {
   /** BIR "Business Style" — the store's trade name / line of business. */
   businessStyle: string | null;
   vatLabel: string | null;
+  /** False for a non-VAT store: receipts say NON-VAT and show no VAT lines. */
+  vatRegistered?: boolean;
   receiptHeader: string | null;
   receiptFooter: string | null;
   logoUrl: string | null;
@@ -74,6 +97,17 @@ export interface Catalog {
   products: CatalogProduct[];
   /** Owner-uploaded e-wallet QR codes shown to customers at checkout. */
   paymentQrs: PaymentQrMap;
+  pricing: PricingSettings;
+  /** The owner's ACTIVE promotions — tap-only buttons at the till. */
+  promotions?: Promotion[];
+}
+
+/** An owner-defined promo. `value` is a whole % or centavos, per `kind`. */
+export interface Promotion {
+  id: string;
+  name: string;
+  kind: "percent" | "fixed";
+  value: number;
 }
 
 export interface Sale {
@@ -100,6 +134,8 @@ export interface Sale {
   scPwdIdNumber?: string | null;
   /** The Senior/PWD cardholder's name recorded on the sale (else null). */
   scPwdName?: string | null;
+  /** Which statutory category was applied (null = none / legacy sale). */
+  scPwdType?: "senior" | "pwd" | null;
   createdAt: string;
 }
 
@@ -141,48 +177,59 @@ export interface ShiftZRead extends ShiftTally {
 }
 
 /**
- * Cart-level discount. `percent` → value 0–100; `fixed` → value in centavos;
- * `senior_pwd` is the BIR Senior Citizen / PWD benefit — it carries the ID
- * number + cardholder name and the SERVER derives the VAT-exempt-then-20%
- * amount (the client never sends a peso figure for it).
+ * The Senior Citizen / PWD benefit picked at the till. Carries the BIR-required
+ * ID number + cardholder name and the exclusive-use confirmation; the SERVER
+ * derives the VAT-exempt-then-20% amount (the client never sends a peso figure).
  */
-export type Discount =
-  | { type: "percent"; value: number; label?: string }
-  | { type: "fixed"; value: number; label?: string }
-  | { type: "senior_pwd"; idNumber: string; holderName: string; label?: string };
-
-const SC_PWD_VAT_NUM = 12;
-const SC_PWD_VAT_DEN = 112;
+export type ScPwdDiscount = {
+  type: "senior" | "pwd";
+  idNumber: string;
+  holderName: string;
+  exclusiveUse: true;
+};
 
 /**
- * Preview-only mirror of the server's Senior/PWD math (see
- * `computeSeniorPwdBreakdown` in the backend): strip the 12% VAT from each
- * VATable line, then take 20% off the net-of-VAT base. Returns the combined
- * discount in centavos (removed VAT + 20%) so the terminal can show an accurate
- * "less" figure before checkout. The server re-derives this authoritatively.
+ * What checkout sends. Every discount is a predefined CATEGORY — cashiers can't
+ * key an amount. `member` carries nothing: the % comes from CRM → Discounts.
  */
-export function seniorPwdDiscountCents(lines: { vatClass: VatClass; lineCents: number }[]): number {
-  const grossIncl = lines.reduce((s, l) => s + l.lineCents, 0);
-  const netBase = lines.reduce((s, l) => {
-    if (l.vatClass !== "VATABLE") return s + l.lineCents;
-    const vat = Math.round((l.lineCents * SC_PWD_VAT_NUM) / SC_PWD_VAT_DEN);
-    return s + (l.lineCents - vat);
-  }, 0);
-  const vatExempted = grossIncl - netBase;
-  const seniorDiscount = Math.round((netBase * 20) / 100);
-  return vatExempted + seniorDiscount;
+export type Discount = ScPwdDiscount | { type: "member" } | { type: "promo"; promoId: string };
+
+/** The pricing-relevant shape of a discount (mirror of the server's CartDiscount). */
+export type CartDiscount =
+  | { kind: "senior" | "pwd" }
+  | { kind: "member"; pct: number }
+  | { kind: "promo"; name: string; promoKind: "percent" | "fixed"; value: number };
+
+/** "10% off" / "₱50.00 off" — how a promo's owner-set amount reads on a button. */
+export function promoAmountText(p: Pick<Promotion, "kind" | "value">): string {
+  if (p.kind === "percent") return `${p.value}% off`;
+  return `₱${(p.value / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} off`;
 }
 
-/**
- * Preview-only mirror of the server's `computeVatBreakdown`: output VAT comes
- * from the VATable lines only — EXEMPT and ZERO_RATED lines carry none. A
- * cart-level discount is allocated across the classes pro-rata by gross, and the
- * VATable portion is the residual of the net, exactly as the server books it.
- */
-export function previewVatCents(
-  lines: { vatClass: VatClass; lineCents: number }[],
-  discountCents = 0,
-): number {
+export function discountLabel(d: CartDiscount | null, vatRegistered = true): string | null {
+  if (!d) return null;
+  if (d.kind === "promo") return d.name;
+  if (d.kind === "member") return `Member ${d.pct}% off`;
+  // A non-VAT store has no VAT to exempt — the benefit is a plain 20% off.
+  const benefit = vatRegistered ? "(20% + VAT-exempt)" : "(20% off)";
+  return d.kind === "senior" ? `Senior Citizen ${benefit}` : `PWD ${benefit}`;
+}
+
+const VAT_NUM = 12;
+const VAT_DEN = 112;
+
+type PreviewLine = { vatClass: VatClass; lineCents: number };
+
+interface Breakdown {
+  vatCents: number;
+  vatableSalesCents: number;
+  vatExemptCents: number;
+  zeroRatedCents: number;
+  netCents: number;
+}
+
+/** Mirror of the server's computeVatBreakdown (pro-rata discount, VAT residual). */
+function breakdown(lines: PreviewLine[], discountCents: number): Breakdown {
   const grossOf = (k: VatClass) => lines.reduce((s, l) => (l.vatClass === k ? s + l.lineCents : s), 0);
   const exemptGross = grossOf("EXEMPT");
   const zeroGross = grossOf("ZERO_RATED");
@@ -191,11 +238,115 @@ export function previewVatCents(
   const netCents = totalGross - disc;
   const share = (gross: number) =>
     totalGross > 0 ? Math.min(gross, Math.round((disc * gross) / totalGross)) : 0;
-  const vatableNetIncl = Math.max(
-    0,
-    netCents - (exemptGross - share(exemptGross)) - (zeroGross - share(zeroGross)),
+  const vatExemptCents = exemptGross - share(exemptGross);
+  const zeroRatedCents = zeroGross - share(zeroGross);
+  const vatableNetIncl = Math.max(0, netCents - vatExemptCents - zeroRatedCents);
+  const vatCents = Math.round((vatableNetIncl * VAT_NUM) / VAT_DEN);
+  return { vatCents, vatableSalesCents: vatableNetIncl - vatCents, vatExemptCents, zeroRatedCents, netCents };
+}
+
+/**
+ * Preview-only mirror of the server's `computeVatBreakdown`: output VAT comes
+ * from the VATable lines only — EXEMPT and ZERO_RATED lines carry none. A
+ * cart-level discount is allocated across the classes pro-rata by gross, and the
+ * VATable portion is the residual of the net, exactly as the server books it.
+ */
+export function previewVatCents(lines: PreviewLine[], discountCents = 0): number {
+  return breakdown(lines, discountCents).vatCents;
+}
+
+/** Mirror of computeSeniorPwdBreakdown: strip VAT, then 20% (+ extra) off. */
+function seniorPwd(lines: PreviewLine[], extraCents: number): { totalDueCents: number; b: Breakdown } {
+  const netLines = lines.map((l) =>
+    l.vatClass !== "VATABLE"
+      ? l
+      : { vatClass: "EXEMPT" as VatClass, lineCents: l.lineCents - Math.round((l.lineCents * VAT_NUM) / VAT_DEN) },
   );
-  return Math.round((vatableNetIncl * SC_PWD_VAT_NUM) / SC_PWD_VAT_DEN);
+  const netBase = netLines.reduce((s, l) => s + l.lineCents, 0);
+  const senior = Math.round((netBase * 20) / 100);
+  const extra = Math.min(Math.max(0, Math.round(extraCents)), Math.max(0, netBase - senior));
+  const b = breakdown(netLines, senior + extra);
+  return { totalDueCents: b.netCents, b };
+}
+
+export interface CartPreview {
+  grossCents: number;
+  /** gross − net: every reduction (removed VAT, 20%, member %, points). */
+  discountCents: number;
+  vatCents: number;
+  netCents: number;
+  pointsRedeemed: number;
+  eligibleLineCount: number;
+}
+
+/**
+ * Preview-only mirror of the server's `priceCart` (pos.schema.ts), so the
+ * register shows the total the receipt will print. The server re-derives every
+ * figure; frontendParity.test.ts holds the two together.
+ */
+export function previewCart(raw: {
+  lines: (PreviewLine & { scPwdEligible: boolean })[];
+  discount: CartDiscount | null;
+  requestedPoints: number;
+  pointsBalance: number;
+  pointValueCents: number;
+  /** False for a non-VAT store: every line carries no VAT (mirrors the server). */
+  vatRegistered?: boolean;
+}): CartPreview {
+  const input =
+    raw.vatRegistered === false
+      ? { ...raw, lines: raw.lines.map((l) => ({ ...l, vatClass: "EXEMPT" as VatClass })) }
+      : raw;
+  const grossCents = input.lines.reduce((s, l) => s + l.lineCents, 0);
+  const pointValue = Math.max(1, Math.round(input.pointValueCents));
+  const clampPoints = (payable: number) =>
+    Math.max(
+      0,
+      Math.min(Math.floor(input.requestedPoints), Math.floor(input.pointsBalance), Math.floor(payable / pointValue)),
+    );
+  const d = input.discount;
+
+  if (d && (d.kind === "senior" || d.kind === "pwd")) {
+    const eligible = input.lines.filter((l) => l.scPwdEligible);
+    const other = input.lines.filter((l) => !l.scPwdEligible);
+    const benefit = seniorPwd(eligible, 0);
+    const otherGross = other.reduce((s, l) => s + l.lineCents, 0);
+    const totalPayable = benefit.totalDueCents + otherGross;
+    const pointsRedeemed = clampPoints(totalPayable);
+    const extra = pointsRedeemed * pointValue;
+    let extraBenefit = totalPayable > 0 ? Math.round((extra * benefit.totalDueCents) / totalPayable) : 0;
+    extraBenefit = Math.min(extraBenefit, benefit.totalDueCents);
+    const extraOther = Math.min(extra - extraBenefit, otherGross);
+    extraBenefit = extra - extraOther;
+    const b1 = extraBenefit > 0 ? seniorPwd(eligible, extraBenefit).b : benefit.b;
+    const b2 = breakdown(other, extraOther);
+    const netCents = b1.netCents + b2.netCents;
+    return {
+      grossCents,
+      discountCents: grossCents - netCents,
+      vatCents: b1.vatCents + b2.vatCents,
+      netCents,
+      pointsRedeemed,
+      eligibleLineCount: eligible.length,
+    };
+  }
+
+  const reduction = (kind: "percent" | "fixed", value: number) =>
+    kind === "percent"
+      ? Math.round((grossCents * Math.min(100, Math.max(0, value))) / 100)
+      : Math.min(grossCents, Math.max(0, Math.round(value)));
+  const offCents =
+    d?.kind === "member" ? reduction("percent", d.pct) : d?.kind === "promo" ? reduction(d.promoKind, d.value) : 0;
+  const pointsRedeemed = clampPoints(grossCents - offCents);
+  const b = breakdown(input.lines, offCents + pointsRedeemed * pointValue);
+  return {
+    grossCents,
+    discountCents: grossCents - b.netCents,
+    vatCents: b.vatCents,
+    netCents: b.netCents,
+    pointsRedeemed,
+    eligibleLineCount: 0,
+  };
 }
 
 export interface OrderLine {
@@ -240,7 +391,7 @@ export async function submitOrder(payload: {
   referenceCode?: string;
   discount?: Discount;
   customerId?: string;
-  /** Loyalty points the attached customer redeems (1 pt = ₱1 off). */
+  /** Loyalty points the attached customer redeems (valued at the store’s point rate). */
   redeemPoints?: number;
 }): Promise<Result<{ sale: Sale }>> {
   try {
@@ -370,10 +521,17 @@ export interface Reversal {
   originalStatus: "voided" | "partially_returned" | "returned";
 }
 
-/** Recent sales for the void/return picker (newest first). */
-export async function listSales(limit = 50): Promise<Result<{ sales: SaleSummary[] }>> {
+/** Server-side page info returned by every paginated list. */
+export interface PageInfo {
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** One page of sales for the void/return picker (newest first). */
+export async function listSales(page = 1, pageSize = 20): Promise<Result<{ sales: SaleSummary[] } & PageInfo>> {
   try {
-    return await readJson(await fetch(`${BASE}/sales?limit=${limit}`, { credentials: "include" }));
+    return await readJson(await fetch(`${BASE}/sales?page=${page}&pageSize=${pageSize}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }
@@ -445,25 +603,45 @@ export interface ReversalSummary {
 
 /** The owner/manager review of every committed void/return, with a rollup. */
 export async function listReversals(
-  limit = 100,
-): Promise<Result<{ reversals: ReversalLogEntry[]; summary: ReversalSummary }>> {
+  page = 1,
+  pageSize = 25,
+): Promise<Result<{ reversals: ReversalLogEntry[]; summary: ReversalSummary } & PageInfo>> {
   try {
-    return await readJson(await fetch(`${BASE}/reversals?limit=${limit}`, { credentials: "include" }));
+    return await readJson(await fetch(`${BASE}/reversals?page=${page}&pageSize=${pageSize}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }
 }
 
-// ── Terminal audit trail (cashier accountability) ───────────────────────────
+// ── Activity log (staff accountability) ─────────────────────────────────────
 
-/** The sensitive live-terminal actions the register reports for auditing. */
+/** The shop-floor actions the register itself reports (no ledger row). */
 export type AuditAction = "void_item" | "cancel_transaction" | "open_drawer";
+
+/** Actions only the server writes — the register can't post these. */
+export type ServerAction =
+  | "sale"
+  | "refund"
+  | "void_sale"
+  | "discount_applied"
+  | "login"
+  | "logout"
+  | "clock_in"
+  | "clock_out"
+  | "shift_open"
+  | "shift_close"
+  | "timecard_corrected"
+  | "payroll_approved";
+
+export type ActivityAction = AuditAction | ServerAction;
 
 export interface AuditLog {
   id: string;
   cashierUserId: string | null;
+  /** Who did it — their name at the time. */
   cashierName: string;
-  action: AuditAction;
+  action: ActivityAction;
+  refId: string | null;
   itemName: string | null;
   itemQty: number | null;
   valueCents: number;
@@ -473,14 +651,20 @@ export interface AuditLog {
 
 export interface AuditSummary {
   total: number;
-  byAction: Record<AuditAction, number>;
+  byAction: Record<ActivityAction, number>;
+  /** Value implicated by cart voids, cancels, voided sales and refunds. */
   flaggedValueCents: number;
 }
 
+export interface ActivityActor {
+  userId: string;
+  name: string;
+}
+
 /**
- * Report a sensitive terminal action (void a cart line, cancel a transaction,
- * pop the drawer). Best-effort and fire-and-forget from the caller's view — it
- * never blocks the register — but the server write itself is durable.
+ * Report a shop-floor action (void a cart line, cancel a transaction, pop the
+ * drawer). Best-effort and fire-and-forget from the caller's view — it never
+ * blocks the register — but the server write itself is durable.
  */
 export async function recordAudit(event: {
   action: AuditAction;
@@ -502,12 +686,20 @@ export async function recordAudit(event: {
   }
 }
 
-/** The owner/manager audit trail of terminal actions, with a rollup. */
-export async function listAuditLogs(
-  limit = 100,
-): Promise<Result<{ logs: AuditLog[]; summary: AuditSummary }>> {
+/** The owner/manager activity log, optionally filtered, with a rollup. */
+export async function listAuditLogs(filter: {
+  action?: ActivityAction;
+  userId?: string;
+  /** YYYY-MM-DD, inclusive (Manila). */
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<Result<{ logs: AuditLog[]; actors: ActivityActor[]; summary: AuditSummary } & PageInfo>> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "") qs.set(k, String(v));
   try {
-    return await readJson(await fetch(`${BASE}/audit?limit=${limit}`, { credentials: "include" }));
+    return await readJson(await fetch(`${BASE}/audit?${qs.toString()}`, { credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }

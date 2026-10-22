@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../Icon";
-import { AttendanceCalendar } from "../hr/AttendanceCalendar";
+import { Pagination, usePagination } from "../Pagination";
+import { AttendanceCalendar, fmtHours } from "../hr/AttendanceCalendar";
+import { AttendanceDayPanel } from "../hr/AttendanceDayPanel";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
 import { getMyEssProfile, type EssErrorKind, type EssProfile } from "@/lib/ess";
 import type { Role } from "@/lib/auth";
@@ -18,9 +20,12 @@ function thisMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
+const NO_SLIPS: EmployeePayslip[] = [];
+
 export function EssPortal({ greetingName, role }: { greetingName: string; role: Role }) {
   const [month, setMonth] = useState(thisMonth());
   const [reload, setReload] = useState(0);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "error"; kind: EssErrorKind; message: string }
@@ -47,6 +52,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
 
   const firstName = greetingName.split(/\s+/)[0] ?? greetingName;
 
+  const slips = usePagination(state.status === "ready" ? state.profile.payslips : NO_SLIPS, null, 10);
   if (state.status === "loading") {
     return (
       <div className="space-y-5 animate-pulse">
@@ -75,7 +81,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
           : {
               icon: "users",
               title: "Your login isn't linked yet",
-              body: "Ask your store owner to open HR → Employees, pick your profile, and link this login. Your hours and paystubs will appear here.",
+              body: "Ask your store owner to open People & Payroll → Employees, pick your profile, and link this login. Your hours and paystubs will appear here.",
             }
         : state.kind === "plan"
           ? { icon: "lock", title: "Paystubs aren't on this plan", body: state.message }
@@ -127,28 +133,45 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat icon="clock" label="Hours this month" value={`${p.hours.hoursWorked}h`} sub={`${p.hours.regularHours} reg · ${p.hours.overtimeHours} OT`} />
-        <Stat icon="check" label="Attendance" value={`${p.hours.attendanceRatePct}%`} sub={`${p.hours.daysPresent} days present`} tone="good" />
+        <Stat icon="clock" label="Hours worked this month" value={fmtHours(p.attendanceSummary.workedMinutes)} sub={`after unpaid breaks`} />
+        <Stat icon="check" label="Attendance" value={`${p.hours.attendanceRatePct}%`} sub={`${p.attendanceSummary.presentDays} present · ${p.attendanceSummary.absentDays} absent`} tone="good" />
         <Stat icon="heart" label="PTO balance" value={`${p.employee.ptoBalanceDays}d`} sub={`${p.ptoUsedYtd} used this year`} />
-        <Stat icon="peso" label="Pay rate" value={formatCentsWhole(p.employee.payRateCents)} sub={`per ${rateUnit(p.employee.payType)}`} />
+        <Stat icon="peso" label="Daily rate" value={p.employee.dailyRateCents != null ? formatCentsWhole(p.employee.dailyRateCents) : "—"} sub="set by your employer" />
       </div>
 
       <div className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div>
             <h3 className="font-extrabold tracking-tight">My attendance</h3>
-            <p className="text-[12.5px] text-ink-soft">Your shift history for the month.</p>
+            <p className="text-[12.5px] text-ink-soft">From your Shift In / Shift Out. Tap a date for its times.</p>
           </div>
           <input
             type="month"
             value={month}
             max={thisMonth()}
-            onChange={(e) => setMonth(e.target.value)}
+            onChange={(e) => {
+              setMonth(e.target.value);
+              setSelectedDate(null);
+            }}
             className="field-input rounded-[10px] px-3 py-2 text-[14px]"
           />
         </div>
-        <div className="border-t border-ink/8 p-5">
-          <AttendanceCalendar month={month} days={p.attendanceMonth} />
+        <div className="border-t border-ink/8 p-5 grid gap-5 lg:grid-cols-2">
+          <AttendanceCalendar
+            month={month}
+            days={p.attendanceMonth}
+            selected={selectedDate}
+            onSelect={setSelectedDate}
+          />
+          {(() => {
+            const day = p.attendanceMonth.find((d) => d.date === selectedDate);
+            // Read-only: no employeeId, so no fixes — staff see their own times only.
+            return day ? (
+              <AttendanceDayPanel day={day} />
+            ) : (
+              <p className="text-[13px] text-ink-soft">Tap a date to see your Time In, Time Out and hours.</p>
+            );
+          })()}
         </div>
       </div>
 
@@ -168,18 +191,18 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
                 <tr className="text-left text-[12px] font-semibold text-ink-faint border-b border-ink/8 bg-paper/40">
                   <th className="px-5 py-2.5">Payslip</th>
                   <th className="px-3 py-2.5">Period</th>
-                  <th className="px-3 py-2.5 text-right">Gross</th>
+                  <th className="px-3 py-2.5 text-right">Final pay</th>
                   <th className="px-5 py-2.5 text-right">·</th>
                 </tr>
               </thead>
               <tbody>
-                {p.payslips.map((slip) => (
+                {slips.pageItems.map((slip) => (
                   <tr key={slip.runId} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition">
                     <td className="px-5 py-3 font-bold tabular-nums">{slip.reference}</td>
                     <td className="px-3 py-3 text-ink-soft tabular-nums whitespace-nowrap">
                       {formatDate(slip.periodStart)} – {formatDate(slip.periodEnd)}
                     </td>
-                    <td className="px-3 py-3 text-right font-bold tabular-nums whitespace-nowrap">{formatCents(slip.grossCents)}</td>
+                    <td className="px-3 py-3 text-right font-bold tabular-nums whitespace-nowrap">{formatCents(slip.payableCents)}</td>
                     <td className="px-5 py-3 text-right">
                       <button
                         type="button"
@@ -194,6 +217,7 @@ export function EssPortal({ greetingName, role }: { greetingName: string; role: 
                 ))}
               </tbody>
             </table>
+            <Pagination page={slips.page} total={slips.total} pageSize={slips.pageSize} onPage={slips.setPage} noun="payslips" />
           </div>
         )}
       </div>
@@ -222,6 +246,8 @@ function printPayslip(p: EssProfile, slip: EmployeePayslip) {
   const row = (label: string, value: string) =>
     `<tr><td style="padding:6px 0;color:#555">${esc(label)}</td><td style="padding:6px 0;text-align:right;font-weight:600">${esc(value)}</td></tr>`;
   const basisUnit = slip.payType === "Hourly" ? "hours" : slip.payType === "Daily" ? "days" : "month";
+  // Lines from the attendance-based payroll are Daily with regular HOURS as the basis.
+  const daily = slip.attendanceBased;
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Payslip ${esc(slip.reference)}</title>
   <style>
@@ -239,11 +265,15 @@ function printPayslip(p: EssProfile, slip: EmployeePayslip) {
     <table>
       ${row("Employee", p.employee.name)}
       ${row("Position", p.employee.position ?? "—")}
-      ${row("Pay basis", `${slip.payType} @ ${formatCents(slip.payRateCents)} / ${rateUnit(slip.payType)}`)}
-      ${row(`Worked (${basisUnit})`, String(slip.basisQty))}
+      ${daily
+        ? row("Daily rate", formatCents(slip.payRateCents)) + row("Regular hours worked", `${slip.basisQty} h`)
+        : row("Pay basis", `${slip.payType} @ ${formatCents(slip.payRateCents)} / ${rateUnit(slip.payType)}`) +
+          row(`Worked (${basisUnit})`, String(slip.basisQty))}
+      ${row("Base earnings", formatCents(slip.grossCents))}
+      ${row("Approved adjustments", formatCents(slip.payableCents - slip.grossCents))}
     </table>
-    <table class="total"><tr><td>Gross pay</td><td style="text-align:right">${esc(formatCents(slip.grossCents))}</td></tr></table>
-    <p class="muted" style="margin-top:20px">Gross pay only. Statutory deductions are not itemised on this payslip.</p>
+    <table class="total"><tr><td>Final pay</td><td style="text-align:right">${esc(formatCents(slip.payableCents))}</td></tr></table>
+    <p class="muted" style="margin-top:20px">SSS, PhilHealth, Pag-IBIG and withholding tax are not computed by VendoPOS; your employer handles them separately.</p>
   </body></html>`;
 
   const w = window.open("", "_blank", "width=640,height=800");

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { useDashUser } from "../dash/DashShell";
 import { formatPesoExact } from "@/lib/format";
 import { resolveAssetUrl } from "@/lib/images";
@@ -79,6 +80,8 @@ export function InventoryMatrix() {
       return p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q);
     });
   }, [products, search, catFilter]);
+  // Numbered pages; a new search or category starts again at page 1.
+  const pager = usePagination(filtered, `${search}|${catFilter}`);
 
   const lowCount = useMemo(() => products.filter((p) => p.lowStock).length, [products]);
 
@@ -203,7 +206,7 @@ export function InventoryMatrix() {
                   </td>
                 </tr>
               )}
-              {filtered.map((p) => {
+              {pager.pageItems.map((p) => {
                 const out = p.stock <= 0;
                 return (
                   <tr
@@ -291,6 +294,7 @@ export function InventoryMatrix() {
             </tbody>
           </table>
         </div>
+        <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="products" />
       </div>
 
       {/* Modals */}

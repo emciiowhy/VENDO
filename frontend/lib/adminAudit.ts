@@ -26,12 +26,16 @@ export interface AuditRow {
   createdAt: string;
 }
 
-export async function getAuditTrail(): Promise<Result<{ entries: AuditRow[] }>> {
+/** One page of the platform audit trail, newest first. */
+export async function getAuditTrail(
+  page = 1,
+  pageSize = 25,
+): Promise<Result<{ entries: AuditRow[]; total: number; page: number; pageSize: number }>> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/admin/audit`, {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/audit?page=${page}&pageSize=${pageSize}`, {
       credentials: "include",
     });
-    return (await res.json()) as Result<{ entries: AuditRow[] }>;
+    return (await res.json()) as Result<{ entries: AuditRow[]; total: number; page: number; pageSize: number }>;
   } catch {
     return { ok: false, error: "Could not reach the server. Check your connection." };
   }

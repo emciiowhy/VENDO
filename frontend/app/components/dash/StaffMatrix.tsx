@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { useToast } from "../Toast";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { formatPesoExact } from "@/lib/format";
@@ -30,6 +31,8 @@ type State =
   | { status: "ready"; cashiers: CashierSummary[]; requests: PinRequest[] };
 
 const peso = (cents: number) => formatPesoExact(cents / 100);
+
+const NO_CASHIERS: CashierSummary[] = [];
 
 export function StaffMatrix() {
   const { push } = useToast();
@@ -102,6 +105,7 @@ export function StaffMatrix() {
     }
   }
 
+  const pager = usePagination(state.status === "ready" ? state.cashiers : NO_CASHIERS);
   if (state.status === "loading") return <Skeleton />;
   if (state.status === "error") {
     return (
@@ -193,7 +197,7 @@ export function StaffMatrix() {
           </div>
         ) : (
           <ul className="divide-y divide-[rgba(11,18,32,0.06)] dark:divide-[rgba(255,255,255,0.07)]">
-            {state.cashiers.map((c) => {
+            {pager.pageItems.map((c) => {
               const disabled = c.status !== "active";
               return (
                 <li
@@ -277,6 +281,7 @@ export function StaffMatrix() {
             })}
           </ul>
         )}
+        <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="cashiers" />
       </div>
 
       {adding && (

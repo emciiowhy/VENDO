@@ -145,8 +145,8 @@ const MOVEMENT_COLUMNS = `m.id, m.product_id, p.name AS product_name, m.qty_delt
 export async function listProductMovements(
   tenantId: string,
   productId: string,
-  limit = 100,
-): Promise<StockMovement[]> {
+  paging: { page: number; pageSize: number; offset: number },
+): Promise<{ items: StockMovement[]; total: number }> {
   const { rows } = await query<MovementRow>(
     `SELECT ${MOVEMENT_COLUMNS}
        FROM stock_movements m
@@ -154,24 +154,28 @@ export async function listProductMovements(
        LEFT JOIN users u    ON u.id = m.created_by
       WHERE m.tenant_id = $1 AND m.product_id = $2
       ORDER BY m.created_at DESC, m.id DESC
-      LIMIT $3`,
-    [tenantId, productId, Math.min(Math.max(limit, 1), 500)],
+      LIMIT $3 OFFSET $4`,
+    [tenantId, productId, paging.pageSize, paging.offset],
   );
-  return rows.map(toMovement);
+  const count = await query<{ n: string }>(
+    `SELECT count(*) AS n FROM stock_movements WHERE tenant_id = $1 AND product_id = $2`,
+    [tenantId, productId],
+  );
+  return { items: rows.map(toMovement), total: Number(count.rows[0]?.n ?? 0) };
 }
 
 /** The whole-store movement feed (optionally filtered by reason), newest first. */
 export async function listMovements(
   tenantId: string,
-  opts: { reason?: StockReason; limit?: number } = {},
-): Promise<StockMovement[]> {
+  opts: { reason?: StockReason } = {},
+  paging: { page: number; pageSize: number; offset: number } = { page: 1, pageSize: 25, offset: 0 },
+): Promise<{ items: StockMovement[]; total: number }> {
   const params: unknown[] = [tenantId];
   let where = `m.tenant_id = $1`;
   if (opts.reason) {
     params.push(opts.reason);
     where += ` AND m.reason = $${params.length}`;
   }
-  params.push(Math.min(Math.max(opts.limit ?? 200, 1), 500));
   const { rows } = await query<MovementRow>(
     `SELECT ${MOVEMENT_COLUMNS}
        FROM stock_movements m
@@ -179,10 +183,11 @@ export async function listMovements(
        LEFT JOIN users u    ON u.id = m.created_by
       WHERE ${where}
       ORDER BY m.created_at DESC, m.id DESC
-      LIMIT $${params.length}`,
-    params,
+      LIMIT ${params.length + 1} OFFSET ${params.length + 2}`,
+    [...params, paging.pageSize, paging.offset],
   );
-  return rows.map(toMovement);
+  const count = await query<{ n: string }>(`SELECT count(*) AS n FROM stock_movements m WHERE ${where}`, params);
+  return { items: rows.map(toMovement), total: Number(count.rows[0]?.n ?? 0) };
 }
 
 /**

@@ -8,7 +8,6 @@ import { useDashUser } from "./DashShell";
 import { FeatureGate } from "../FeatureGate";
 import { PasswordOnboarding } from "./PasswordOnboarding";
 import { useToast } from "../Toast";
-import { asTier, featureAllowed } from "@/lib/tiers";
 import {
   getDashboardPulse,
   getReorderForecast,
@@ -36,12 +35,10 @@ import { MERCHANT_EVENTS_URL, type LowStockEvent } from "@/lib/merchantEvents";
 
 const MODULES: { icon: IconName; label: string; desc: string; href?: string }[] = [
   { icon: "pos", label: "Point of Sale", desc: "Ring up & take payment", href: "/pos" },
-  { icon: "box", label: "Inventory", desc: "Items, prices & stock", href: "/dashboard/inventory" },
-  { icon: "file", label: "Compliance", desc: "BIR sales ledger & VAT", href: "/dashboard/compliance" },
+  { icon: "box", label: "Product Management", desc: "Products, prices & stock", href: "/dashboard/inventory" },
+  { icon: "file", label: "Compliance", desc: "Sales ledger & VAT", href: "/dashboard/compliance" },
   { icon: "chart", label: "Finance", desc: "Profit, loss & expenses", href: "/dashboard/finance" },
-  { icon: "truck", label: "Procurement", desc: "Suppliers & POs", href: "/dashboard/procurement" },
-  { icon: "factory", label: "Manufacturing", desc: "Recipes & BOM", href: "/dashboard/manufacturing" },
-  { icon: "users", label: "HR", desc: "Staff & payroll", href: "/dashboard/hr" },
+  { icon: "users", label: "People & Payroll", desc: "Employees, attendance & payroll", href: "/dashboard/hr" },
   { icon: "heart", label: "CRM", desc: "Customers & loyalty", href: "/dashboard/crm" },
 ];
 
@@ -317,10 +314,6 @@ function TotalTile({
 }
 
 function Live({ pulse, alerts }: { pulse: DashboardPulse; alerts: StockAlert[] }) {
-  const user = useDashUser();
-  // Only surface the "Quick Draft PO" deep-link when the store can actually
-  // reach Procurement — otherwise it would lead straight to an upgrade wall.
-  const canDraftPo = featureAllowed(asTier(user.tier), "procurement_supply_chain");
   return (
     <>
       {alerts.length > 0 && <LowStockBanner alerts={alerts} />}
@@ -388,17 +381,15 @@ function Live({ pulse, alerts }: { pulse: DashboardPulse; alerts: StockAlert[] }
                   >
                     {s.depleted ? "out" : `${s.stock} left`}
                   </span>
-                  {canDraftPo && (
-                    <Link
-                      href={`/dashboard/procurement?reorder=${s.id}`}
-                      title="Quick draft purchase order"
-                      aria-label={`Draft a purchase order for ${s.name}`}
-                      className="press shrink-0 inline-flex items-center gap-1 rounded-[8px] bg-paper hairline px-2 py-1 text-cap font-bold text-ink-soft hover:text-brand-600 hover:border-brand-200"
-                    >
-                      <Icon name="truck" className="w-[14px] h-[14px]" strokeWidth={1.7} />
-                      Draft PO
-                    </Link>
-                  )}
+                  <Link
+                    href="/dashboard/inventory"
+                    title="Restock in Product Management"
+                    aria-label={`Restock ${s.name}`}
+                    className="press shrink-0 inline-flex items-center gap-1 rounded-[8px] bg-paper hairline px-2 py-1 text-cap font-bold text-ink-soft hover:text-brand-600 hover:border-brand-200"
+                  >
+                    <Icon name="box" className="w-[14px] h-[14px]" strokeWidth={1.7} />
+                    Restock
+                  </Link>
                 </div>
               ))}
               {alerts.length > 5 && (
@@ -531,7 +522,7 @@ function AiInsights({ pulse }: { pulse: DashboardPulse }) {
                 </div>
                 {state.forecast.items.length > 5 && (
                   <Link
-                    href="/dashboard/procurement"
+                    href="/dashboard/inventory"
                     className="mt-3 block text-fine font-semibold text-brand-600 hover:text-brand-700"
                   >
                     +{state.forecast.items.length - 5} more to forecast →
@@ -608,12 +599,12 @@ function RestockRow({ item }: { item: ForecastItem }) {
           order {item.suggestedOrderQty}
         </span>
         <Link
-          href={`/dashboard/procurement?reorder=${item.productId}`}
-          title="Quick draft purchase order"
-          aria-label={`Draft a purchase order for ${item.name}`}
+          href="/dashboard/inventory"
+          title="Restock in Product Management"
+          aria-label={`Restock ${item.name}`}
           className="grid place-items-center w-7 h-7 rounded-[8px] bg-surface hairline text-ink-faint hover:text-brand-600 hover:border-brand-200 transition duration-150"
         >
-          <Icon name="truck" className="w-[15px] h-[15px]" strokeWidth={1.7} />
+          <Icon name="box" className="w-[15px] h-[15px]" strokeWidth={1.7} />
         </Link>
       </div>
     </div>
@@ -810,7 +801,7 @@ function TaxCard({ pulse }: { pulse: DashboardPulse }) {
         className="mt-4 inline-flex items-center justify-center gap-1.5 bg-paper hairline text-ink font-semibold text-note py-2.5 rounded-[10px] hover:border-brand-200 hover:text-brand-600 transition duration-150"
       >
         <Icon name="file" className="w-[16px] h-[16px]" strokeWidth={1.7} />
-        BIR sales ledger
+        Sales ledger
       </Link>
     </div>
   );

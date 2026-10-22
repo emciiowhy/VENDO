@@ -39,7 +39,7 @@ export const PRODUCTS: ProductPage[] = [
     name: "Point of Sale (POS)",
     tagline: "A checkout your cashiers actually enjoy using.",
     intro:
-      "Ring up sales in seconds on any device, with a fast touch layout, shift drawers that balance to the centavo, and a receipt that's BIR-ready out of the box.",
+      "Ring up sales in seconds on any device, with a fast touch layout, shift drawers that balance to the centavo, and an itemized, VAT-inclusive receipt out of the box.",
     features: [
       {
         icon: "bolt",
@@ -53,8 +53,8 @@ export const PRODUCTS: ProductPage[] = [
       },
       {
         icon: "receipt",
-        title: "Compliant receipts",
-        body: "VAT-inclusive computation and BIR reference details print on every sale automatically.",
+        title: "Itemized receipts",
+        body: "VAT-inclusive computation and your store's TIN and permit details print on every sale automatically.",
       },
     ],
   },
@@ -85,36 +85,10 @@ export const PRODUCTS: ProductPage[] = [
     ],
   },
   {
-    slug: "bir-accreditation",
-    category: "Run your store smoothly",
-    icon: "shield",
-    name: "BIR Accreditation",
-    tagline: "Stay compliant without thinking about it.",
-    intro:
-      "Collision-free invoice serials, VAT-inclusive math, and audit-ready exports keep you aligned with BIR requirements as you grow.",
-    features: [
-      {
-        icon: "file",
-        title: "Sequential invoicing",
-        body: "Every sale gets a unique, gap-free serial — even across busy multi-cashier days.",
-      },
-      {
-        icon: "receipt",
-        title: "VAT done right",
-        body: "12% VAT-inclusive computation is applied and itemized on each receipt automatically.",
-      },
-      {
-        icon: "download",
-        title: "Audit-ready exports",
-        body: "Pull compliant CSV summaries for any period when it's time to file or get inspected.",
-      },
-    ],
-  },
-  {
     slug: "inventory-management",
     category: "Run your store smoothly",
     icon: "box",
-    name: "Inventory Management",
+    name: "Product Management",
     tagline: "Know exactly what you have, in real time.",
     intro:
       "Track stock to the unit, get low-stock alerts before you run out, and watch quantities move automatically as you sell and restock.",
@@ -267,58 +241,6 @@ export const PRODUCTS: ProductPage[] = [
       },
     ],
   },
-  {
-    slug: "procurement",
-    category: "Back office & operations",
-    icon: "truck",
-    name: "Procurement",
-    tagline: "From purchase order to restocked shelf.",
-    intro:
-      "Manage suppliers, raise purchase orders, and receive against them so inventory restocks itself the moment goods arrive.",
-    features: [
-      {
-        icon: "users",
-        title: "Supplier directory",
-        body: "Keep your vendors, terms, and contacts in one place, tied to what you buy from each.",
-      },
-      {
-        icon: "file",
-        title: "Purchase orders",
-        body: "Raise POs for what you need and track them from sent to received.",
-      },
-      {
-        icon: "refresh",
-        title: "Receiving restocks stock",
-        body: "Receiving a PO adds the goods straight into inventory — no double entry.",
-      },
-    ],
-  },
-  {
-    slug: "manufacturing",
-    category: "Back office & operations",
-    icon: "factory",
-    name: "Manufacturing",
-    tagline: "Turn ingredients into finished goods, tracked.",
-    intro:
-      "Define recipes and bills of materials, then run production that consumes component stock and restocks the finished product automatically.",
-    features: [
-      {
-        icon: "layers",
-        title: "Recipes & BOM",
-        body: "Define what goes into each finished good so production always knows its inputs.",
-      },
-      {
-        icon: "factory",
-        title: "Production runs",
-        body: "Run a batch and components are deducted while finished goods are added — in one step.",
-      },
-      {
-        icon: "box",
-        title: "Accurate component stock",
-        body: "Always know what raw materials you have left and what you can still produce.",
-      },
-    ],
-  },
 ];
 
 const BY_SLUG = new Map(PRODUCTS.map((p) => [p.slug, p]));
@@ -327,15 +249,12 @@ const BY_SLUG = new Map(PRODUCTS.map((p) => [p.slug, p]));
 const PRODUCT_PHOTO: Record<string, string> = {
   "point-of-sale": "point-of-sale",
   payments: "payments",
-  "bir-accreditation": "payments",
   "inventory-management": "inventory",
   "reporting-and-analytics": "analytics",
   "employee-management": "staff",
   "loyalty-program": "loyalty",
   "engage-crm": "loyalty",
   finance: "analytics",
-  procurement: "warehouse",
-  manufacturing: "inventory",
 };
 
 export function productPhotoKey(slug: string): string {

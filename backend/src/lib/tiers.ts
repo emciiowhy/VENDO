@@ -46,7 +46,7 @@ export type Feature =
   // STARTER — the core retail floor every store gets.
   | "pos_terminal" // Core POS terminal interface
   | "inventory_basic" // Basic inventory / catalogue management
-  | "bir_receipts" // BIR-compliant receipts + serial invoicing
+  | "bir_receipts" // VAT-itemized receipts + serial invoicing (key name kept; not a BIR accreditation claim)
   | "digital_payments_qrph" // QRPH / e-wallet digital payments
   // BUSINESS — Starter PLUS the back-office ERP pillars.
   | "procurement_supply_chain" // Suppliers + purchase orders

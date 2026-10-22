@@ -246,10 +246,21 @@ accountRouter.patch("/receipt", async (req, res) => {
     invoicePrefix = p;
   }
   try {
+    // VAT registration is the store's legal tax status: only the OWNER may change
+    // it. A manager saving the other receipt fields keeps the current value.
+    const current = await getReceiptSettings(tenantId);
+    let vatRegistered = current?.vatRegistered ?? true;
+    if (typeof body.vatRegistered === "boolean" && body.vatRegistered !== vatRegistered) {
+      if (req.user?.role !== "MERCHANT_OWNER") {
+        return res.status(403).json({ ok: false, error: "Only the store owner can change the VAT registration." });
+      }
+      vatRegistered = body.vatRegistered;
+    }
     await updateReceiptSettings(tenantId, {
       header: text(body.header, 160),
       footer: text(body.footer, 240),
       vatLabel: text(body.vatLabel, 40),
+      vatRegistered,
       invoicePrefix,
       showLogo: body.showLogo !== false,
       ptu: text(body.ptu, 40),

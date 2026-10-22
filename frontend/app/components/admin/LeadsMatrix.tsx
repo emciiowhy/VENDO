@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { formatDate } from "@/lib/format";
 import { PLAN_LABEL, PLAN_PRICE, type Plan } from "./tenants.data";
 import {
@@ -79,6 +80,7 @@ export function LeadsMatrix() {
       );
     });
   }, [leads, query, statusFilter]);
+  const pager = usePagination(filtered, `${query}|${statusFilter}`);
 
   const pending = useMemo(() => leads.filter((l) => l.status === "PENDING_DEMO").length, [leads]);
   const provisioned = useMemo(() => leads.filter((l) => l.status === "APPROVED").length, [leads]);
@@ -190,7 +192,7 @@ export function LeadsMatrix() {
                 </td>
               </tr>
             )}
-            {filtered.map((l) => {
+            {pager.pageItems.map((l) => {
               // Approved/declined leads are settled transactions — dim their data
               // so the operator's eye lands on the rows that still need action.
               const settled = l.status !== "PENDING_DEMO";
@@ -233,6 +235,7 @@ export function LeadsMatrix() {
             })}
           </tbody>
         </table>
+        <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="leads" />
       </div>
 
       {active && (

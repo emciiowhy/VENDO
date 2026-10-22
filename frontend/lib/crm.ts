@@ -42,6 +42,8 @@ export interface CustomerLite {
   name: string;
   phone: string | null;
   loyaltyPoints: number;
+  /** Net lifetime spend (centavos), for the member-discount eligibility hint. */
+  totalSpentCents: number;
 }
 
 export interface CrmSummary {
@@ -147,6 +149,85 @@ export async function updateCustomer(id: string, fields: Partial<CustomerFields>
 export async function deleteCustomer(id: string): Promise<Result<Record<string, never>>> {
   try {
     return await readJson(await fetch(`${BASE}/customers/${id}`, { method: "DELETE", credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+// ── Discounts (CRM → Discounts) ──────────────────────────────────────────────
+
+/** The owner-configurable loyalty rules. Senior/PWD are statutory, not here. */
+export interface DiscountSettings {
+  pesosPerPoint: number;
+  pointValueCents: number;
+  memberDiscountPct: number;
+  memberMinSpendCents: number;
+}
+
+export async function getDiscountSettings(): Promise<Result<{ settings: DiscountSettings }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/discount-settings`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function saveDiscountSettings(settings: DiscountSettings): Promise<Result<{ settings: DiscountSettings }>> {
+  try {
+    return await readJson(
+      await fetch(`${BASE}/discount-settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(settings),
+      }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** An owner-defined promo: `value` is a whole % or centavos, per `kind`. */
+export interface Promotion {
+  id: string;
+  name: string;
+  kind: "percent" | "fixed";
+  value: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export type PromotionFields = Pick<Promotion, "name" | "kind" | "value" | "isActive">;
+
+export async function listPromotions(): Promise<Result<{ promotions: Promotion[] }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/promotions`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function savePromotion(
+  fields: PromotionFields,
+  id?: string,
+): Promise<Result<{ promotion: Promotion }>> {
+  try {
+    return await readJson(
+      await fetch(id ? `${BASE}/promotions/${id}` : `${BASE}/promotions`, {
+        method: id ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(fields),
+      }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function deletePromotion(id: string): Promise<Result<Record<string, never>>> {
+  try {
+    return await readJson(await fetch(`${BASE}/promotions/${id}`, { method: "DELETE", credentials: "include" }));
   } catch {
     return NETWORK_ERR;
   }

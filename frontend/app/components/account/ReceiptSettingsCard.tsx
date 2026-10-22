@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useToast } from "../Toast";
 import { CardSkeleton, PrimaryButton, SectionCard, TextArea, TextField, Toggle } from "./ui";
 import { getReceipt, saveReceipt, type ReceiptSettings } from "@/lib/account";
+import { useSession } from "../auth/useSession";
 
 /**
  * Receipt & invoice customization. Display-only fields (header line, footer
@@ -19,6 +20,9 @@ export function ReceiptSettingsCard() {
   const [header, setHeader] = useState("");
   const [footer, setFooter] = useState("");
   const [vatLabel, setVatLabel] = useState("");
+  const [vatRegistered, setVatRegistered] = useState(true);
+  const session = useSession();
+  const isOwner = session.status === "authed" && session.user.role === "MERCHANT_OWNER";
   const [prefix, setPrefix] = useState("");
   const [showLogo, setShowLogo] = useState(true);
   const [ptu, setPtu] = useState("");
@@ -45,6 +49,7 @@ export function ReceiptSettingsCard() {
     setHeader(s.header ?? "");
     setFooter(s.footer ?? "");
     setVatLabel(s.vatLabel ?? "");
+    setVatRegistered(s.vatRegistered !== false);
     setPrefix(s.invoicePrefix ?? "");
     setShowLogo(s.showLogo);
     setPtu(s.ptu ?? "");
@@ -68,6 +73,7 @@ export function ReceiptSettingsCard() {
       header,
       footer,
       vatLabel,
+      ...(isOwner ? { vatRegistered } : {}),
       invoicePrefix: prefix.trim().toUpperCase(),
       showLogo,
       ptu,
@@ -93,6 +99,25 @@ export function ReceiptSettingsCard() {
       description="Customize what prints on every receipt and how your invoice numbers are stamped."
     >
       <div className="space-y-5">
+        {/* VAT registration — the store's tax status. Most small PH businesses
+            (under ₱3M a year) are NON-VAT and must not show VAT on receipts.
+            Prices and totals don't change either way: VAT is inside the price. */}
+        {isOwner ? (
+          <Toggle
+            label="VAT-registered business"
+            description={
+              vatRegistered
+                ? "Receipts show VAT REG TIN and the VAT breakdown; the register notes the VAT included in each total."
+                : "Non-VAT: no VAT on the register or receipts, receipts read NON-VAT REG TIN, and Senior/PWD is a plain 20% off."
+            }
+            checked={vatRegistered}
+            onChange={setVatRegistered}
+          />
+        ) : (
+          <p className="rounded-[10px] bg-paper hairline px-3.5 py-2.5 text-[13px] text-ink-soft">
+            This store is <b className="text-ink">{vatRegistered ? "VAT-registered" : "non-VAT"}</b>. Only the owner can change it.
+          </p>
+        )}
         <div className="grid sm:grid-cols-2 gap-4">
           <TextField
             label="Invoice serial prefix"
@@ -102,7 +127,9 @@ export function ReceiptSettingsCard() {
             error={prefixError}
             hint={`Next receipt will read ${sample}`}
           />
-          <TextField label="VAT label" value={vatLabel} onChange={setVatLabel} placeholder="VAT REG TIN" />
+          {vatRegistered && (
+            <TextField label="VAT label" value={vatLabel} onChange={setVatLabel} placeholder="VAT REG TIN" />
+          )}
         </div>
         <TextField
           label="Header line"
@@ -114,7 +141,7 @@ export function ReceiptSettingsCard() {
           label="Footer message"
           value={footer}
           onChange={setFooter}
-          placeholder="This serves as your official receipt. Come again!"
+          placeholder="Thank you, come again!"
           rows={2}
         />
         <div className="hairline-t pt-2">
@@ -127,9 +154,9 @@ export function ReceiptSettingsCard() {
         </div>
 
         <div className="hairline-t pt-4">
-          <div className="text-[13px] font-bold tracking-tight">BIR accreditation</div>
+          <div className="text-[13px] font-bold tracking-tight">Your BIR permit details (optional)</div>
           <p className="mt-0.5 text-[12.5px] text-ink-soft">
-            From your BIR Permit to Use (PTU). Printed in the receipt footer for a valid invoice; leave
+            From your BIR Permit to Use (PTU). Printed in the receipt footer if your business has one; leave
             blank if you don’t have one yet.
           </p>
           <div className="mt-3 grid sm:grid-cols-3 gap-4">

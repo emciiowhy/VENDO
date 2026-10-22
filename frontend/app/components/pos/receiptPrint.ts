@@ -32,6 +32,11 @@ function fmtDate(iso: string): string {
 }
 
 /** Shared chrome: store header (logo, name, address, TIN) + a documented footer. */
+/** "VAT REG TIN" (or the owner's label) for a VAT store; always "NON-VAT REG TIN" otherwise. */
+export function tinLabel(store: StoreBrand): string {
+  return store.vatRegistered === false ? "NON-VAT REG TIN" : store.vatLabel || "VAT REG TIN";
+}
+
 function header(store: StoreBrand): string {
   const lines: string[] = [];
   if (store.logoUrl) {
@@ -45,7 +50,7 @@ function header(store: StoreBrand): string {
   // Style; both print as fixed labelled rows — with a blank placeholder when the
   // store hasn't filled them yet — so the ticket reads as a compliant form.
   lines.push(
-    `<div class="muted">${esc(store.vatLabel || "VAT REG TIN")}: ${esc(store.tin || "________________")}</div>`,
+    `<div class="muted">${esc(tinLabel(store))}: ${esc(store.tin || "________________")}</div>`,
   );
   lines.push(`<div class="muted">Business Style: ${esc(store.businessStyle || "________________")}</div>`);
   return `<div class="center">${lines.join("")}</div>`;
@@ -123,9 +128,10 @@ function printDoc(title: string, bodyHtml: string): void {
 }
 
 /**
- * The BIR machine-accreditation footer — Permit to Use (PTU), Machine ID (MIN)
- * and serial number, plus the mandatory five-year validity statement. Renders
- * only the lines the store has configured; emits nothing when none are set.
+ * The owner's own permit details — Permit to Use (PTU), Machine ID (MIN) and
+ * serial number — exactly as they typed them in Account → Receipt. Renders only
+ * the lines the store has configured; emits nothing when none are set. VendoPOS
+ * itself is not BIR-accredited, so no validity statement is printed.
  */
 function accreditation(store: StoreBrand): string {
   const lines: string[] = [];
@@ -135,8 +141,7 @@ function accreditation(store: StoreBrand): string {
   if (lines.length === 0) return "";
   return (
     `<div class="rule"></div>` +
-    `<div class="foot muted">${lines.join("<br/>")}</div>` +
-    `<div class="foot muted">This invoice shall be valid for five (5) years from the date of the Permit to Use.</div>`
+    `<div class="foot muted">${lines.join("<br/>")}</div>`
   );
 }
 
@@ -158,8 +163,8 @@ export function printSaleReceipt(args: {
 }): void {
   const { store, sale, items } = args;
   const parts: string[] = [header(store)];
-  parts.push(`<div class="title">SALES INVOICE${args.titleNote ? ` ${esc(args.titleNote)}` : ""}</div>`);
-  parts.push(row("Invoice No.", sale.reference, { mono: true }));
+  parts.push(`<div class="title">RECEIPT${args.titleNote ? ` ${esc(args.titleNote)}` : ""}</div>`);
+  parts.push(row("Receipt No.", sale.reference, { mono: true }));
   parts.push(row("Date", fmtDate(sale.createdAt)));
   if (args.cashierName) parts.push(row("Cashier", args.cashierName));
   parts.push(`<div class="rule"></div>`);
@@ -180,12 +185,15 @@ export function printSaleReceipt(args: {
     parts.push(`<div class="rule"></div>`);
   }
   // VAT summary — the per-class figures the server booked from each line's VAT
-  // classification (VATable net / exempt / zero-rated + 12% output VAT).
-  parts.push(row("VATable Sales", formatCents(sale.vatableSalesCents)));
-  parts.push(row("VAT-Exempt Sales", formatCents(sale.vatExemptCents)));
-  parts.push(row("Zero-Rated Sales", formatCents(sale.zeroRatedCents)));
-  parts.push(row("VAT (12%)", formatCents(sale.vatCents)));
-  parts.push(`<div class="rule"></div>`);
+  // classification (VATable net / exempt / zero-rated + 12% output VAT). A non-VAT
+  // store prints none of it: it must not show VAT on its receipts.
+  if (store.vatRegistered !== false) {
+    parts.push(row("VATable Sales", formatCents(sale.vatableSalesCents)));
+    parts.push(row("VAT-Exempt Sales", formatCents(sale.vatExemptCents)));
+    parts.push(row("Zero-Rated Sales", formatCents(sale.zeroRatedCents)));
+    parts.push(row("VAT (12%)", formatCents(sale.vatCents)));
+    parts.push(`<div class="rule"></div>`);
+  }
   parts.push(row("TOTAL AMOUNT DUE", formatCents(sale.totalCents), { strong: true }));
   parts.push(row("Paid via", sale.paymentMethod));
   if (sale.paymentMethod === "Cash" && sale.tenderedCents !== null) {
@@ -200,8 +208,11 @@ export function printSaleReceipt(args: {
     if (sale.pointsRedeemed > 0) parts.push(row("Points redeemed", `-${sale.pointsRedeemed}`));
     if (sale.pointsEarned > 0) parts.push(row("Points earned", `+${sale.pointsEarned}`));
   }
-  const foot = store.receiptFooter || "This serves as your Sales Invoice. Thank you!";
+  const foot = store.receiptFooter || "Thank you!";
   parts.push(`<div class="foot">${esc(foot)}</div>`);
+  // Fixed, not owner-editable: VendoPOS is not BIR-accredited, so its receipt
+  // must never pass for an official invoice.
+  parts.push(`<div class="foot muted">Not a BIR-registered invoice. Not valid for claim of input tax.</div>`);
   parts.push(accreditation(store));
   parts.push(`<div class="foot muted">Powered by VendoPOS</div>`);
 
@@ -227,7 +238,7 @@ export function printRefundSlip(args: {
   parts.push(itemRows(items));
   parts.push(`<div class="rule"></div>`);
   if (reversal.discountCents !== 0) parts.push(row("Discount reversed", abs(reversal.discountCents)));
-  parts.push(row("VAT (12% incl.)", abs(reversal.vatCents)));
+  if (reversal.vatCents !== 0) parts.push(row("VAT (12% incl.)", abs(reversal.vatCents)));
   parts.push(row("REFUND TOTAL", abs(reversal.totalCents), { strong: true }));
   parts.push(`<div class="rule"></div>`);
   parts.push(row("Refunded via", reversal.paymentMethod));

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { PlanBadge } from "./TenantsDirectory";
 import { getAtRiskTenants, type RiskReason, type RiskTenant } from "@/lib/adminRisk";
 
@@ -41,6 +42,7 @@ export function RiskWatchlist() {
   }, []);
 
   const count = state.status === "ready" ? state.rows.length : 0;
+  const pager = usePagination(state.status === "ready" ? state.rows : [], null, 10);
   const dangerCount =
     state.status === "ready" ? state.rows.filter((r) => r.severity === "danger").length : 0;
 
@@ -97,13 +99,14 @@ export function RiskWatchlist() {
 
       {state.status === "ready" && count > 0 && (
         <ul>
-          {state.rows.map((t) => (
+          {pager.pageItems.map((t) => (
             <li key={t.id}>
               <RiskRow t={t} />
             </li>
           ))}
         </ul>
       )}
+      {state.status === "ready" && <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} noun="stores" />}
     </section>
   );
 }

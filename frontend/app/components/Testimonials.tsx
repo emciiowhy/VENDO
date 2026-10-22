@@ -49,7 +49,7 @@ const REVIEWS: Review[] = [
   },
   {
     quote:
-      "Regulars earn points on every cup now, and at month-end I can finally see which drinks actually make money — not just what sold. At closing the Z-reading and BIR receipts are already sorted, so I've stopped staying late to reconcile by hand.",
+      "Regulars earn points on every cup now, and at month-end I can finally see which drinks actually make money — not just what sold. At closing the Z-reading and receipts are already sorted, so I've stopped staying late to reconcile by hand.",
     name: "Aira Santos",
     role: "Owner",
     store: "Tsaa & Co. Milk Tea",
@@ -71,7 +71,7 @@ const REVIEWS: Review[] = [
   },
   {
     quote:
-      "We used to write receipts by hand and lose the line at lunch. Now the thermal printer spits out a BIR-ready receipt in a second, and the stock count is already right when I check it at night.",
+      "We used to write receipts by hand and lose the line at lunch. Now the thermal printer spits out an itemized receipt in a second, and the stock count is already right when I check it at night.",
     name: "Ramon Teng",
     role: "Owner",
     store: "Kopi Express",
@@ -177,7 +177,7 @@ export function Testimonials() {
               5.0 from local operators
             </span>
             <Dot />
-            <span>BIR-ready receipts</span>
+            <span>VAT-itemized receipts</span>
             <Dot />
             <span>Senior &amp; PWD discounts</span>
             <Dot />

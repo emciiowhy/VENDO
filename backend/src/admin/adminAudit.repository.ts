@@ -59,8 +59,8 @@ export async function recordAudit(entry: AuditEntry): Promise<void> {
   }
 }
 
-/** The most recent control-plane actions, newest first (capped). */
-export async function listAudit(limit = 100): Promise<AuditRow[]> {
+/** One page of control-plane actions, newest first, with the total count. */
+export async function listAudit(paging: { page: number; pageSize: number; offset: number }): Promise<{ items: AuditRow[]; total: number }> {
   const { rows } = await query<{
     id: string;
     actor_name: string;
@@ -72,11 +72,12 @@ export async function listAudit(limit = 100): Promise<AuditRow[]> {
   }>(
     `SELECT id, actor_name, action, target_tenant_id, target_name, detail, created_at
        FROM admin_audit_logs
-      ORDER BY created_at DESC
-      LIMIT $1`,
-    [Math.min(Math.max(limit, 1), 200)],
+      ORDER BY created_at DESC, id DESC
+      LIMIT $1 OFFSET $2`,
+    [paging.pageSize, paging.offset],
   );
-  return rows.map((r) => ({
+  const count = await query<{ n: string }>(`SELECT count(*) AS n FROM admin_audit_logs`);
+  const items = rows.map((r) => ({
     id: r.id,
     actorName: r.actor_name,
     action: r.action,
@@ -85,4 +86,5 @@ export async function listAudit(limit = 100): Promise<AuditRow[]> {
     detail: r.detail,
     createdAt: r.created_at.toISOString(),
   }));
+  return { items, total: Number(count.rows[0]?.n ?? 0) };
 }

@@ -12,42 +12,19 @@ const app = createApp();
 const UUID_A = "11111111-1111-1111-1111-111111111111";
 const UUID_B = "22222222-2222-2222-2222-222222222222";
 
-describe("Manufacturing routes require store-management auth", () => {
-  it("blocks the summary for the unauthenticated with 401", async () => {
-    const res = await request(app).get("/api/v1/manufacturing/summary");
-    expect(res.status).toBe(401);
-  });
-
-  it("blocks listing recipes for the unauthenticated with 401", async () => {
-    const res = await request(app).get("/api/v1/manufacturing/recipes");
-    expect(res.status).toBe(401);
-  });
-
-  it("blocks production history for the unauthenticated with 401", async () => {
-    const res = await request(app).get("/api/v1/manufacturing/runs");
-    expect(res.status).toBe(401);
-  });
-
-  it("blocks producing for the unauthenticated with 401", async () => {
-    const res = await request(app)
-      .post(`/api/v1/manufacturing/recipes/${UUID_A}/produce`)
-      .send({ batches: 2 });
-    expect(res.status).toBe(401);
-  });
-
-  it("blocks listing and adding ingredients for the unauthenticated with 401", async () => {
-    expect((await request(app).get("/api/v1/manufacturing/ingredients")).status).toBe(401);
-    const res = await request(app)
-      .post("/api/v1/manufacturing/ingredients")
-      .send({ name: "Flour", unit: "g", stock: 1000 });
-    expect(res.status).toBe(401);
-  });
-
-  it("blocks restocking an ingredient for the unauthenticated with 401", async () => {
-    const res = await request(app)
-      .post(`/api/v1/manufacturing/ingredients/${UUID_A}/restock`)
-      .send({ qty: 500 });
-    expect(res.status).toBe(401);
+// Manufacturing was retired from VendoPOS (capstone scope): the router is no
+// longer mounted, so every endpoint is gone. Tables and history are kept; the
+// pure schemas below are still exercised in case the module is re-enabled.
+describe("Manufacturing is switched off", () => {
+  it.each([
+    ["get", "/api/v1/manufacturing/summary"],
+    ["get", "/api/v1/manufacturing/recipes"],
+    ["get", "/api/v1/manufacturing/runs"],
+    ["get", "/api/v1/manufacturing/ingredients"],
+    ["post", `/api/v1/manufacturing/recipes/${UUID_A}/produce`],
+    ["post", `/api/v1/manufacturing/ingredients/${UUID_A}/restock`],
+  ] as const)("%s %s → 404", async (method, path) => {
+    expect((await request(app)[method](path)).status).toBe(404);
   });
 });
 

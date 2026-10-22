@@ -1,5 +1,4 @@
 import { pool, query } from "../db.js";
-import { markPresentFromShift } from "./hr.repository.js";
 import type {
   ActiveStaffMember,
   CashierEfficiencyRow,
@@ -64,19 +63,32 @@ export async function getActiveTimecard(tenantId: string, userId: string): Promi
 }
 
 export type ClockInResult =
-  | { ok: true; timecard: Timecard }
+  | { ok: true; timecard: Timecard; autoClosedId?: string | null }
   | { ok: false; reason: "already_active"; timecard: Timecard };
 
 /**
- * Punch in. Idempotent-ish: if the caller already has an open card we return it
- * with `already_active` rather than opening a second one. The pre-check covers
- * the common case; the unique-violation catch covers a genuine race (two punches
- * landing at once) so the engine never creates a duplicate active session.
- * Best-effort: opening a card also stamps the linked employee Present for the
- * day — the same attendance signal a drawer-shift open produces — but a failure
- * there never fails the punch.
+ * Punch in (Shift In). Idempotent-ish: if the caller already has an open card
+ * from TODAY we return it with `already_active` rather than opening a second
+ * one. The pre-check covers the common case; the unique-violation catch covers a
+ * genuine race (two punches landing at once) so the engine never creates a
+ * duplicate active session.
+ *
+ * Forgotten Shift Out: a card still open from an EARLIER Manila day is closed
+ * here with zero length (clock_out = clock_in) and flagged `needs_review`, so the
+ * worker can start today without being blocked and the system never guesses the
+ * hours. A manager enters the real Time Out from People & Payroll.
+ * `autoClosedId` reports that card so the route can log it.
  */
 export async function clockIn(tenantId: string, userId: string): Promise<ClockInResult> {
+  const stale = await query<{ id: string }>(
+    `UPDATE timecards
+        SET clock_out = clock_in, status = 'COMPLETED', needs_review = TRUE
+      WHERE tenant_id = $1 AND user_id = $2 AND status = 'ACTIVE'
+        AND (clock_in AT TIME ZONE 'Asia/Manila')::date < (now() AT TIME ZONE 'Asia/Manila')::date
+      RETURNING id`,
+    [tenantId, userId],
+  );
+  const autoClosedId = stale.rows[0]?.id ?? null;
   const existing = await getActiveTimecard(tenantId, userId);
   if (existing) return { ok: false, reason: "already_active", timecard: existing };
   try {
@@ -84,12 +96,7 @@ export async function clockIn(tenantId: string, userId: string): Promise<ClockIn
       `INSERT INTO timecards (tenant_id, user_id) VALUES ($1, $2) RETURNING ${COLS}`,
       [tenantId, userId],
     );
-    try {
-      await markPresentFromShift(tenantId, userId);
-    } catch (err) {
-      console.error("[timecard] auto-attendance stamp failed (non-fatal):", err);
-    }
-    return { ok: true, timecard: toTimecard(rows[0]) };
+    return { ok: true, timecard: toTimecard(rows[0]), autoClosedId };
   } catch (err) {
     // 23505 = unique_violation on timecards_one_active_per_user (concurrent punch).
     if ((err as { code?: string }).code === "23505") {

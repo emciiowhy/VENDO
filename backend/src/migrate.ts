@@ -1131,13 +1131,167 @@ CREATE TABLE IF NOT EXISTS tenant_support_notes (
 
 CREATE INDEX IF NOT EXISTS tenant_support_notes_tenant_idx
   ON tenant_support_notes (tenant_id, created_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- Predefined discounts (CRM → Discounts).
+--
+-- Cashiers can no longer key a free-form % or peso discount; they pick one of
+-- three server-priced categories: Senior Citizen, PWD (both RA 9994 / RA 10754:
+-- VAT-exempt, then 20% off) or the owner-configured loyalty Member discount.
+--
+--   tenants.loyalty_*         points earn/redeem rates. Defaults reproduce the
+--                             old hardcoded rules (1 pt per ₱100, 1 pt = ₱1).
+--   tenants.member_discount_* the loyalty member %, 0 = off, and the lifetime
+--                             spend a customer needs before it applies.
+--   products.sc_pwd_eligible  whether the statutory benefit covers this item
+--                             (e.g. untick alcohol). Defaults TRUE, so every
+--                             existing product keeps its current treatment.
+--   sales.sc_pwd_type         which statutory category a sale used; NULL for
+--                             legacy "Senior/PWD" sales and non-benefit sales.
+-- All additive + idempotent; no existing row changes meaning.
+-- ---------------------------------------------------------------------------
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_pesos_per_point INTEGER NOT NULL DEFAULT 100
+  CHECK (loyalty_pesos_per_point BETWEEN 1 AND 100000);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS loyalty_point_value_cents INTEGER NOT NULL DEFAULT 100
+  CHECK (loyalty_point_value_cents BETWEEN 1 AND 100000);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS member_discount_pct INTEGER NOT NULL DEFAULT 0
+  CHECK (member_discount_pct BETWEEN 0 AND 50);
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS member_discount_min_spend_cents INTEGER NOT NULL DEFAULT 0
+  CHECK (member_discount_min_spend_cents >= 0);
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS sc_pwd_eligible BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS sc_pwd_type TEXT
+  CHECK (sc_pwd_type IN ('senior', 'pwd'));
+
+-- Owner-defined promotions (CRM → Discounts). The OWNER sets each promo's
+-- amount; at the till a cashier can only tap an active promo — the server looks
+-- the amount up by id, so it can't be edited or forged. \`value\` is a whole
+-- percent (1–100) for 'percent' promos, or integer centavos for 'fixed'. Sales
+-- snapshot the promo's name in discount_label, so editing or deleting a promo
+-- never rewrites history. Strictly tenant-fenced.
+CREATE TABLE IF NOT EXISTS promotions (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID        NOT NULL REFERENCES tenants (id) ON DELETE CASCADE,
+  name        TEXT        NOT NULL,
+  kind        TEXT        NOT NULL CHECK (kind IN ('percent', 'fixed')),
+  value       INTEGER     NOT NULL CHECK (value > 0),
+  is_active   BOOLEAN     NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT promotions_percent_range CHECK (kind <> 'percent' OR value <= 100)
+);
+CREATE INDEX IF NOT EXISTS promotions_tenant_idx ON promotions (tenant_id, is_active);
+
+-- ---------------------------------------------------------------------------
+-- Activity log: widen pos_audit_logs from 3 floor actions to the full staff
+-- timeline. The first three are still POSTed by the register; every other
+-- action is written ONLY by the server, inside the route that performed it, so
+-- a client can't forge a "sale" or "login" row. \`ref_id\` points at the sale,
+-- timecard, shift or payroll run the event is about. Existing rows stay valid —
+-- the CHECK only widens. Owner/manager read-only; still no update/delete path.
+-- ---------------------------------------------------------------------------
+ALTER TABLE pos_audit_logs ADD COLUMN IF NOT EXISTS ref_id UUID;
+ALTER TABLE pos_audit_logs DROP CONSTRAINT IF EXISTS pos_audit_logs_action_check;
+ALTER TABLE pos_audit_logs ADD CONSTRAINT pos_audit_logs_action_check CHECK (action IN
+  ('void_item', 'cancel_transaction', 'open_drawer',
+   'sale', 'refund', 'void_sale', 'discount_applied',
+   'login', 'logout', 'clock_in', 'clock_out', 'shift_open', 'shift_close',
+   'timecard_corrected', 'payroll_approved'));
+CREATE INDEX IF NOT EXISTS pos_audit_logs_action_idx ON pos_audit_logs (tenant_id, action, created_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- Attendance from Shift In / Shift Out (the labor clock).
+--
+-- Each employee gets a fixed weekly schedule, so a day's status is DERIVED, not
+-- assumed: a rest day is grey, a scheduled day with no punch is absent, and
+-- worked hours are the timecard minutes less the unpaid break.
+--   work_days            ISO-ish weekday numbers the employee is scheduled
+--                        (0 = Sun … 6 = Sat). Default Mon–Sat, the common PH week.
+--   standard_daily_hours the full day (divisor for the hourly rate; half-day
+--                        cutoff is under 50% of it).
+--   unpaid_break_minutes deducted once from a day whose punches total ≥ 5 hours
+--                        (Labor Code Art. 85 meal break).
+-- timecards.needs_review flags a card the system had to close because the worker
+-- forgot to clock out; it counts 0 hours until a manager enters the real time
+-- out, and blocks payroll approval for its period.
+-- All additive with safe defaults — no existing row changes meaning.
+-- ---------------------------------------------------------------------------
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS work_days SMALLINT[] NOT NULL DEFAULT '{1,2,3,4,5,6}';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS standard_daily_hours NUMERIC(4,2) NOT NULL DEFAULT 8
+  CHECK (standard_daily_hours > 0 AND standard_daily_hours <= 24);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS unpaid_break_minutes SMALLINT NOT NULL DEFAULT 60
+  CHECK (unpaid_break_minutes BETWEEN 0 AND 240);
+ALTER TABLE timecards ADD COLUMN IF NOT EXISTS needs_review BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ---------------------------------------------------------------------------
+-- Payroll from attendance: daily rate, Draft → Approved, adjustments.
+--
+--   employees.daily_rate_cents  the rate the owner/manager confirmed. NULL until
+--                               set; payroll then suggests one from the legacy
+--                               pay_type/pay_rate_cents (kept, untouched) and
+--                               refuses approval until it is confirmed.
+--   payroll_runs.status         'draft' while being reviewed, 'approved' when
+--                               locked. Every pre-existing run defaults to
+--                               'approved', so history becomes read-only and
+--                               nothing about it changes.
+--   payroll_items.*             the attendance + rate snapshot each line was paid
+--                               on. NULL on legacy lines (they keep gross_cents).
+--   payroll_adjustments         overtime / paid-leave suggestions (unapproved
+--                               until the manager ticks them) and manual +/-
+--                               lines. Only approved ones are paid.
+-- Money is integer centavos. All additive; legacy rows keep their meaning.
+-- ---------------------------------------------------------------------------
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS daily_rate_cents INTEGER CHECK (daily_rate_cents >= 0);
+
+ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'approved'
+  CHECK (status IN ('draft', 'approved'));
+ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS approved_by   UUID REFERENCES users (id) ON DELETE SET NULL;
+ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS approved_at   TIMESTAMPTZ;
+ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS total_payable_cents INTEGER;
+
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS daily_rate_cents     INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS rate_confirmed       BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS standard_daily_hours NUMERIC(4,2);
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS present_days         INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS half_days            INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS absent_days          INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS leave_days           INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS worked_minutes       INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS regular_minutes      INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS overtime_minutes     INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS base_cents           INTEGER;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS payable_cents        INTEGER;
+
+CREATE TABLE IF NOT EXISTS payroll_adjustments (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id       UUID        NOT NULL REFERENCES payroll_runs (id) ON DELETE CASCADE,
+  item_id      UUID        NOT NULL REFERENCES payroll_items (id) ON DELETE CASCADE,
+  kind         TEXT        NOT NULL CHECK (kind IN ('overtime', 'paid_leave', 'manual')),
+  label        TEXT        NOT NULL,
+  amount_cents INTEGER     NOT NULL,              -- signed: a deduction is negative
+  approved     BOOLEAN     NOT NULL DEFAULT FALSE,
+  created_by   UUID        REFERENCES users (id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS payroll_adjustments_run_idx ON payroll_adjustments (run_id);
+
+-- ---------------------------------------------------------------------------
+-- VAT registration. Most small PH businesses (under ₱3M a year) are NON-VAT:
+-- they pay percentage tax instead and must not show VAT on receipts. When a
+-- store is non-VAT, every sale line is booked as having no VAT (vat_cents = 0,
+-- lines snapshotted as EXEMPT, so refunds reverse correctly) and the receipt
+-- says NON-VAT. Prices and totals don't change — VAT was always inside the
+-- price. Defaults TRUE, so every existing store keeps behaving as before.
+-- ---------------------------------------------------------------------------
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS vat_registered BOOLEAN NOT NULL DEFAULT TRUE;
 `;
 
 async function migrate() {
   console.log("[migrate] applying schema…");
   await pool.query(SQL);
   console.log(
-    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, ingredients, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs, tenant_support_notes ready.",
+    "[migrate] done. leads, tenants, users, categories, products, sales, sale_items, invoice_counters, cashier_shifts, timecards, cashier_pin_requests, tenant_payment_qrs, expenses, suppliers, purchase_orders, purchase_order_items, po_counters, recipes, recipe_components, production_runs, production_run_items, production_counters, ingredients, employees, attendance, payroll_runs, payroll_items, payroll_counters, customers, sessions, login_events, notifications, stock_movements, reversal_counters, pos_audit_logs, media_objects, admin_audit_logs, tenant_support_notes, promotions ready (+ discount settings).",
   );
 }
 

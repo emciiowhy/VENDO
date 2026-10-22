@@ -243,7 +243,7 @@ function Ambient() {
 const IDLE_MESSAGES = [
   "Your order will appear here as it's rung up.",
   "We accept Cash, GCash, Maya & QRPH.",
-  "Every sale comes with a BIR-ready receipt.",
+  "Every sale comes with an itemized receipt.",
 ];
 
 function IdleScreen({
@@ -408,7 +408,7 @@ function SummaryPanel({ snap }: { snap: DisplaySnapshot }) {
               accent
             />
           )}
-          <TotalRow label={snap.vatCents > 0 ? "VAT (12% included)" : "VAT (none)"} value={peso(snap.vatCents)} dim />
+          {snap.vatCents > 0 && <TotalRow label="Includes VAT (12%)" value={peso(snap.vatCents)} dim />}
         </div>
 
         <div className="mt-5 pt-5 border-t border-white/12">

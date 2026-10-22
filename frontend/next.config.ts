@@ -15,6 +15,24 @@ import type { NextConfig } from "next";
 const API_TARGET = process.env.API_PROXY_TARGET ?? "https://api.vendopos.shop";
 
 const nextConfig: NextConfig = {
+  /**
+   * Procurement and Manufacturing are retired from VendoPOS (their APIs are no
+   * longer mounted). Old bookmarks land somewhere useful instead of a dead
+   * console. Temporary (307) so re-enabling a module later isn't fighting a
+   * browser-cached permanent redirect. Restocking now lives in Product
+   * Management, so the old Procurement links go there.
+   */
+  async redirects() {
+    return [
+      { source: "/dashboard/procurement", destination: "/dashboard/inventory", permanent: false },
+      { source: "/dashboard/manufacturing", destination: "/dashboard", permanent: false },
+      { source: "/products/procurement", destination: "/products", permanent: false },
+      { source: "/products/manufacturing", destination: "/products", permanent: false },
+      // VendoPOS is not BIR-accredited, so the old "BIR Accreditation" page is gone.
+      { source: "/products/bir-accreditation", destination: "/products", permanent: false },
+    ];
+  },
+
   async rewrites() {
     return {
       beforeFiles: [

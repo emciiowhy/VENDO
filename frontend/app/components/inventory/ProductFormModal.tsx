@@ -10,6 +10,8 @@ import {
   type Category,
   type Product,
   type ProductFields,
+  type StockReason,
+  STOCK_REASONS,
 } from "@/lib/inventory";
 import { VAT_CLASS_HINTS, VAT_CLASS_LABELS, type VatClass } from "@/lib/pos";
 
@@ -37,9 +39,13 @@ export function ProductFormModal({
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? "");
   const [price, setPrice] = useState(product ? String(product.price) : "");
   const [stock, setStock] = useState(product ? String(product.stock) : "0");
+  // Editing on-hand stock is a logged adjustment; the reason goes on the ledger.
+  const [stockReason, setStockReason] = useState<StockReason>("Restock");
+  const stockChanged = editing && Number(stock || 0) !== product.stock;
   const [threshold, setThreshold] = useState(product ? String(product.lowStockThreshold) : "0");
   const [vatClass, setVatClass] = useState<VatClass>(product?.vatClass ?? "VATABLE");
   const [isActive, setIsActive] = useState(product?.isActive ?? true);
+  const [scPwdEligible, setScPwdEligible] = useState(product?.scPwdEligible ?? true);
 
   const [file, setFile] = useState<File | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
@@ -60,9 +66,11 @@ export function ProductFormModal({
       categoryId,
       price,
       stock,
+      ...(stockChanged ? { stockReason } : {}),
       lowStockThreshold: threshold,
       vatClass,
       isActive,
+      scPwdEligible,
     };
 
     const res = editing
@@ -213,6 +221,26 @@ export function ProductFormModal({
             </Field>
           </div>
 
+          {stockChanged && (
+            <Field label="Reason for the stock change" error={fieldErrors.stockReason}>
+              <select
+                value={stockReason}
+                onChange={(e) => setStockReason(e.target.value as StockReason)}
+                className={FIELD_INPUT}
+              >
+                {STOCK_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <span className="block mt-1 text-[12px] text-ink-faint">
+                {Number(stock || 0) > product.stock ? "+" : "−"}
+                {Math.abs(Number(stock || 0) - product.stock)} units · saved in the stock history with your name.
+              </span>
+            </Field>
+          )}
+
           {/* Active toggle */}
           <button
             type="button"
@@ -234,6 +262,36 @@ export function ProductFormModal({
             </span>
             <span className="text-[14px] font-semibold text-ink">
               {isActive ? "Active — sold at POS" : "Inactive — hidden from POS"}
+            </span>
+          </button>
+
+          {/* Senior Citizen / PWD eligibility (RA 9994 / RA 10754) */}
+          <button
+            type="button"
+            onClick={() => setScPwdEligible((v) => !v)}
+            aria-pressed={scPwdEligible}
+            className="flex items-center gap-3 group text-left"
+          >
+            <span
+              className={
+                "relative shrink-0 w-10 h-6 rounded-full transition duration-150 " +
+                (scPwdEligible ? "bg-accent-500" : "bg-ink/15")
+              }
+            >
+              <span
+                className={
+                  "absolute top-0.5 w-5 h-5 rounded-full bg-surface shadow-sm transition duration-150 " +
+                  (scPwdEligible ? "left-[18px]" : "left-0.5")
+                }
+              />
+            </span>
+            <span>
+              <span className="block text-[14px] font-semibold text-ink">
+                {scPwdEligible ? "Senior / PWD discount applies" : "No Senior / PWD discount"}
+              </span>
+              <span className="block text-[12px] text-ink-faint">
+                Turn off for items the benefit doesn&rsquo;t cover, e.g. alcohol or gift items.
+              </span>
             </span>
           </button>
 

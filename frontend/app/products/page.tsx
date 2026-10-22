@@ -11,7 +11,7 @@ import { productsByGroup } from "@/lib/products";
 export const metadata: Metadata = pageMetadata({
   title: "Products — VendoPOS",
   description:
-    "Everything to run your business on one platform: POS, payments, inventory, finance, procurement, manufacturing, HR, CRM, and more.",
+    "Everything to run your business on one platform: POS, payments, product management, finance, people & payroll, CRM, and more.",
   path: "/products",
 });
 

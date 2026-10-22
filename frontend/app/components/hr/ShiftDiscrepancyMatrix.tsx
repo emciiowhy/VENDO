@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Icon, type IconName } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { formatCents } from "@/lib/format";
 import {
   getShiftReconciliations,
@@ -93,6 +94,7 @@ export function ShiftDiscrepancyMatrix() {
       (r) => (statusFilter === "all" || r.status === statusFilter) && (cashier === "" || r.cashierName === cashier),
     );
   }, [report, statusFilter, cashier]);
+  const pager = usePagination(filtered, `${from}|${to}|${statusFilter}|${cashier}`);
 
   return (
     <div className="space-y-5">
@@ -185,11 +187,12 @@ export function ShiftDiscrepancyMatrix() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r) => (
+                  {pager.pageItems.map((r) => (
                     <Row key={r.id} r={r} />
                   ))}
                 </tbody>
               </table>
+              <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="shifts" />
             </div>
           )}
         </div>

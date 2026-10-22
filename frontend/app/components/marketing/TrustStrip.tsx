@@ -14,7 +14,7 @@ import { Icon, type IconName } from "@/app/components/Icon";
  * disabled and chips shown immediately under prefers-reduced-motion.
  */
 const TRUST: { icon: IconName; label: string }[] = [
-  { icon: "receipt", label: "BIR-ready receipts" },
+  { icon: "receipt", label: "VAT-itemized receipts" },
   { icon: "card", label: "GCash · Maya · QRPH" },
   { icon: "tag", label: "Senior & PWD discounts" },
   { icon: "peso", label: "Peso-first" },

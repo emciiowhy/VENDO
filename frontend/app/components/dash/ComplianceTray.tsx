@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { formatCents } from "@/lib/format";
 import {
   complianceCsvUrl,
@@ -20,11 +21,14 @@ import {
  * state — setState only happens after `await` in the effect, never synchronously
  * in its body.
  */
+const NO_ROWS: ComplianceLedger["rows"] = [];
+
 export function ComplianceTray() {
   const [month, setMonth] = useState<string>(() => currentMonth());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<{ label: string; ledger: ComplianceLedger } | null>(null);
+  const pager = usePagination(view ? view.ledger.rows : NO_ROWS, view?.label ?? month);
 
   useEffect(() => {
     let alive = true;
@@ -139,7 +143,7 @@ export function ComplianceTray() {
                 </tr>
               </thead>
               <tbody>
-                {view.ledger.rows.map((r) => (
+                {pager.pageItems.map((r) => (
                   <tr
                     key={r.reference}
                     className="hairline-b last:border-0 hover:bg-paper/70 transition duration-150"
@@ -168,6 +172,7 @@ export function ComplianceTray() {
                 ))}
               </tbody>
             </table>
+            <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} noun="sales" />
           </div>
         )}
       </div>

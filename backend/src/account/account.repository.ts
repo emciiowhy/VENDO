@@ -158,6 +158,8 @@ export interface ReceiptSettings {
   header: string | null;
   footer: string | null;
   vatLabel: string | null;
+  /** False for a non-VAT store: no VAT on the register or receipts. */
+  vatRegistered: boolean;
   invoicePrefix: string | null;
   showLogo: boolean;
   /** BIR machine-accreditation footer fields (all optional). */
@@ -171,13 +173,14 @@ export async function getReceiptSettings(tenantId: string): Promise<ReceiptSetti
     receipt_header: string | null;
     receipt_footer: string | null;
     vat_label: string | null;
+    vat_registered: boolean;
     invoice_prefix: string | null;
     receipt_show_logo: boolean;
     receipt_ptu: string | null;
     receipt_min: string | null;
     receipt_serial: string | null;
   }>(
-    `SELECT receipt_header, receipt_footer, vat_label, invoice_prefix, receipt_show_logo,
+    `SELECT receipt_header, receipt_footer, vat_label, vat_registered, invoice_prefix, receipt_show_logo,
             receipt_ptu, receipt_min, receipt_serial
        FROM tenants WHERE id = $1`,
     [tenantId],
@@ -188,6 +191,7 @@ export async function getReceiptSettings(tenantId: string): Promise<ReceiptSetti
     header: r.receipt_header,
     footer: r.receipt_footer,
     vatLabel: r.vat_label,
+    vatRegistered: r.vat_registered,
     invoicePrefix: r.invoice_prefix,
     showLogo: r.receipt_show_logo,
     ptu: r.receipt_ptu,
@@ -201,9 +205,9 @@ export async function updateReceiptSettings(tenantId: string, s: ReceiptSettings
     `UPDATE tenants
         SET receipt_header = $2, receipt_footer = $3, vat_label = $4,
             invoice_prefix = $5, receipt_show_logo = $6,
-            receipt_ptu = $7, receipt_min = $8, receipt_serial = $9
+            receipt_ptu = $7, receipt_min = $8, receipt_serial = $9, vat_registered = $10
       WHERE id = $1`,
-    [tenantId, s.header, s.footer, s.vatLabel, s.invoicePrefix, s.showLogo, s.ptu, s.min, s.serial],
+    [tenantId, s.header, s.footer, s.vatLabel, s.invoicePrefix, s.showLogo, s.ptu, s.min, s.serial, s.vatRegistered],
   );
 }
 

@@ -7,23 +7,32 @@ import {
   attendanceUpsertSchema,
   employeeCreateSchema,
   employeeUpdateSchema,
+  dailyRateSchema,
+  payrollAdjustmentSchema,
   payrollRunSchema,
   tillAccessSchema,
+  timecardCorrectionSchema,
 } from "./hr.schema.js";
+import {
+  clearManualAttendance,
+  correctTimecard,
+  getAttendanceReport,
+  getTeamAttendance,
+} from "./attendance.repository.js";
+import { monthBounds } from "./hr.repository.js";
+import { logActivity } from "../pos/audit.repository.js";
 import {
   adoptCashier,
   createEmployee,
-  createPayrollRun,
   deleteEmployee,
+  getEmployee,
   getAttendanceForDate,
   getEmployeeDetail,
   getHrOverview,
   getHrSummary,
-  getPayrollRun,
   getPerformance,
   grantTillAccess,
   listEmployees,
-  listPayrollRuns,
   listUnlinkedCashiers,
   updateEmployee,
   upsertAttendance,
@@ -31,9 +40,19 @@ import {
   type GrantTillResult,
 } from "./hr.repository.js";
 import { DEFAULT_HOURLY_RATE_CENTS, getLaborAnalytics } from "./timecard.repository.js";
-import { buildPayrollExport } from "./payroll.export.repository.js";
-import { toPayrollCsv } from "./payroll.processor.js";
-import { listShiftReconciliations } from "../pos/shifts.repository.js";
+import {
+  addAdjustment,
+  approveRun,
+  createDraftRun,
+  deleteAdjustment,
+  deleteDraftRun,
+  getPayrollRun,
+  listPayrollRuns,
+  payrollCsv,
+  recalculateRun,
+  setAdjustmentApproved,
+  setLineRate,
+} from "./payroll.repository.js";
 
 /**
  * Merchant HR — employees, attendance, payroll.
@@ -68,6 +87,8 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_MONTH = /^\d{4}-\d{2}$/;
 
 /** Read & validate a YYYY-MM query param, defaulting to the current Manila month. */
+const UUID = new RegExp("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "i");
+
 function monthParam(req: Request): string {
   const m = req.query.month;
   return typeof m === "string" && ISO_MONTH.test(m) ? m : new Date().toISOString().slice(0, 7);
@@ -88,13 +109,6 @@ function windowParams(req: Request): { from: string; to: string } {
   return { from: dateParam(req, "from") ?? monthAgo, to: dateParam(req, "to") ?? today };
 }
 
-/** Truthy `?nightDiff=` query flag (1/true/yes/on). Defaults ON when absent. */
-function nightDiffParam(req: Request): boolean {
-  const v = req.query.nightDiff;
-  if (v === undefined) return true;
-  const s = String(v).toLowerCase();
-  return s === "1" || s === "true" || s === "yes" || s === "on";
-}
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 
@@ -169,25 +183,6 @@ hrRouter.get("/labor-analytics", async (req, res) => {
 
 // ── Shift discrepancy matrix (drawer reconciliation audit) ─────────────────────
 
-/**
- * GET /api/v1/hr/shift-reconciliations?from&to — every closed cashier shift in
- * the window with its drawer variance + short/over status, for the manager audit
- * matrix. Reuses the cashier_shifts ledger the POS close paths already write;
- * read-only and tenant-fenced (OWNER/MANAGER via the router-level guards).
- */
-hrRouter.get("/shift-reconciliations", async (req, res) => {
-  const tenantId = tenantOf(req);
-  if (!tenantId) return noTenant(res);
-  const { from, to } = windowParams(req);
-  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
-  try {
-    res.json({ ok: true, report: await listShiftReconciliations(tenantId, from, to) });
-  } catch (err) {
-    console.error("[hr] shift reconciliations failed:", err);
-    res.status(500).json({ ok: false, error: "Could not load shift reconciliations." });
-  }
-});
-
 // ── Employees ────────────────────────────────────────────────────────────────
 
 hrRouter.get("/employees", async (req, res) => {
@@ -233,6 +228,15 @@ hrRouter.patch("/employees/:id", async (req, res) => {
   const parsed = employeeUpdateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
   try {
+    // A manager can't raise their own pay: only the owner changes the salary
+    // fields on the employee record linked to that manager's own login.
+    const touchesPay = parsed.data.dailyRate !== undefined || parsed.data.payRate !== undefined || parsed.data.payType !== undefined;
+    if (touchesPay && req.user?.role === "MANAGER") {
+      const self = await getEmployee(tenantId, req.params.id);
+      if (self?.userId && self.userId === req.user.userId) {
+        return res.status(403).json({ ok: false, error: "You can't change your own pay. Ask the store owner." });
+      }
+    }
     const employee = await updateEmployee(tenantId, req.params.id, parsed.data);
     if (!employee) return res.status(404).json({ ok: false, error: "Employee not found." });
     res.json({ ok: true, employee });
@@ -353,7 +357,118 @@ hrRouter.put("/attendance", async (req, res) => {
   }
 });
 
+/** GET /hr/attendance/month?month=YYYY-MM — every employee's month totals, for the Attendance tab. */
+hrRouter.get("/attendance/month", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  try {
+    const { start, end } = monthBounds(monthParam(req));
+    res.json({ ok: true, month: start.slice(0, 7), rows: await getTeamAttendance(tenantId, start, end) });
+  } catch (err) {
+    console.error("[hr] team attendance failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load attendance." });
+  }
+});
+
+/** DELETE /hr/attendance?employeeId=&date= — drop a manual entry; the day goes back to the timecards. */
+hrRouter.delete("/attendance", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  const employeeId = typeof req.query.employeeId === "string" ? req.query.employeeId : "";
+  const date = typeof req.query.date === "string" && ISO_DATE.test(req.query.date) ? req.query.date : null;
+  if (!UUID.test(employeeId) || !date) {
+    return res.status(400).json({ ok: false, error: "A valid employeeId and date are required." });
+  }
+  try {
+    await clearManualAttendance(tenantId, employeeId, date);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[hr] attendance clear failed:", err);
+    res.status(500).json({ ok: false, error: "Could not clear the entry." });
+  }
+});
+
+/**
+ * GET /hr/employees/:id/attendance?month=YYYY-MM — the month derived from the
+ * employee's schedule + Shift In/Out timecards + manual entries: one status per
+ * day (with Time In / Time Out, break and worked minutes) and the totals.
+ */
+hrRouter.get("/employees/:id/attendance", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID.test(req.params.id)) return res.status(404).json({ ok: false, error: "Employee not found." });
+  try {
+    const { start, end } = monthBounds(monthParam(req));
+    const report = await getAttendanceReport(tenantId, req.params.id, start, end);
+    if (!report) return res.status(404).json({ ok: false, error: "Employee not found." });
+    res.json({ ok: true, month: start.slice(0, 7), ...report });
+  } catch (err) {
+    console.error("[hr] attendance report failed:", err);
+    res.status(500).json({ ok: false, error: "Could not load attendance." });
+  }
+});
+
+/**
+ * PATCH /hr/timecards/:id — set a timecard's real Time In / Time Out (the fix
+ * for a forgotten Shift Out). Owner/manager only, like the rest of this router;
+ * tenant-fenced; recorded on the activity log with the before/after times.
+ */
+hrRouter.patch("/timecards/:id", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID.test(req.params.id)) return res.status(404).json({ ok: false, error: "Timecard not found." });
+  const parsed = timecardCorrectionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const result = await correctTimecard(tenantId, req.params.id, parsed.data);
+    if (!result.ok) {
+      return result.code === "NOT_FOUND"
+        ? res.status(404).json({ ok: false, error: "Timecard not found." })
+        : res.status(400).json({ ok: false, error: result.detail });
+    }
+    const t = (iso: string | null) =>
+      iso
+        ? new Date(iso).toLocaleString("en-PH", {
+            timeZone: "Asia/Manila",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "open";
+    void logActivity(
+      { tenantId, userId: req.user?.userId ?? null, name: req.user?.name ?? "Manager" },
+      {
+        action: "timecard_corrected",
+        refId: req.params.id,
+        detail: `${t(result.before.clockIn)} – ${t(result.before.clockOut)} → ${t(result.after.clockIn)} – ${t(result.after.clockOut)}`,
+      },
+    );
+    res.json({ ok: true, timecard: result.after });
+  } catch (err) {
+    console.error("[hr] timecard correction failed:", err);
+    res.status(500).json({ ok: false, error: "Could not save the correction." });
+  }
+});
+
 // ── Payroll ──────────────────────────────────────────────────────────────────
+//
+// Draft → Approved. Base earnings come from attendance (see hr/payroll.ts);
+// overtime and paid leave are suggestions the manager approves; manual +/-
+// adjustments are allowed. An approved run is locked. Owner/manager only (the
+// router-level guard); a MANAGER can't touch or approve their own pay line.
+
+function actorOf(req: Request) {
+  return { userId: req.user?.userId ?? null, role: req.user?.role ?? "", name: req.user?.name ?? "Manager" };
+}
+
+function draftError(res: Response, code: "NOT_FOUND" | "NOT_DRAFT" | "OWN_PAY") {
+  if (code === "NOT_FOUND") return res.status(404).json({ ok: false, error: "Payroll run not found." });
+  if (code === "OWN_PAY") {
+    return res.status(403).json({ ok: false, error: "You can't change or approve your own pay. Ask the store owner." });
+  }
+  return res.status(409).json({ ok: false, error: "This payroll run is approved and locked." });
+}
 
 hrRouter.get("/payroll", async (req, res) => {
   const tenantId = tenantOf(req);
@@ -366,58 +481,10 @@ hrRouter.get("/payroll", async (req, res) => {
   }
 });
 
-/**
- * GET /api/v1/hr/payroll/export/preview?from&to&nightDiff&employeeId — the live
- * payroll table the export studio renders before download. Same maths as the CSV
- * route; returns JSON. Registered before `/payroll/:id` so "export" isn't read as
- * a run id.
- */
-hrRouter.get("/payroll/export/preview", async (req, res) => {
-  const tenantId = tenantOf(req);
-  if (!tenantId) return noTenant(res);
-  const { from, to } = windowParams(req);
-  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
-  const employeeId = typeof req.query.employeeId === "string" && UUID_RE.test(req.query.employeeId)
-    ? req.query.employeeId
-    : undefined;
-  try {
-    const report = await buildPayrollExport(tenantId, from, to, nightDiffParam(req), employeeId);
-    res.json({ ok: true, report });
-  } catch (err) {
-    console.error("[hr] payroll export preview failed:", err);
-    res.status(500).json({ ok: false, error: "Could not build the payroll preview." });
-  }
-});
-
-/**
- * GET /api/v1/hr/payroll/export?from&to&nightDiff&employeeId — the accounting-
- * ready payroll snapshot as a downloadable CSV stream. Strictly tenant-fenced;
- * a manager can never pull another store's labour. Registered before
- * `/payroll/:id` for the same routing reason as the preview above.
- */
-hrRouter.get("/payroll/export", async (req, res) => {
-  const tenantId = tenantOf(req);
-  if (!tenantId) return noTenant(res);
-  const { from, to } = windowParams(req);
-  if (from > to) return res.status(400).json({ ok: false, error: "The 'from' date must be on or before 'to'." });
-  const employeeId = typeof req.query.employeeId === "string" && UUID_RE.test(req.query.employeeId)
-    ? req.query.employeeId
-    : undefined;
-  try {
-    const report = await buildPayrollExport(tenantId, from, to, nightDiffParam(req), employeeId);
-    const csv = toPayrollCsv(report);
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="payroll-${from}_to_${to}.csv"`);
-    res.send(csv);
-  } catch (err) {
-    console.error("[hr] payroll export failed:", err);
-    res.status(500).json({ ok: false, error: "Could not export payroll." });
-  }
-});
-
 hrRouter.get("/payroll/:id", async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ ok: false, error: "Payroll run not found." });
   try {
     const run = await getPayrollRun(tenantId, req.params.id);
     if (!run) return res.status(404).json({ ok: false, error: "Payroll run not found." });
@@ -428,16 +495,171 @@ hrRouter.get("/payroll/:id", async (req, res) => {
   }
 });
 
+/** GET /hr/payroll/:id/csv — the final payable figures of an APPROVED run. */
+hrRouter.get("/payroll/:id/csv", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ ok: false, error: "Payroll run not found." });
+  try {
+    const run = await getPayrollRun(tenantId, req.params.id);
+    if (!run) return res.status(404).json({ ok: false, error: "Payroll run not found." });
+    if (run.status !== "approved") return res.status(409).json({ ok: false, error: "Approve the run before exporting it." });
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${run.reference}.csv"`);
+    res.send(payrollCsv(run));
+  } catch (err) {
+    console.error("[hr] payroll csv failed:", err);
+    res.status(500).json({ ok: false, error: "Could not export the payroll run." });
+  }
+});
+
+/** POST /hr/payroll — start a DRAFT run for a period. */
 hrRouter.post("/payroll", async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
   const parsed = payrollRunSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
   try {
-    const run = await createPayrollRun(tenantId, req.user?.userId ?? null, parsed.data);
-    res.status(201).json({ ok: true, run });
+    const result = await createDraftRun(tenantId, req.user?.userId ?? null, parsed.data);
+    if (!result.ok) {
+      return result.code === "OVERLAP"
+        ? res.status(409).json({ ok: false, error: `These dates overlap ${result.reference}. Pick a period that isn't paid yet.` })
+        : res.status(400).json({ ok: false, error: "There are no employees to pay in this period." });
+    }
+    res.status(201).json({ ok: true, run: await getPayrollRun(tenantId, result.runId) });
   } catch (err) {
     console.error("[hr] create payroll failed:", err);
-    res.status(500).json({ ok: false, error: "Could not run payroll." });
+    res.status(500).json({ ok: false, error: "Could not start the payroll run." });
+  }
+});
+
+/** POST /hr/payroll/:id/recalculate — re-read attendance (e.g. after fixing a Shift Out). */
+hrRouter.post("/payroll/:id/recalculate", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ ok: false, error: "Payroll run not found." });
+  try {
+    const r = await recalculateRun(tenantId, req.params.id, req.user?.userId ?? null);
+    if (!r.ok) return draftError(res, r.code);
+    res.json({ ok: true, run: await getPayrollRun(tenantId, req.params.id) });
+  } catch (err) {
+    console.error("[hr] payroll recalculate failed:", err);
+    res.status(500).json({ ok: false, error: "Could not recalculate the run." });
+  }
+});
+
+/** PUT /hr/payroll/:id/lines/:lineId/rate — enter or confirm the daily rate. */
+hrRouter.put("/payroll/:id/lines/:lineId/rate", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.lineId)) {
+    return res.status(404).json({ ok: false, error: "Payroll line not found." });
+  }
+  const parsed = dailyRateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const r = await setLineRate(tenantId, req.params.id, req.params.lineId, parsed.data.dailyRateCents, actorOf(req));
+    if (!r.ok) return draftError(res, r.code);
+    res.json({ ok: true, run: await getPayrollRun(tenantId, req.params.id) });
+  } catch (err) {
+    console.error("[hr] payroll rate failed:", err);
+    res.status(500).json({ ok: false, error: "Could not save the daily rate." });
+  }
+});
+
+/** POST /hr/payroll/:id/lines/:lineId/adjustments — a manual +/- line. */
+hrRouter.post("/payroll/:id/lines/:lineId/adjustments", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.lineId)) {
+    return res.status(404).json({ ok: false, error: "Payroll line not found." });
+  }
+  const parsed = payrollAdjustmentSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, errors: fieldErrors(parsed.error) });
+  try {
+    const r = await addAdjustment(tenantId, req.params.id, req.params.lineId, parsed.data, actorOf(req));
+    if (!r.ok) return draftError(res, r.code);
+    res.status(201).json({ ok: true, run: await getPayrollRun(tenantId, req.params.id) });
+  } catch (err) {
+    console.error("[hr] payroll adjustment failed:", err);
+    res.status(500).json({ ok: false, error: "Could not add the adjustment." });
+  }
+});
+
+/** PATCH /hr/payroll/:id/adjustments/:adjId — approve / un-approve (e.g. overtime). */
+hrRouter.patch("/payroll/:id/adjustments/:adjId", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.adjId)) {
+    return res.status(404).json({ ok: false, error: "Adjustment not found." });
+  }
+  const approved = (req.body as { approved?: unknown })?.approved;
+  if (typeof approved !== "boolean") return res.status(400).json({ ok: false, error: "Send approved: true or false." });
+  try {
+    const r = await setAdjustmentApproved(tenantId, req.params.id, req.params.adjId, approved, actorOf(req));
+    if (!r.ok) return draftError(res, r.code);
+    res.json({ ok: true, run: await getPayrollRun(tenantId, req.params.id) });
+  } catch (err) {
+    console.error("[hr] payroll adjustment toggle failed:", err);
+    res.status(500).json({ ok: false, error: "Could not update the adjustment." });
+  }
+});
+
+hrRouter.delete("/payroll/:id/adjustments/:adjId", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.adjId)) {
+    return res.status(404).json({ ok: false, error: "Adjustment not found." });
+  }
+  try {
+    const r = await deleteAdjustment(tenantId, req.params.id, req.params.adjId, actorOf(req));
+    if (!r.ok) return draftError(res, r.code);
+    res.json({ ok: true, run: await getPayrollRun(tenantId, req.params.id) });
+  } catch (err) {
+    console.error("[hr] payroll adjustment delete failed:", err);
+    res.status(500).json({ ok: false, error: "Could not remove the adjustment." });
+  }
+});
+
+/** POST /hr/payroll/:id/approve — lock the run (all blockers re-checked here). */
+hrRouter.post("/payroll/:id/approve", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ ok: false, error: "Payroll run not found." });
+  try {
+    const actor = actorOf(req);
+    const r = await approveRun(tenantId, req.params.id, actor);
+    if (!r.ok) {
+      if (r.code === "BLOCKED") return res.status(409).json({ ok: false, error: r.blockers.join(" "), blockers: r.blockers });
+      return draftError(res, r.code);
+    }
+    void logActivity(
+      { tenantId, userId: actor.userId, name: actor.name },
+      {
+        action: "payroll_approved",
+        refId: req.params.id,
+        valueCents: r.totalPayableCents,
+        detail: `${r.reference} · ${r.headcount} employee${r.headcount === 1 ? "" : "s"}`,
+      },
+    );
+    res.json({ ok: true, run: await getPayrollRun(tenantId, req.params.id) });
+  } catch (err) {
+    console.error("[hr] payroll approve failed:", err);
+    res.status(500).json({ ok: false, error: "Could not approve the run." });
+  }
+});
+
+/** DELETE /hr/payroll/:id — discard a DRAFT (approved runs can't be deleted). */
+hrRouter.delete("/payroll/:id", async (req, res) => {
+  const tenantId = tenantOf(req);
+  if (!tenantId) return noTenant(res);
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ ok: false, error: "Payroll run not found." });
+  try {
+    const r = await deleteDraftRun(tenantId, req.params.id);
+    if (!r.ok) return draftError(res, r.code);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[hr] payroll delete failed:", err);
+    res.status(500).json({ ok: false, error: "Could not discard the draft." });
   }
 });

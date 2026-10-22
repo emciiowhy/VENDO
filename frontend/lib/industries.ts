@@ -47,7 +47,7 @@ export const INDUSTRY_GROUPS: IndustryGroup[] = [
   { key: "fnb", title: "F&B Business", icon: "store", blurb: "Cafés, restaurants, quick-serve and fine dining." },
   { key: "retail", title: "Retail Business", icon: "cart", blurb: "Grocery, convenience, fashion and specialty shops." },
   { key: "service", title: "Service", icon: "heart", blurb: "Salons, clinics and pharmacies that sell time and goods." },
-  { key: "enterprise", title: "Enterprise", icon: "building", blurb: "Distributors and operations that run on purchase orders." },
+  { key: "enterprise", title: "Enterprise", icon: "building", blurb: "Larger operations with bigger teams and deeper stock." },
 ];
 
 export const INDUSTRIES: Industry[] = [
@@ -59,16 +59,16 @@ export const INDUSTRIES: Industry[] = [
     name: "Cafés & Bakeries",
     tagline: "Run your café and bakery on one system.",
     intro:
-      "From the first coffee at dawn to the last pastry at closing, VendoPOS keeps the line moving, tracks every ingredient, and reconciles the drawer to the peso.",
+      "From the first coffee at dawn to the last pastry at closing, VendoPOS keeps the line moving, tracks stock on every item, and reconciles the drawer to the peso.",
     highlights: [
       { icon: "bolt", title: "Rush-ready checkout", body: "A large-tile menu and instant search keep orders flowing through the morning peak." },
-      { icon: "factory", title: "Recipe-based production", body: "Bake a batch from its recipe and the ingredients are deducted while finished goods are added." },
+      { icon: "box", title: "Low-stock alerts", body: "Every sale deducts stock automatically, and you are alerted before a bestseller runs out." },
       { icon: "wallet", title: "Drawer that reconciles", body: "X-Read and Z-Read close every shift to the centavo — no end-of-day guessing." },
     ],
     outcomes: [
       "Serve customers faster at peak hours with a touch-first layout",
       "See which items sell and which to retire, by day or week",
-      "BIR-ready receipts on every cup and pastry, automatically",
+      "VAT-itemized receipts on every cup and pastry, automatically",
     ],
   },
   {
@@ -80,7 +80,7 @@ export const INDUSTRIES: Industry[] = [
     intro:
       "Ring orders fast, take cash or e-wallet payments, and keep tables turning — with stock and sales that tie out at the end of the night.",
     highlights: [
-      { icon: "receipt", title: "Compliant receipts", body: "VAT-inclusive, BIR-ready receipts printed straight from checkout." },
+      { icon: "receipt", title: "Itemized receipts", body: "VAT-inclusive, itemized receipts printed straight from checkout." },
       { icon: "card", title: "Flexible payments", body: "Cash, GCash, Maya and QRPH at the counter, settled into one sale." },
       { icon: "users", title: "Staff & shifts", body: "Manage roles and tie each sale to the cashier shift on duty." },
     ],
@@ -231,18 +231,18 @@ export const INDUSTRIES: Industry[] = [
     group: "service",
     icon: "shield",
     name: "Healthcare & Pharmacies",
-    tagline: "Accurate stock, compliant receipts.",
+    tagline: "Accurate stock, itemized receipts.",
     intro:
-      "Track every unit with low-stock alerts and issue BIR-ready receipts your customers can trust — for pharmacies and clinics.",
+      "Track every unit with low-stock alerts and issue itemized receipts your customers can trust — for pharmacies and clinics.",
     photoKey: "healthcare",
     highlights: [
       { icon: "box", title: "Unit-level inventory", body: "Know exactly what's on the shelf as items sell and restocks arrive." },
-      { icon: "shield", title: "Compliant receipts", body: "VAT-inclusive, sequentially numbered receipts on every sale, automatically." },
+      { icon: "shield", title: "Itemized receipts", body: "VAT-inclusive, sequentially numbered receipts on every sale, automatically." },
       { icon: "bell", title: "Low-stock alerts", body: "Get notified before a fast-moving item runs out so you reorder in time." },
     ],
     outcomes: [
       "Keep precise, unit-level stock counts",
-      "Issue compliant receipts without thinking about it",
+      "Issue itemized, numbered receipts without thinking about it",
       "Reorder in time with proactive alerts",
     ],
   },
@@ -254,17 +254,17 @@ export const INDUSTRIES: Industry[] = [
     name: "Warehouse & Distribution",
     tagline: "Move stock and orders without losing track.",
     intro:
-      "Manage suppliers, purchase orders, and receiving with a clear trail from order to restocked shelf.",
+      "Keep a clear trail on every unit — sales, restocks and count corrections — and run payroll for a bigger team.",
     photoKey: "warehouse",
     highlights: [
-      { icon: "truck", title: "Receiving & suppliers", body: "Raise purchase orders and receive against them to restock automatically." },
-      { icon: "box", title: "Stock ledger", body: "Every sale, receipt, and adjustment is logged, so stock levels always have a trail." },
-      { icon: "refresh", title: "PO status tracking", body: "Follow each purchase order from sent to received so nothing slips." },
+      { icon: "bell", title: "Low-stock alerts", body: "Set a floor per product and get alerted before stock runs out." },
+      { icon: "box", title: "Stock ledger", body: "Every sale, restock, and adjustment is logged, so stock levels always have a trail." },
+      { icon: "users", title: "People & Payroll", body: "Attendance from Shift In/Out and owner-approved payroll for the whole team." },
     ],
     outcomes: [
-      "Restock automatically from received purchase orders",
+      "Restock in seconds with a logged stock adjustment",
       "Get reorder suggestions before items run out",
-      "Follow each purchase order end to end",
+      "Pay your team from real attendance, not guesswork",
     ],
   },
 ];

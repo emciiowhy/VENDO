@@ -531,6 +531,7 @@ function NewProductForm({
         lowStockThreshold: "0",
         isActive: true,
         vatClass: "VATABLE",
+        scPwdEligible: true,
       },
       null,
     );

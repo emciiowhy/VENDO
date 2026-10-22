@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { computeVatBreakdown, type VatClass } from "./pos/pos.schema.js";
+import { computeVatBreakdown, priceCart, type CartDiscount, type VatClass } from "./pos/pos.schema.js";
 import { FEATURE_MIN_TIER } from "./lib/tiers.js";
 
 /**
@@ -83,6 +83,64 @@ describe("register VAT preview mirrors the server's computeVatBreakdown", () => 
       // Include no discount, partial discounts, and over-discounts (clamped).
       const discount = i % 4 === 0 ? 0 : Math.floor(rand() * gross * 1.2);
       expect(previewVatCents(lines, discount), `case ${i}`).toBe(serverVat(lines, discount));
+    }
+  });
+});
+
+describe("register cart preview mirrors the server's priceCart", () => {
+  type CartLine = PreviewLine & { scPwdEligible: boolean };
+  type PreviewCart = (input: {
+    lines: CartLine[];
+    discount: CartDiscount | null;
+    requestedPoints: number;
+    pointsBalance: number;
+    pointValueCents: number;
+    vatRegistered?: boolean;
+  }) => { netCents: number; discountCents: number; vatCents: number; pointsRedeemed: number; eligibleLineCount: number };
+  const loadPreview = async () =>
+    ((await import(/* @vite-ignore */ `${FRONTEND}/pos.ts`)) as { previewCart: PreviewCart }).previewCart;
+
+  it("agrees with the server on 3,000 random carts, discounts and redemptions", async () => {
+    const previewCart = await loadPreview();
+    const rand = mulberry32(20261018);
+    const classes: VatClass[] = ["VATABLE", "EXEMPT", "ZERO_RATED"];
+    const discounts: (CartDiscount | null)[] = [
+      null,
+      { kind: "senior" },
+      { kind: "pwd" },
+      { kind: "member", pct: 5 },
+      { kind: "member", pct: 37 },
+      { kind: "promo", name: "Payday", promoKind: "percent", value: 15 },
+      { kind: "promo", name: "₱50 off", promoKind: "fixed", value: 5_000 },
+    ];
+    for (let i = 0; i < 3000; i++) {
+      const lines: CartLine[] = Array.from({ length: 1 + Math.floor(rand() * 6) }, () => ({
+        vatClass: classes[Math.floor(rand() * classes.length)],
+        lineCents: 1 + Math.floor(rand() * 500_000),
+        scPwdEligible: rand() > 0.3,
+      }));
+      const discount = discounts[i % discounts.length];
+      const points = {
+        requestedPoints: i % 3 === 0 ? 0 : Math.floor(rand() * 20_000),
+        pointsBalance: Math.floor(rand() * 20_000),
+        pointValueCents: 1 + Math.floor(rand() * 300),
+        // Every 4th cart prices as a NON-VAT store.
+        vatRegistered: i % 4 !== 3,
+      };
+      const client = previewCart({ lines, discount, ...points });
+      const server = priceCart({
+        lines: lines.map((l) => ({ vatClass: l.vatClass, grossCents: l.lineCents, scPwdEligible: l.scPwdEligible })),
+        discount,
+        ...points,
+      });
+      const pick = (r: typeof client) => ({
+        netCents: r.netCents,
+        discountCents: r.discountCents,
+        vatCents: r.vatCents,
+        pointsRedeemed: r.pointsRedeemed,
+        eligibleLineCount: r.eligibleLineCount,
+      });
+      expect(pick(client), `case ${i}`).toEqual(pick(server));
     }
   });
 });

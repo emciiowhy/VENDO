@@ -64,6 +64,11 @@ export const productCreateSchema = z.object({
   vatClass: z
     .enum(VAT_CLASSES, { errorMap: () => ({ message: "Choose a valid VAT class." }) })
     .optional(),
+  // Whether the Senior Citizen / PWD benefit covers this item. Absent → TRUE.
+  scPwdEligible: booleanField,
+  // Why on-hand stock was changed (restock, damage, recount). Saved as the
+  // stock ledger note on the adjustment; ignored when stock isn't changed.
+  stockReason: z.enum(["Restock", "Damaged / expired", "Count correction", "Other"]).optional(),
 });
 
 /** Update: every field optional, but at least the shape is validated. */
@@ -106,6 +111,7 @@ export interface Product {
   imageUrl: string | null;
   isActive: boolean;
   vatClass: VatClass;
+  scPwdEligible: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { formatDate } from "@/lib/format";
 import { getSubscribers, type Subscriber } from "@/lib/adminAnalytics";
 import { impersonateTenant } from "@/lib/auth";
@@ -38,6 +39,7 @@ export function SubscribersDrawer({ onClose }: { onClose: () => void }) {
   // The store currently being opened, plus the id of any row whose open failed.
   const [opening, setOpening] = useState<string | null>(null);
   const [openError, setOpenError] = useState<{ id: string; message: string } | null>(null);
+  const pager = usePagination(state.status === "ready" ? state.rows : [], null, 10);
 
   // Mint an owner session for this Tenant and hard-navigate into its dashboard.
   // A full navigation (not router.push) is required so the swapped session cookie
@@ -120,7 +122,7 @@ export function SubscribersDrawer({ onClose }: { onClose: () => void }) {
             <p className="py-12 text-center text-[13.5px] text-ink-soft">No subscribers yet.</p>
           ) : (
             <div className="space-y-2.5">
-              {state.rows.map((s) => (
+              {pager.pageItems.map((s) => (
                 <div key={s.id} className="rounded-xl2 bg-paper hairline p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -178,6 +180,7 @@ export function SubscribersDrawer({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
               ))}
+              <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} noun="subscribers" className="px-0" />
             </div>
           )}
         </div>

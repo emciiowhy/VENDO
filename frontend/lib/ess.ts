@@ -5,7 +5,7 @@
  * to pass here. Reuses the HR shapes for attendance, hours and paystubs.
  */
 import { API_BASE_URL } from "./api";
-import type { AttendanceDay, EmployeePayslip, HoursBreakdown, Result } from "./hr";
+import type { AttendanceDay, AttendanceSummary, EmployeePayslip, HoursBreakdown, Result } from "./hr";
 
 const BASE = `${API_BASE_URL}/api/v1/ess`;
 
@@ -19,10 +19,12 @@ export interface EssProfile {
     payRateCents: number;
     hireDate: string | null;
     ptoBalanceDays: number;
+    dailyRateCents: number | null;
   };
   storeName: string | null;
   month: string;
   attendanceMonth: AttendanceDay[];
+  attendanceSummary: AttendanceSummary;
   hours: HoursBreakdown;
   ptoUsedYtd: number;
   payslips: EmployeePayslip[];

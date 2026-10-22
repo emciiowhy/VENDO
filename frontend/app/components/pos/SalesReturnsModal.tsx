@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pagination } from "../Pagination";
 import { Icon } from "../Icon";
 import { formatCents } from "@/lib/format";
 import {
@@ -33,6 +34,9 @@ const STATUS_BADGE: Record<SaleStatus, { label: string; cls: string }> = {
   voided: { label: "Voided", cls: "bg-rose-50 text-rose-600" },
 };
 
+
+const PAGE_SIZE = 20;
+
 export function SalesReturnsModal({
   store,
   onClose,
@@ -46,6 +50,9 @@ export function SalesReturnsModal({
   const [view, setView] = useState<View>("list");
   const [sales, setSales] = useState<SaleSummary[]>([]);
   const [loadingList, setLoadingList] = useState(true);
+  // Server-side pages of 20, so a busy store can still reach last week's sales.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const [detail, setDetail] = useState<SaleDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -59,25 +66,27 @@ export function SalesReturnsModal({
   // Manual refresh (event-handler context — synchronous setState is fine here).
   const loadList = useCallback(async () => {
     setLoadingList(true);
-    const res = await listSales(50);
+    const res = await listSales(page, PAGE_SIZE);
     setSales(res.ok ? res.sales : []);
+    setTotal(res.ok ? res.total : 0);
     setLoadingList(false);
-  }, []);
+  }, [page]);
 
   // Initial load: no setState before the await (keeps it out of the cascading-
   // render path the lint guards against); loadingList starts true.
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const res = await listSales(50);
+      const res = await listSales(page, PAGE_SIZE);
       if (!alive) return;
       setSales(res.ok ? res.sales : []);
+      setTotal(res.ok ? res.total : 0);
       setLoadingList(false);
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [page]);
 
   // Esc closes.
   useEffect(() => {
@@ -320,6 +329,7 @@ export function SalesReturnsModal({
                     </button>
                   );
                 })}
+                <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPage={setPage} noun="sales" className="px-0" />
               </div>
             ))}
 

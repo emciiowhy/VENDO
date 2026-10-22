@@ -6,13 +6,21 @@ import { useToast } from "../Toast";
 import { runPayroll } from "@/lib/hr";
 
 /**
- * Run payroll for a period. Gross pay is computed server-side from each active
- * employee's pay basis and the attendance in range (Monthly → flat rate,
- * Daily → rate × days present, Hourly → rate × hours). Records GROSS pay.
+ * Start a payroll run for a period. The server creates a DRAFT: each line's
+ * base pay = daily rate ÷ standard hours × regular hours from Shift In / Shift
+ * Out. The owner/manager then reviews and approves it. A period can't overlap
+ * an existing run, so the same day is never paid twice.
  */
 function firstOfMonth(): string {
   const d = new Date();
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), "01"].join("-");
+}
+/** Semi-monthly cut-offs for the current month: 1–15 and 16–end. */
+function cutoff(which: 1 | 2): { start: string; end: string } {
+  const d = new Date();
+  const ym = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0")].join("-");
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  return which === 1 ? { start: `${ym}-01`, end: `${ym}-15` } : { start: `${ym}-16`, end: `${ym}-${last}` };
 }
 function today(): string {
   const d = new Date();
@@ -47,7 +55,7 @@ export function PayrollRunModal({
     setError(null);
     const res = await runPayroll({ periodStart, periodEnd, note });
     if (res.ok) {
-      push({ variant: "success", title: `Payroll ${res.run.reference} ready`, message: `${res.run.headcount} employees.` });
+      push({ variant: "success", title: `Draft ${res.run.reference} ready`, message: "Review the lines, then approve." });
       onRan(res.run.id);
       return;
     }
@@ -65,8 +73,8 @@ export function PayrollRunModal({
               <Icon name="peso" className="w-5 h-5" strokeWidth={1.8} />
             </span>
             <div>
-              <h3 className="text-[1.1rem] font-extrabold tracking-tight">Run payroll</h3>
-              <p className="text-[12.5px] text-ink-soft">Gross pay for a period, from rates &amp; attendance.</p>
+              <h3 className="text-[1.1rem] font-extrabold tracking-tight">Start payroll</h3>
+              <p className="text-[12.5px] text-ink-soft">Creates a draft from daily rates &amp; attendance.</p>
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-ink-faint hover:text-ink transition -mt-1 -mr-1 p-1">
@@ -81,6 +89,23 @@ export function PayrollRunModal({
             void submit();
           }}
         >
+          <div className="flex gap-2">
+            {([1, 2] as const).map((w) => (
+              <button
+                key={w}
+                type="button"
+                onClick={() => {
+                  const c = cutoff(w);
+                  setPeriodStart(c.start);
+                  setPeriodEnd(c.end);
+                  setError(null);
+                }}
+                className="rounded-[9px] bg-paper hairline px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft hover:text-brand-600 hover:border-brand-200"
+              >
+                {w === 1 ? "1–15 this month" : "16–end this month"}
+              </button>
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-[12px] font-semibold text-ink-soft">Period start</span>
@@ -97,7 +122,8 @@ export function PayrollRunModal({
           </label>
 
           <p className="text-[11.5px] text-ink-faint leading-relaxed">
-            Records gross pay. Statutory deductions (SSS, PhilHealth, Pag-IBIG, tax) aren&apos;t applied yet.
+            Overtime and paid leave are suggested for you to approve. SSS, PhilHealth, Pag-IBIG and tax are handled by
+            the employer outside VendoPOS.
           </p>
 
           {error && <p className="text-[12.5px] font-semibold text-rose-600">{error}</p>}
@@ -107,7 +133,7 @@ export function PayrollRunModal({
               Cancel
             </button>
             <button type="submit" disabled={busy} className="bg-brand-500 hover:bg-brand-600 text-white font-semibold text-[14px] px-5 py-2.5 rounded-[10px] shadow-btn tracking-tight transition duration-150 disabled:opacity-60">
-              {busy ? "Running…" : "Run payroll"}
+              {busy ? "Creating…" : "Create draft"}
             </button>
           </div>
         </form>

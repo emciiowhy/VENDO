@@ -110,8 +110,7 @@ const PRODUCTS: MenuDef = {
         icon: "store",
         accent: true,
         links: [
-          { label: "BIR-Accreditation", href: "/products/bir-accreditation" },
-          { label: "Inventory Management", href: "/products/inventory-management" },
+          { label: "Product Management", href: "/products/inventory-management" },
           { label: "Reporting & Analytics", href: "/products/reporting-and-analytics" },
           { label: "Employee Management", href: "/products/employee-management" },
         ],
@@ -123,8 +122,6 @@ const PRODUCTS: MenuDef = {
         icon: "layers",
         links: [
           { label: "Finance & P&L", href: "/products/finance" },
-          { label: "Procurement", href: "/products/procurement" },
-          { label: "Manufacturing", href: "/products/manufacturing" },
         ],
       },
       {
@@ -150,7 +147,7 @@ const HARDWARE: MenuDef = {
         title: "Front-of-counter gear",
         icon: "pos",
         links: [
-          { label: "POS Terminal & Tablet Stand", href: "/hardware/pos-terminal" },
+          { label: "POS Terminal", href: "/hardware/pos-terminal" },
           { label: "Receipt Printer", href: "/hardware/receipt-printer" },
           { label: "Cash Drawer", href: "/hardware/cash-drawer" },
         ],

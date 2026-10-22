@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Icon, type IconName } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { formatDate, formatPeso } from "@/lib/format";
 import { impersonateTenant } from "@/lib/auth";
 import {
@@ -111,6 +112,7 @@ export function TenantsDirectory() {
       );
     });
   }, [state, query, statusFilter]);
+  const pager = usePagination(filtered, `${query}|${statusFilter}`);
 
   return (
     <section className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden">
@@ -181,7 +183,7 @@ export function TenantsDirectory() {
             )}
 
             {state.status === "ready" &&
-              filtered.map((t) => (
+              pager.pageItems.map((t) => (
                 <tr key={t.id} className="hairline-b last:border-0 hover:bg-paper/70 transition duration-150">
                   <td className="px-6 py-3.5">
                     <div className="font-bold tracking-tight">{t.name}</div>
@@ -228,6 +230,7 @@ export function TenantsDirectory() {
             )}
           </tbody>
         </table>
+        <Pagination page={pager.page} total={pager.total} pageSize={pager.pageSize} onPage={pager.setPage} onPageSize={pager.setPageSize} noun="stores" />
       </div>
 
       {active && (

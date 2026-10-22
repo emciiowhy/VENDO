@@ -42,6 +42,37 @@ export const customerCreateSchema = z.object({
 
 export const customerUpdateSchema = customerCreateSchema.partial();
 
+/**
+ * CRM → Discounts: the owner-configurable loyalty rules. Senior Citizen / PWD
+ * are statutory (fixed by RA 9994 / RA 10754) and deliberately NOT here — no
+ * one in the store can change those amounts. Money is integer centavos.
+ */
+export const discountSettingsSchema = z.object({
+  pesosPerPoint: z.number().int().min(1, "At least ₱1 per point.").max(100_000),
+  pointValueCents: z.number().int().min(1, "A point must be worth at least ₱0.01.").max(100_000),
+  memberDiscountPct: z.number().int().min(0).max(50, "Member discount can be at most 50%."),
+  memberMinSpendCents: z.number().int().min(0).max(1_000_000_000),
+});
+export type DiscountSettingsInput = z.infer<typeof discountSettingsSchema>;
+
+/**
+ * An owner-defined promotion. `value` is a whole percent (1–100) for a
+ * `percent` promo, or integer centavos for a `fixed` one. The amount lives
+ * only here — the till sends just the promo's id.
+ */
+export const promotionSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name the promo.").max(40, "Keep the name under 40 characters."),
+    kind: z.enum(["percent", "fixed"], { errorMap: () => ({ message: "Choose % or ₱." }) }),
+    value: z.number().int().positive("Enter an amount above zero.").max(100_000_000),
+    isActive: z.boolean().default(true),
+  })
+  .refine((p) => p.kind !== "percent" || p.value <= 100, {
+    message: "A percent promo can be at most 100%.",
+    path: ["value"],
+  });
+export type PromotionInput = z.infer<typeof promotionSchema>;
+
 export type CustomerCreateInput = z.infer<typeof customerCreateSchema>;
 export type CustomerUpdateInput = z.infer<typeof customerUpdateSchema>;
 
@@ -84,4 +115,6 @@ export interface CustomerLite {
   name: string;
   phone: string | null;
   loyaltyPoints: number;
+  /** Net lifetime spend (centavos) — lets the till preview member eligibility. */
+  totalSpentCents: number;
 }

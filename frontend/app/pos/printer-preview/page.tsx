@@ -19,7 +19,7 @@ const SAMPLE_STORE: StoreBrand = {
   businessStyle: "Coffee Shop",
   vatLabel: "VAT REG TIN",
   receiptHeader: "Single-origin Benguet beans",
-  receiptFooter: "This serves as your Sales Invoice. Thank you!",
+  receiptFooter: "Thank you!",
   logoUrl: null,
   ptu: "PTU FP012025",
   min: "MIN 00000001",
@@ -94,8 +94,8 @@ export default function PrinterPreviewPage() {
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24 }}>
-          <Proof title="Sales invoice — 58mm (32 cols)" text={sale58} />
-          <Proof title="Sales invoice — 80mm (48 cols)" text={sale80} />
+          <Proof title="Receipt — 58mm (32 cols)" text={sale58} />
+          <Proof title="Receipt — 80mm (48 cols)" text={sale80} />
           <Proof title="Test print — 58mm (32 cols)" text={test58} />
           <Proof title="Test print — 80mm (48 cols)" text={test80} />
         </div>

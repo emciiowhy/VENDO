@@ -1,7 +1,7 @@
 /**
  * Client for the Merchant HR module (`/api/v1/hr/*`) — employees, attendance,
- * payroll. Payroll gross is computed server-side from each employee's pay type
- * and attendance in the period. Tenant scope is enforced from the session
+ * payroll. Payroll base earnings are computed server-side from each employee's
+ * daily rate and their attendance in the period. Tenant scope is enforced from the session
  * cookie; every call rides with `credentials: "include"`. Payloads are JSON.
  */
 import { API_BASE_URL } from "./api";
@@ -37,14 +37,70 @@ export interface Employee {
   bankAccountName: string | null;
   bankAccountLast4: string | null;
   ptoBalanceDays: number;
+  /** Scheduled weekdays, 0 = Sunday … 6 = Saturday. */
+  workDays: number[];
+  standardDailyHours: number;
+  unpaidBreakMinutes: number;
+  /** Confirmed daily rate in centavos; null until set. */
+  dailyRateCents: number | null;
   createdAt: string;
   updatedAt: string;
 }
 
+/** A day's derived attendance status (see backend hr/attendance.ts). */
+export type DayStatus =
+  | "present"
+  | "half_day"
+  | "absent"
+  | "leave"
+  | "rest_day"
+  | "unscheduled"
+  | "pending"
+  | "needs_review";
+
+export interface PunchView {
+  id: string;
+  /** Shift In (ISO). */
+  timeIn: string;
+  /** Shift Out (ISO), null while on the clock or if forgotten. */
+  timeOut: string | null;
+  minutes: number;
+  open: boolean;
+  needsReview: boolean;
+}
+
+/** One day of attendance, derived from the schedule + Shift In/Out + manual entries. */
 export interface AttendanceDay {
   date: string;
-  status: string;
-  hours: number;
+  weekday: number;
+  scheduled: boolean;
+  status: DayStatus;
+  punches: PunchView[];
+  grossMinutes: number;
+  breakMinutes: number;
+  workedMinutes: number;
+  manual: boolean;
+  note: string | null;
+  restDayWorked: boolean;
+}
+
+export interface AttendanceSummary {
+  scheduledDays: number;
+  presentDays: number;
+  halfDays: number;
+  absentDays: number;
+  leaveDays: number;
+  restDays: number;
+  needsReviewDays: number;
+  workedMinutes: number;
+}
+
+export interface TeamAttendanceRow {
+  employeeId: string;
+  name: string;
+  position: string | null;
+  hasTillAccess: boolean;
+  summary: AttendanceSummary;
 }
 
 export interface EmployeePayslip {
@@ -55,7 +111,12 @@ export interface EmployeePayslip {
   payType: string;
   payRateCents: number;
   basisQty: number;
+  /** Base earnings (legacy runs: gross). */
   grossCents: number;
+  /** What was approved for payment: base + approved adjustments. */
+  payableCents: number;
+  /** From the attendance-based payroll (basis = regular hours at a daily rate). */
+  attendanceBased: boolean;
   createdAt: string;
 }
 
@@ -117,6 +178,7 @@ export interface HrOverview {
 export interface EmployeeDetail extends Employee {
   month: string;
   attendanceMonth: AttendanceDay[];
+  attendanceSummary: AttendanceSummary;
   hours: HoursBreakdown;
   ptoUsedYtd: number;
   payslips: EmployeePayslip[];
@@ -132,37 +194,62 @@ export interface AttendanceRow {
   hours: number;
 }
 
-export interface PayrollItem {
+export type PayrollRunStatus = "draft" | "approved";
+
+/** An adjustment on a payroll line. Only approved ones are paid. */
+export interface PayrollAdjustment {
+  id: string;
+  itemId: string;
+  /** overtime / paid_leave are system suggestions; manual are typed by the manager. */
+  kind: "overtime" | "paid_leave" | "manual";
+  label: string;
+  /** Signed centavos — a deduction is negative. */
+  amountCents: number;
+  approved: boolean;
+}
+
+/** One employee's line: attendance → base earnings → adjustments → payable. */
+export interface PayrollLine {
   id: string;
   employeeId: string | null;
   name: string;
-  payType: string;
-  payRateCents: number;
-  basisQty: number;
-  grossCents: number;
-  sssCents: number;
-  philhealthCents: number;
-  pagibigCents: number;
-  withholdingTaxCents: number;
-  totalDeductionsCents: number;
-  netCents: number;
+  /** Lines from before the payroll rework (gross only, no attendance detail). */
+  legacy: boolean;
+  dailyRateCents: number;
+  rateConfirmed: boolean;
+  standardDailyHours: number;
+  presentDays: number;
+  halfDays: number;
+  absentDays: number;
+  leaveDays: number;
+  workedMinutes: number;
+  regularMinutes: number;
+  overtimeMinutes: number;
+  baseCents: number;
+  adjustments: PayrollAdjustment[];
+  approvedAdjustmentsCents: number;
+  payableCents: number;
 }
 
 export interface PayrollRunSummary {
   id: string;
   reference: string;
+  status: PayrollRunStatus;
   periodStart: string;
   periodEnd: string;
-  totalGrossCents: number;
   headcount: number;
+  totalBaseCents: number;
+  totalPayableCents: number;
+  approvedAt: string | null;
   createdAt: string;
 }
 
 export interface PayrollRunDetail extends PayrollRunSummary {
   note: string | null;
-  items: PayrollItem[];
-  totalDeductionsCents: number;
-  totalNetCents: number;
+  approvedByName: string | null;
+  lines: PayrollLine[];
+  /** Why a draft can't be approved yet (empty = ready). */
+  blockers: string[];
 }
 
 export interface HrSummary {
@@ -208,47 +295,6 @@ export interface LaborAnalytics {
   cashiers: CashierEfficiencyRow[];
 }
 
-// ── Payroll export (timecard-based, with OT + night differential) ───────────
-
-export interface PayrollExportLine {
-  employeeId: string;
-  name: string;
-  position: string | null;
-  payType: string;
-  hourlyRateCents: number;
-  daysWorked: number;
-  regularHours: number;
-  overtimeHours: number;
-  nightDiffHours: number;
-  totalHours: number;
-  regularPayCents: number;
-  overtimePayCents: number;
-  nightDiffPayCents: number;
-  grossCents: number;
-  sssCents: number;
-  philhealthCents: number;
-  pagibigCents: number;
-  withholdingTaxCents: number;
-  totalDeductionsCents: number;
-  netCents: number;
-}
-
-export interface PayrollExportReport {
-  from: string;
-  to: string;
-  includeNightDifferential: boolean;
-  lines: PayrollExportLine[];
-  totals: {
-    headcount: number;
-    regularHours: number;
-    overtimeHours: number;
-    nightDiffHours: number;
-    grossCents: number;
-    totalDeductionsCents: number;
-    netCents: number;
-  };
-}
-
 // ── Shift discrepancy matrix (drawer reconciliation audit) ──────────────────
 
 export type ShiftStatus = "balanced" | "short" | "over";
@@ -290,8 +336,9 @@ export interface EmployeeFields {
   name: string;
   position: string;
   employmentType: string;
-  payType: string;
-  payRate: string; // pesos
+  /** Legacy pay basis — no longer edited; payroll uses dailyRate. */
+  payType?: string;
+  payRate?: string; // pesos (legacy)
   hireDate: string;
   phone: string;
   email: string;
@@ -305,6 +352,12 @@ export interface EmployeeFields {
   bankAccountName?: string;
   bankAccountNumber?: string; // write-only; never returned by the API
   ptoBalanceDays?: string; // days
+  // Work schedule (sent as numbers).
+  workDays?: number[];
+  standardDailyHours?: number;
+  unpaidBreakMinutes?: number;
+  /** Daily rate in pesos (the server stores centavos). */
+  dailyRate?: string;
 }
 
 export type Result<T> =
@@ -393,48 +446,6 @@ export async function getAttendance(date: string): Promise<Result<{ date: string
   }
 }
 
-/** Build the export query string shared by the preview fetch and the CSV link. */
-function payrollExportQuery(opts: {
-  from: string;
-  to: string;
-  nightDiff: boolean;
-  employeeId?: string;
-}): string {
-  const qs = new URLSearchParams({ from: opts.from, to: opts.to, nightDiff: opts.nightDiff ? "1" : "0" });
-  if (opts.employeeId) qs.set("employeeId", opts.employeeId);
-  return qs.toString();
-}
-
-/** The live payroll preview the export studio renders before download. */
-export async function getPayrollExportPreview(opts: {
-  from: string;
-  to: string;
-  nightDiff: boolean;
-  employeeId?: string;
-}): Promise<Result<{ report: PayrollExportReport }>> {
-  try {
-    return await readJson(
-      await fetch(`${BASE}/payroll/export/preview?${payrollExportQuery(opts)}`, { credentials: "include" }),
-    );
-  } catch {
-    return NETWORK_ERR;
-  }
-}
-
-/**
- * The tenant-scoped CSV download URL. Used as a plain <a href download> so the
- * session cookie rides the top-level navigation and the server streams an
- * attachment (mirrors the account data-export links).
- */
-export function payrollExportUrl(opts: {
-  from: string;
-  to: string;
-  nightDiff: boolean;
-  employeeId?: string;
-}): string {
-  return `${BASE}/payroll/export?${payrollExportQuery(opts)}`;
-}
-
 /** The manager shift-discrepancy matrix — closed shifts with drawer variance. */
 export async function getShiftReconciliations(
   from?: string,
@@ -445,7 +456,10 @@ export async function getShiftReconciliations(
   if (to) qs.set("to", to);
   const suffix = qs.toString() ? `?${qs}` : "";
   try {
-    return await readJson(await fetch(`${BASE}/shift-reconciliations${suffix}`, { credentials: "include" }));
+    // Served by the POS router (any plan with cashiers), not People & Payroll.
+    return await readJson(
+      await fetch(`${API_BASE_URL}/api/v1/pos/shift-reconciliations${suffix}`, { credentials: "include" }),
+    );
   } catch {
     return NETWORK_ERR;
   }
@@ -600,21 +614,144 @@ export async function saveAttendance(input: {
   }
 }
 
-export async function runPayroll(input: {
-  periodStart: string;
-  periodEnd: string;
-  note?: string;
-}): Promise<Result<{ run: PayrollRunDetail }>> {
+// ── Attendance (Shift In / Shift Out) ────────────────────────────────────────
+
+/** Every employee's totals for a month — the Attendance tab. */
+export async function getTeamAttendance(month: string): Promise<Result<{ month: string; rows: TeamAttendanceRow[] }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/attendance/month?month=${month}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** One employee's month, day by day, with the totals. */
+export async function getEmployeeAttendance(
+  id: string,
+  month: string,
+): Promise<Result<{ month: string; days: AttendanceDay[]; summary: AttendanceSummary }>> {
+  try {
+    return await readJson(await fetch(`${BASE}/employees/${id}/attendance?month=${month}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Manager sets a timecard's real Time In / Time Out (ISO instants). */
+export async function correctTimecard(
+  id: string,
+  body: { clockIn?: string; clockOut: string },
+): Promise<Result<{ timecard: { clockIn: string; clockOut: string } }>> {
   try {
     return await readJson(
-      await fetch(`${BASE}/payroll`, {
-        method: "POST",
+      await fetch(`${BASE}/timecards/${id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(input),
+        body: JSON.stringify(body),
       }),
     );
   } catch {
     return NETWORK_ERR;
   }
+}
+
+/** Remove a manual entry for a day, so it goes back to the timecards. */
+export async function clearAttendance(employeeId: string, date: string): Promise<Result<Record<string, never>>> {
+  try {
+    return await readJson(
+      await fetch(`${BASE}/attendance?employeeId=${employeeId}&date=${date}`, { method: "DELETE", credentials: "include" }),
+    );
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+// ── Payroll (Draft → Approved) ───────────────────────────────────────────────
+
+type RunResult = Promise<Result<{ run: PayrollRunDetail }>>;
+
+async function send(path: string, method: string, body?: unknown): Promise<Response> {
+  return fetch(`${BASE}${path}`, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    credentials: "include",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+/** Start a DRAFT run for a period (priced from attendance). */
+export async function runPayroll(input: { periodStart: string; periodEnd: string; note?: string }): RunResult {
+  try {
+    return await readJson(await send("/payroll", "POST", input));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Re-read attendance for a draft (e.g. after fixing a missing Shift Out). */
+export async function recalculatePayroll(runId: string): RunResult {
+  try {
+    return await readJson(await send(`/payroll/${runId}/recalculate`, "POST"));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Enter or confirm a line's daily rate (centavos). Also saved on the employee. */
+export async function setPayrollRate(runId: string, lineId: string, dailyRateCents: number): RunResult {
+  try {
+    return await readJson(await send(`/payroll/${runId}/lines/${lineId}/rate`, "PUT", { dailyRateCents }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** A manual +/- adjustment (positive adds pay, negative deducts). */
+export async function addPayrollAdjustment(runId: string, lineId: string, label: string, amountCents: number): RunResult {
+  try {
+    return await readJson(await send(`/payroll/${runId}/lines/${lineId}/adjustments`, "POST", { label, amountCents }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Approve / un-approve an adjustment (e.g. tick the overtime suggestion). */
+export async function setPayrollAdjustmentApproved(runId: string, adjustmentId: string, approved: boolean): RunResult {
+  try {
+    return await readJson(await send(`/payroll/${runId}/adjustments/${adjustmentId}`, "PATCH", { approved }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+export async function deletePayrollAdjustment(runId: string, adjustmentId: string): RunResult {
+  try {
+    return await readJson(await send(`/payroll/${runId}/adjustments/${adjustmentId}`, "DELETE"));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Lock the run. The server re-checks every blocker. */
+export async function approvePayroll(runId: string): Promise<Result<{ run: PayrollRunDetail; blockers?: string[] }>> {
+  try {
+    return await readJson(await send(`/payroll/${runId}/approve`, "POST"));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** Discard a draft (approved runs can't be deleted). */
+export async function deletePayrollRun(runId: string): Promise<Result<Record<string, never>>> {
+  try {
+    return await readJson(await send(`/payroll/${runId}`, "DELETE"));
+  } catch {
+    return NETWORK_ERR;
+  }
+}
+
+/** CSV download URL of an approved run (a plain link carries the session cookie). */
+export function payrollCsvUrl(runId: string): string {
+  return `${BASE}/payroll/${runId}/csv`;
 }

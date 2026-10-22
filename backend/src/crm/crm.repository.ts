@@ -6,6 +6,7 @@ import type {
   CustomerLite,
   CustomerSale,
   CustomerUpdateInput,
+  DiscountSettingsInput,
 } from "./crm.schema.js";
 
 /**
@@ -115,16 +116,30 @@ export async function getCustomer(tenantId: string, id: string): Promise<Custome
 /** Name/phone search for the POS customer picker (active customers only). */
 export async function searchCustomers(tenantId: string, q: string): Promise<CustomerLite[]> {
   const term = `%${q.trim()}%`;
-  const { rows } = await query<{ id: string; name: string; phone: string | null; loyalty_points: number }>(
-    `SELECT id, name, phone, loyalty_points
-       FROM customers
-      WHERE tenant_id = $1 AND is_active = TRUE
-        AND (name ILIKE $2 OR coalesce(phone, '') ILIKE $2)
-      ORDER BY lower(name) ASC
+  const { rows } = await query<{
+    id: string;
+    name: string;
+    phone: string | null;
+    loyalty_points: number;
+    total_spent: string;
+  }>(
+    `SELECT c.id, c.name, c.phone, c.loyalty_points,
+            (SELECT coalesce(sum(s.total_cents), 0) FROM sales s
+              WHERE s.tenant_id = $1 AND s.customer_id = c.id) AS total_spent
+       FROM customers c
+      WHERE c.tenant_id = $1 AND c.is_active = TRUE
+        AND (c.name ILIKE $2 OR coalesce(c.phone, '') ILIKE $2)
+      ORDER BY lower(c.name) ASC
       LIMIT 8`,
     [tenantId, term],
   );
-  return rows.map((r) => ({ id: r.id, name: r.name, phone: r.phone, loyaltyPoints: r.loyalty_points }));
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    phone: r.phone,
+    loyaltyPoints: r.loyalty_points,
+    totalSpentCents: Number(r.total_spent),
+  }));
 }
 
 export async function createCustomer(tenantId: string, input: CustomerCreateInput): Promise<Customer> {
@@ -219,4 +234,19 @@ export async function getCrmSummary(tenantId: string): Promise<CrmSummary> {
     repeatCustomers: r.repeat,
     loyaltyPointsOutstanding: Number(r.points),
   };
+}
+
+// ── Discount settings (CRM → Discounts) ──────────────────────────────────────
+
+/** Save the tenant's loyalty rules. Read back via pos getPricingSettings. */
+export async function updateDiscountSettings(tenantId: string, input: DiscountSettingsInput): Promise<void> {
+  await query(
+    `UPDATE tenants
+        SET loyalty_pesos_per_point = $2,
+            loyalty_point_value_cents = $3,
+            member_discount_pct = $4,
+            member_discount_min_spend_cents = $5
+      WHERE id = $1`,
+    [tenantId, input.pesosPerPoint, input.pointValueCents, input.memberDiscountPct, input.memberMinSpendCents],
+  );
 }

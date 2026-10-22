@@ -1,5 +1,6 @@
 import { pool, query } from "../db.js";
-import { computeDeductions } from "./deductions.js";
+import { getAttendanceReport } from "./attendance.repository.js";
+import type { AttendanceDay as DerivedDay } from "./attendance.js";
 import { hashPin } from "../auth/auth.crypto.js";
 import type {
   AttendanceDay,
@@ -13,10 +14,7 @@ import type {
   EssProfile,
   HoursBreakdown,
   HrOverview,
-  PayrollItem,
-  PayrollRunDetail,
   PayrollRunInput,
-  PayrollRunSummary,
   PerformanceReport,
   PerformanceRow,
   RosterEntry,
@@ -85,6 +83,10 @@ interface EmployeeRow {
   bank_account_name: string | null;
   bank_account_number: string | null;
   pto_balance_days: string | number;
+  work_days: number[];
+  standard_daily_hours: string | number;
+  unpaid_break_minutes: number;
+  daily_rate_cents: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -123,6 +125,10 @@ function toEmployee(row: EmployeeRow): Employee {
     bankAccountName: row.bank_account_name,
     bankAccountLast4: last4(row.bank_account_number),
     ptoBalanceDays: Number(row.pto_balance_days),
+    workDays: (row.work_days ?? []).map(Number),
+    standardDailyHours: Number(row.standard_daily_hours),
+    unpaidBreakMinutes: row.unpaid_break_minutes,
+    dailyRateCents: row.daily_rate_cents,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -131,7 +137,7 @@ function toEmployee(row: EmployeeRow): Employee {
 const EMP_COLUMNS = `id, user_id, name, position, employment_type, pay_type, pay_rate_cents,
   hire_date, phone, email, note, is_active, separated_on, address, emergency_contact_name,
   emergency_contact_phone, bank_name, bank_account_name, bank_account_number, pto_balance_days,
-  created_at, updated_at`;
+  work_days, standard_daily_hours, unpaid_break_minutes, daily_rate_cents, created_at, updated_at`;
 
 export async function listEmployees(tenantId: string): Promise<Employee[]> {
   const { rows } = await query<EmployeeRow>(
@@ -155,8 +161,10 @@ export async function createEmployee(tenantId: string, input: EmployeeCreateInpu
     `INSERT INTO employees
        (tenant_id, name, position, employment_type, pay_type, pay_rate_cents, hire_date, phone, email, note,
         is_active, address, emergency_contact_name, emergency_contact_phone,
-        bank_name, bank_account_name, bank_account_number, pto_balance_days)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        bank_name, bank_account_name, bank_account_number, pto_balance_days,
+        work_days, standard_daily_hours, unpaid_break_minutes, daily_rate_cents)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+             coalesce($19::smallint[], '{1,2,3,4,5,6}'), coalesce($20::numeric, 8), coalesce($21::smallint, 60), $22)
      RETURNING ${EMP_COLUMNS}`,
     [
       tenantId,
@@ -177,6 +185,10 @@ export async function createEmployee(tenantId: string, input: EmployeeCreateInpu
       input.bankAccountName ?? null,
       input.bankAccountNumber ?? null,
       input.ptoBalanceDays ?? 0,
+      input.workDays ?? null,
+      input.standardDailyHours ?? null,
+      input.unpaidBreakMinutes ?? null,
+      input.dailyRate ?? null,
     ],
   );
   return toEmployee(rows[0]);
@@ -210,6 +222,10 @@ export async function updateEmployee(
   // Account number is write-only: only overwrite when a new value is supplied.
   if (input.bankAccountNumber !== undefined) set("bank_account_number", input.bankAccountNumber ?? null);
   if (input.ptoBalanceDays !== undefined) set("pto_balance_days", input.ptoBalanceDays);
+  if (input.workDays !== undefined) set("work_days", input.workDays);
+  if (input.standardDailyHours !== undefined) set("standard_daily_hours", input.standardDailyHours);
+  if (input.unpaidBreakMinutes !== undefined) set("unpaid_break_minutes", input.unpaidBreakMinutes);
+  if (input.dailyRate !== undefined) set("daily_rate_cents", input.dailyRate);
   if (input.isActive !== undefined) {
     set("is_active", input.isActive);
     // Stamp/clear the separation date so monthly retention stays truthful.
@@ -544,171 +560,7 @@ export async function markPresentFromShift(tenantId: string, cashierUserId: stri
   return (rowCount ?? 0) > 0;
 }
 
-// ── Payroll ──────────────────────────────────────────────────────────────────
-
-interface RunRow {
-  id: string;
-  reference: string;
-  period_start: Date;
-  period_end: Date;
-  total_gross_cents: number;
-  headcount: number;
-  note: string | null;
-  created_at: Date;
-}
-
-function toRunSummary(row: RunRow): PayrollRunSummary {
-  return {
-    id: row.id,
-    reference: row.reference,
-    periodStart: toIsoDate(row.period_start),
-    periodEnd: toIsoDate(row.period_end),
-    totalGrossCents: row.total_gross_cents,
-    headcount: row.headcount,
-    createdAt: row.created_at.toISOString(),
-  };
-}
-
-/**
- * Run payroll for a period: gross is derived from each active employee's pay
- * type and the attendance in [start, end] —
- *   Monthly → flat monthly rate (basis 1)
- *   Daily   → rate × (Present days + ½ Half-days)
- *   Hourly  → rate × total hours logged
- * Written in one transaction with a per-Tenant serial. Records GROSS pay;
- * statutory deductions are out of scope for v1.
- */
-export async function createPayrollRun(
-  tenantId: string,
-  createdBy: string | null,
-  input: PayrollRunInput,
-): Promise<PayrollRunDetail> {
-  const employees = await query<{ id: string; name: string; pay_type: string; pay_rate_cents: number }>(
-    `SELECT id, name, pay_type, pay_rate_cents FROM employees
-      WHERE tenant_id = $1 AND is_active = TRUE ORDER BY lower(name) ASC`,
-    [tenantId],
-  );
-
-  const agg = await query<{ employee_id: string; days: string; hours: string }>(
-    `SELECT employee_id,
-            sum(CASE status WHEN 'Present' THEN 1 WHEN 'Half-day' THEN 0.5 ELSE 0 END) AS days,
-            coalesce(sum(hours), 0) AS hours
-       FROM attendance
-      WHERE tenant_id = $1 AND work_date BETWEEN $2 AND $3
-      GROUP BY employee_id`,
-    [tenantId, input.periodStart, input.periodEnd],
-  );
-  const byEmp = new Map(agg.rows.map((r) => [r.employee_id, { days: Number(r.days), hours: Number(r.hours) }]));
-
-  const items = employees.rows.map((e) => {
-    const a = byEmp.get(e.id) ?? { days: 0, hours: 0 };
-    let basisQty: number;
-    let grossCents: number;
-    if (e.pay_type === "Daily") {
-      basisQty = a.days;
-      grossCents = Math.round(e.pay_rate_cents * a.days);
-    } else if (e.pay_type === "Hourly") {
-      basisQty = a.hours;
-      grossCents = Math.round(e.pay_rate_cents * a.hours);
-    } else {
-      basisQty = 1;
-      grossCents = e.pay_rate_cents;
-    }
-    return { employeeId: e.id, name: e.name, payType: e.pay_type, payRateCents: e.pay_rate_cents, basisQty, grossCents };
-  });
-  const totalGross = items.reduce((s, i) => s + i.grossCents, 0);
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const seqRes = await client.query<{ next_seq: string }>(
-      `INSERT INTO payroll_counters (tenant_id, next_seq)
-       VALUES ($1, (SELECT count(*) FROM payroll_runs WHERE tenant_id = $1) + 1)
-       ON CONFLICT (tenant_id)
-         DO UPDATE SET next_seq = payroll_counters.next_seq + 1, updated_at = now()
-       RETURNING next_seq`,
-      [tenantId],
-    );
-    const reference = `PAY-${String(Number(seqRes.rows[0].next_seq)).padStart(6, "0")}`;
-
-    const runRes = await client.query<{ id: string }>(
-      `INSERT INTO payroll_runs
-         (tenant_id, reference, period_start, period_end, total_gross_cents, headcount, note, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id`,
-      [tenantId, reference, input.periodStart, input.periodEnd, totalGross, items.length, input.note ?? null, createdBy],
-    );
-    const runId = runRes.rows[0].id;
-    for (const it of items) {
-      await client.query(
-        `INSERT INTO payroll_items (run_id, employee_id, name, pay_type, pay_rate_cents, basis_qty, gross_cents)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [runId, it.employeeId, it.name, it.payType, it.payRateCents, it.basisQty, it.grossCents],
-      );
-    }
-    await client.query("COMMIT");
-    const detail = await getPayrollRun(tenantId, runId);
-    if (!detail) throw new Error("Payroll run vanished immediately after insert.");
-    return detail;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-export async function listPayrollRuns(tenantId: string): Promise<PayrollRunSummary[]> {
-  const { rows } = await query<RunRow>(
-    `SELECT id, reference, period_start, period_end, total_gross_cents, headcount, note, created_at
-       FROM payroll_runs WHERE tenant_id = $1 ORDER BY created_at DESC`,
-    [tenantId],
-  );
-  return rows.map(toRunSummary);
-}
-
-export async function getPayrollRun(tenantId: string, id: string): Promise<PayrollRunDetail | null> {
-  const { rows } = await query<RunRow>(
-    `SELECT id, reference, period_start, period_end, total_gross_cents, headcount, note, created_at
-       FROM payroll_runs WHERE id = $1 AND tenant_id = $2`,
-    [id, tenantId],
-  );
-  if (!rows[0]) return null;
-  const itemsRes = await query<{
-    id: string;
-    employee_id: string | null;
-    name: string;
-    pay_type: string;
-    pay_rate_cents: number;
-    basis_qty: string;
-    gross_cents: number;
-  }>(
-    `SELECT id, employee_id, name, pay_type, pay_rate_cents, basis_qty, gross_cents
-       FROM payroll_items WHERE run_id = $1 ORDER BY lower(name) ASC`,
-    [id],
-  );
-  const items: PayrollItem[] = itemsRes.rows.map((i) => {
-    const d = computeDeductions(i.gross_cents);
-    return {
-      id: i.id,
-      employeeId: i.employee_id,
-      name: i.name,
-      payType: i.pay_type,
-      payRateCents: i.pay_rate_cents,
-      basisQty: Number(i.basis_qty),
-      grossCents: i.gross_cents,
-      sssCents: d.sssCents,
-      philhealthCents: d.philhealthCents,
-      pagibigCents: d.pagibigCents,
-      withholdingTaxCents: d.withholdingTaxCents,
-      totalDeductionsCents: d.totalDeductionsCents,
-      netCents: d.netCents,
-    };
-  });
-  const totalDeductionsCents = items.reduce((s, i) => s + i.totalDeductionsCents, 0);
-  const totalNetCents = items.reduce((s, i) => s + i.netCents, 0);
-  return { ...toRunSummary(rows[0]), note: rows[0].note, items, totalDeductionsCents, totalNetCents };
-}
+// Payroll runs live in payroll.repository.ts (Draft → Approved, from attendance).
 
 // ── Summary KPIs ──────────────────────────────────────────────────────────────
 
@@ -734,8 +586,9 @@ export async function getHrSummary(tenantId: string): Promise<HrSummary> {
         (SELECT count(*)::int FROM payroll_runs
            WHERE tenant_id = $1
              AND (created_at AT TIME ZONE $2) >= date_trunc('month', now() AT TIME ZONE $2)) AS runs_month,
-        (SELECT total_gross_cents FROM payroll_runs
-           WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1) AS last_gross`,
+        -- The last APPROVED run's final payable (a draft isn't pay yet).
+        (SELECT coalesce(total_payable_cents, total_gross_cents) FROM payroll_runs
+           WHERE tenant_id = $1 AND status = 'approved' ORDER BY period_end DESC, created_at DESC LIMIT 1) AS last_gross`,
     [tenantId, MNL],
   );
   const r = res.rows[0];
@@ -763,49 +616,31 @@ export function monthBounds(month: string): { start: string; end: string } {
 const STD_DAY_HOURS = 8; // PH standard working day; hours past it on a day are OT.
 
 /**
- * Roll daily attendance into worked / regular / overtime hours. Hourly staff log
- * real hours; Daily/Monthly staff don't, so a Present day counts as a standard
- * 8h day and a Half-day as 4h. Attendance rate excludes approved Leave from the
- * denominator (you're not "unreliable" for taking sanctioned time off).
+ * The hours rollup for derived attendance days: worked time split at the
+ * employee's own standard day (anything past it on a day is overtime).
+ * Attendance rate excludes approved Leave from the denominator.
  */
-function summarizeHours(rows: { status: string; hours: number }[]): HoursBreakdown {
-  let daysPresent = 0;
+function hoursFromDays(days: DerivedDay[], standardDailyHours: number): HoursBreakdown {
+  const std = standardDailyHours * 60;
   let regular = 0;
   let overtime = 0;
-  let scheduled = 0; // Present + Absent + Half-day (the days you were expected)
-  for (const r of rows) {
-    if (r.status === "Present") {
-      daysPresent += 1;
-      scheduled += 1;
-    } else if (r.status === "Half-day") {
-      daysPresent += 0.5;
-      scheduled += 1;
-    } else if (r.status === "Absent") {
-      scheduled += 1;
-    }
-    const eff = r.hours > 0 ? r.hours : r.status === "Present" ? STD_DAY_HOURS : r.status === "Half-day" ? 4 : 0;
-    regular += Math.min(eff, STD_DAY_HOURS);
-    overtime += Math.max(eff - STD_DAY_HOURS, 0);
+  let present = 0;
+  let expected = 0;
+  for (const d of days) {
+    regular += Math.min(d.workedMinutes, std);
+    overtime += Math.max(d.workedMinutes - std, 0);
+    if (d.status === "present") present += 1;
+    if (d.status === "half_day") present += 0.5;
+    if (d.scheduled && d.status !== "leave") expected += 1;
   }
-  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const h = (m: number) => Math.round((m / 60) * 10) / 10;
   return {
-    daysPresent: round1(daysPresent),
-    hoursWorked: round1(regular + overtime),
-    regularHours: round1(regular),
-    overtimeHours: round1(overtime),
-    attendanceRatePct: scheduled > 0 ? Math.round((daysPresent / scheduled) * 100) : 0,
+    daysPresent: present,
+    hoursWorked: h(regular + overtime),
+    regularHours: h(regular),
+    overtimeHours: h(overtime),
+    attendanceRatePct: expected > 0 ? Math.min(100, Math.round((present / expected) * 100)) : 0,
   };
-}
-
-async function attendanceMonthFor(tenantId: string, employeeId: string, month: string): Promise<AttendanceDay[]> {
-  const { start, end } = monthBounds(month);
-  const { rows } = await query<{ work_date: Date; status: string; hours: string }>(
-    `SELECT work_date, status, hours FROM attendance
-      WHERE tenant_id = $1 AND employee_id = $2 AND work_date BETWEEN $3 AND $4
-      ORDER BY work_date ASC`,
-    [tenantId, employeeId, start, end],
-  );
-  return rows.map((r) => ({ date: toIsoDate(r.work_date), status: r.status, hours: Number(r.hours) }));
 }
 
 /** Days of approved 'Leave' the employee has drawn so far this Manila year. */
@@ -830,14 +665,20 @@ async function payslipsFor(tenantId: string, employeeId: string): Promise<Employ
     pay_rate_cents: number;
     basis_qty: string;
     gross_cents: number;
+    payable_cents: number;
+    attendance_based: boolean;
     created_at: Date;
   }>(
+    // Approved runs only: a draft is still being reviewed and must never show
+    // up as someone's pay. Legacy lines paid their gross.
     `SELECT pr.id AS run_id, pr.reference, pr.period_start, pr.period_end,
-            pi.pay_type, pi.pay_rate_cents, pi.basis_qty, pi.gross_cents, pr.created_at
+            pi.pay_type, pi.pay_rate_cents, pi.basis_qty, pi.gross_cents,
+            coalesce(pi.payable_cents, pi.gross_cents) AS payable_cents,
+            (pi.base_cents IS NOT NULL) AS attendance_based, pr.created_at
        FROM payroll_items pi
        JOIN payroll_runs pr ON pr.id = pi.run_id
-      WHERE pr.tenant_id = $1 AND pi.employee_id = $2
-      ORDER BY pr.created_at DESC`,
+      WHERE pr.tenant_id = $1 AND pi.employee_id = $2 AND pr.status = 'approved'
+      ORDER BY pr.period_start DESC`,
     [tenantId, employeeId],
   );
   return rows.map((r) => ({
@@ -849,6 +690,8 @@ async function payslipsFor(tenantId: string, employeeId: string): Promise<Employ
     payRateCents: r.pay_rate_cents,
     basisQty: Number(r.basis_qty),
     grossCents: r.gross_cents,
+    payableCents: r.payable_cents,
+    attendanceBased: r.attendance_based,
     createdAt: r.created_at.toISOString(),
   }));
 }
@@ -863,17 +706,19 @@ export async function getEmployeeDetail(
   const employee = await getEmployee(tenantId, id);
   if (!employee) return null;
   const { start, end } = monthBounds(month);
-  const [attendanceMonth, ptoUsedYtd, payslips, perf] = await Promise.all([
-    attendanceMonthFor(tenantId, id, month),
+  const [report, ptoUsedYtd, payslips, perf] = await Promise.all([
+    getAttendanceReport(tenantId, id, start, end),
     ptoUsedYtdFor(tenantId, id),
     payslipsFor(tenantId, id),
     getPerformance(tenantId, start, end, id),
   ]);
+  const days = report?.days ?? [];
   return {
     ...employee,
-    month: monthBounds(month).start.slice(0, 7),
-    attendanceMonth,
-    hours: summarizeHours(attendanceMonth.map((a) => ({ status: a.status, hours: a.hours }))),
+    month: start.slice(0, 7),
+    attendanceMonth: days,
+    attendanceSummary: report!.summary,
+    hours: hoursFromDays(days, employee.standardDailyHours),
     ptoUsedYtd,
     payslips,
     performance: perf.rows[0] ?? null,
@@ -1111,10 +956,11 @@ export async function getEssProfile(tenantId: string, userId: string, month: str
     pay_rate_cents: number;
     hire_date: Date | null;
     pto_balance_days: string | number;
+    daily_rate_cents: number | null;
     store_name: string | null;
   }>(
     `SELECT e.id, e.name, e.position, e.employment_type, e.pay_type, e.pay_rate_cents,
-            e.hire_date, e.pto_balance_days, t.name AS store_name
+            e.hire_date, e.pto_balance_days, e.daily_rate_cents, t.name AS store_name
        FROM employees e
        JOIN tenants t ON t.id = e.tenant_id
       WHERE e.tenant_id = $1 AND e.user_id = $2
@@ -1124,11 +970,13 @@ export async function getEssProfile(tenantId: string, userId: string, month: str
   const e = rows[0];
   if (!e) return null;
 
-  const [attendanceMonth, ptoUsedYtd, payslips] = await Promise.all([
-    attendanceMonthFor(tenantId, e.id, month),
+  const { start, end } = monthBounds(month);
+  const [report, ptoUsedYtd, payslips] = await Promise.all([
+    getAttendanceReport(tenantId, e.id, start, end),
     ptoUsedYtdFor(tenantId, e.id),
     payslipsFor(tenantId, e.id),
   ]);
+  const days = report?.days ?? [];
 
   return {
     employee: {
@@ -1140,11 +988,13 @@ export async function getEssProfile(tenantId: string, userId: string, month: str
       payRateCents: e.pay_rate_cents,
       hireDate: e.hire_date ? toIsoDate(e.hire_date) : null,
       ptoBalanceDays: Number(e.pto_balance_days),
+      dailyRateCents: e.daily_rate_cents,
     },
     storeName: e.store_name,
-    month: monthBounds(month).start.slice(0, 7),
-    attendanceMonth,
-    hours: summarizeHours(attendanceMonth.map((a) => ({ status: a.status, hours: a.hours }))),
+    month: start.slice(0, 7),
+    attendanceMonth: days,
+    attendanceSummary: report!.summary,
+    hours: hoursFromDays(days, report?.schedule.standardDailyHours ?? 8),
     ptoUsedYtd,
     payslips,
   };

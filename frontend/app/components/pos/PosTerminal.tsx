@@ -18,16 +18,22 @@ import {
   getActiveShift,
   getCatalog,
   recordAudit,
-  previewVatCents,
-  seniorPwdDiscountCents,
+  previewCart,
+  discountLabel,
   submitOrder,
+  DEFAULT_PRICING,
   type ActiveShift,
+  type CartDiscount,
   type CatalogProduct,
-  type Discount,
   type EwalletQrMethod,
   type PaymentMethod,
   type PaymentQrMap,
+  type PricingSettings,
   type Sale,
+  type ScPwdDiscount,
+  type Discount,
+  type Promotion,
+  promoAmountText,
   type StoreBrand,
 } from "@/lib/pos";
 import { searchCustomers, type CustomerLite } from "@/lib/crm";
@@ -89,22 +95,46 @@ const EMPTY_STORE: StoreBrand = {
 const peso = (cents: number) => formatPesoExact(cents / 100);
 
 /**
- * Resolve a cart discount to centavos against the gross. The Senior/PWD benefit
- * can't be resolved from the gross alone (it strips VAT per line first), so it
- * is computed from the cart lines in the terminal and returns 0 here.
+ * The cart's discount pick: Senior/PWD, or one of the owner's promos (kept whole
+ * here only to preview it — checkout sends just its id). The member discount is
+ * chosen at checkout, where the customer is attached.
  */
-function computeDiscountCents(d: Discount | null, gross: number): number {
-  if (!d) return 0;
-  if (d.type === "senior_pwd") return 0;
-  if (d.type === "percent") return Math.round((gross * Math.min(100, Math.max(0, d.value))) / 100);
-  return Math.min(gross, Math.max(0, Math.round(d.value)));
-}
-function discountText(d: Discount | null): string | null {
+type TillDiscount = ScPwdDiscount | { type: "promo"; promo: Promotion };
+
+const toCartDiscount = (d: TillDiscount | null): CartDiscount | null => {
   if (!d) return null;
-  if (d.label) return d.label;
-  if (d.type === "senior_pwd") return "Senior/PWD (20% + VAT-exempt)";
-  return d.type === "percent" ? `${d.value}% off` : `${peso(d.value)} off`;
+  if (d.type === "promo") return { kind: "promo", name: d.promo.name, promoKind: d.promo.kind, value: d.promo.value };
+  return { kind: d.type };
+};
+const discountText = (d: TillDiscount | null, vatRegistered = true) =>
+  discountLabel(toCartDiscount(d), vatRegistered);
+
+/**
+ * The VAT inside a price, shown UNDER the total as information — never as a
+ * line between the discount and the total, where it reads like an extra
+ * charge. Philippine prices are VAT-inclusive, so the total already contains
+ * it. Renders nothing when the sale has no VAT (a non-VAT store, or exempt items).
+ */
+function VatIncludedNote({ vatCents }: { vatCents: number }) {
+  if (vatCents <= 0) return null;
+  return (
+    <p className="text-right text-[11.5px] text-ink-faint tabular-nums">
+      Includes {peso(vatCents)} VAT (12%)
+    </p>
+  );
 }
+
+/** What checkout sends: the category or promo id only, never an amount. */
+const toOrderDiscount = (d: TillDiscount): Discount =>
+  d.type === "promo" ? { type: "promo", promoId: d.promo.id } : d;
+
+/** Cart lines in the shape the price preview takes. */
+const toPreviewLines = (lines: Line[]) =>
+  lines.map((l) => ({
+    vatClass: l.product.vatClass,
+    lineCents: l.product.priceCents * l.qty,
+    scPwdEligible: l.product.scPwdEligible,
+  }));
 
 /** Animated-exit helper for the centered overlays. */
 function useDismiss(onClose: () => void) {
@@ -153,7 +183,9 @@ export function PosTerminal() {
   // next keystroke.
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, Line>>({});
-  const [discount, setDiscount] = useState<Discount | null>(null);
+  const [discount, setDiscount] = useState<TillDiscount | null>(null);
+  const [pricing, setPricing] = useState<PricingSettings>(DEFAULT_PRICING);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [cartOpenMobile, setCartOpenMobile] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
@@ -218,6 +250,16 @@ export function PosTerminal() {
         setStore(data.store);
         setProducts(data.products);
         setPaymentQrs(data.paymentQrs);
+        setPricing(data.pricing ?? DEFAULT_PRICING);
+        const promos = data.promotions ?? [];
+        setPromotions(promos);
+        // The owner paused/edited a promo since it was tapped — drop the stale pick
+        // (the server would refuse it anyway) rather than preview a wrong total.
+        setDiscount((cur) =>
+          cur?.type === "promo" && !promos.some((p) => p.id === cur.promo.id && p.value === cur.promo.value && p.kind === cur.promo.kind)
+            ? null
+            : cur,
+        );
         // Tab order: declared categories that actually have products, then
         // "Uncategorised" if any product has no category.
         const present = new Set(data.products.map((p) => p.categoryName ?? UNCATEGORISED));
@@ -275,27 +317,21 @@ export function PosTerminal() {
 
   const lines = Object.values(cart);
   const grossCents = useMemo(() => lines.reduce((s, l) => s + l.product.priceCents * l.qty, 0), [lines]);
-  // Senior/PWD is resolved from the lines (VAT stripped per class, then 20%);
-  // every other discount resolves against the gross.
-  const discountCents = useMemo(
+  // Preview of the server's priceCart: Senior/PWD strips VAT then takes 20% on
+  // the benefit-eligible lines only; ineligible lines keep their price and VAT.
+  const cartPreview = useMemo(
     () =>
-      discount?.type === "senior_pwd"
-        ? seniorPwdDiscountCents(
-            lines.map((l) => ({ vatClass: l.product.vatClass, lineCents: l.product.priceCents * l.qty })),
-          )
-        : computeDiscountCents(discount, grossCents),
-    [discount, grossCents, lines],
+      previewCart({
+        lines: toPreviewLines(lines),
+        discount: toCartDiscount(discount),
+        requestedPoints: 0,
+        pointsBalance: 0,
+        pointValueCents: pricing.pointValueCents,
+        vatRegistered: pricing.vatRegistered,
+      }),
+    [discount, lines, pricing.pointValueCents, pricing.vatRegistered],
   );
-  const netCents = Math.max(0, grossCents - discountCents);
-  // A Senior/PWD sale is VAT-exempt — no output VAT on the ticket. Otherwise VAT
-  // comes from VATable lines only, so a VAT-exempt/zero-rated item shows none.
-  const vatCents =
-    discount?.type === "senior_pwd"
-      ? 0
-      : previewVatCents(
-          lines.map((l) => ({ vatClass: l.product.vatClass, lineCents: l.product.priceCents * l.qty })),
-          discountCents,
-        );
+  const { discountCents, netCents, vatCents } = cartPreview;
   const count = lines.reduce((s, l) => s + l.qty, 0);
 
   // ── Customer-facing display sync (terminal-local BroadcastChannel) ─────────
@@ -326,7 +362,7 @@ export function PosTerminal() {
       })),
       grossCents,
       discountCents,
-      discountLabel: discountText(discount),
+      discountLabel: discountText(discount, pricing.vatRegistered),
       vatCents,
       netCents,
       count,
@@ -349,7 +385,7 @@ export function PosTerminal() {
         : null,
     };
     // discountText is a module-level pure helper.
-  }, [storeName, lines, grossCents, discountCents, discount, vatCents, netCents, count, checkoutOpen, checkoutMethod, receipt, paymentQrs, session]);
+  }, [storeName, lines, grossCents, discountCents, discount, vatCents, netCents, count, checkoutOpen, checkoutMethod, receipt, paymentQrs, session, pricing.vatRegistered]);
 
   const snapshotRef = useRef(snapshot);
 
@@ -551,7 +587,7 @@ export function PosTerminal() {
     lines,
     grossCents,
     discountCents,
-    discountLabel: discountText(discount),
+    discountLabel: discountText(discount, pricing.vatRegistered),
     netCents,
     vatCents,
     count,
@@ -849,11 +885,9 @@ export function PosTerminal() {
         <CheckoutOverlay
           lines={lines}
           grossCents={grossCents}
-          discountCents={discountCents}
-          discountLabel={discountText(discount)}
-          netCents={netCents}
           count={count}
           discount={discount}
+          pricing={pricing}
           paymentQrs={paymentQrs}
           onMethodChange={setCheckoutMethod}
           onClose={closeCheckout}
@@ -865,10 +899,10 @@ export function PosTerminal() {
       {/* Discount editor */}
       {discountOpen && (
         <DiscountModal
-          grossCents={grossCents}
-          seniorPwdCents={seniorPwdDiscountCents(
-            lines.map((l) => ({ vatClass: l.product.vatClass, lineCents: l.product.priceCents * l.qty })),
-          )}
+          lines={lines}
+          promotions={promotions}
+          pointValueCents={pricing.pointValueCents}
+          vatRegistered={pricing.vatRegistered}
           current={discount}
           onClose={() => setDiscountOpen(false)}
           onApply={(d) => {
@@ -1169,11 +1203,11 @@ function CartPanel({
               <span className="tabular-nums">−{peso(discountCents)}</span>
             </div>
           )}
-          <Row label={vatCents > 0 ? "VAT (12% incl.)" : "VAT (none)"} value={peso(vatCents)} muted />
           <div className="flex items-end justify-between pt-2 mt-1 hairline-t">
             <span className="text-[14px] font-bold">Total</span>
             <span className="text-stat font-extrabold tracking-tightest tabular-nums">{peso(netCents)}</span>
           </div>
+          <VatIncludedNote vatCents={vatCents} />
         </div>
 
         <button
@@ -1197,11 +1231,9 @@ const FAST_CASH = [100, 200, 500, 1000]; // standard PH bills, in pesos
 function CheckoutOverlay({
   lines,
   grossCents,
-  discountCents,
-  discountLabel,
-  netCents,
   count,
   discount,
+  pricing,
   paymentQrs,
   onMethodChange,
   onClose,
@@ -1210,11 +1242,10 @@ function CheckoutOverlay({
 }: {
   lines: Line[];
   grossCents: number;
-  discountCents: number;
-  discountLabel: string | null;
-  netCents: number;
   count: number;
-  discount: Discount | null;
+  /** The cart's Senior/PWD or promo pick, if any (excludes the member discount). */
+  discount: TillDiscount | null;
+  pricing: PricingSettings;
   paymentQrs: PaymentQrMap;
   onMethodChange?: (m: PaymentMethod) => void;
   onClose: () => void;
@@ -1227,6 +1258,7 @@ function CheckoutOverlay({
   const [refCode, setRefCode] = useState("");
   const [customer, setCustomer] = useState<CustomerLite | null>(null);
   const [redeem, setRedeem] = useState(false);
+  const [member, setMember] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1234,23 +1266,42 @@ function CheckoutOverlay({
   // The owner's uploaded scan-to-pay code for the staged rail, if any.
   const uploadedQr = isEwallet ? resolveAssetUrl(paymentQrs[method as EwalletQrMethod]) : null;
 
-  // Loyalty redemption (1 pt = ₱1). Capped at the customer's balance AND at the
-  // payable so it can't overdraw or drive the total negative — mirrors the
-  // server, which re-derives and clamps it authoritatively. Derived (not stored)
-  // so it self-corrects if the customer or cart changes.
-  const maxRedeemablePoints = customer ? Math.min(customer.loyaltyPoints, Math.floor(netCents / 100)) : 0;
-  const redeemPoints = redeem ? maxRedeemablePoints : 0;
-  const redeemCents = redeemPoints * 100;
-  const dueCents = Math.max(0, netCents - redeemCents);
-  // A Senior/PWD sale is VAT-exempt, so no output VAT is shown on the ticket.
-  // Redeemed points fold into the discount, as the server books them.
-  const dueVatCents =
-    discount?.type === "senior_pwd"
-      ? 0
-      : previewVatCents(
-          lines.map((l) => ({ vatClass: l.product.vatClass, lineCents: l.product.priceCents * l.qty })),
-          discountCents + redeemCents,
-        );
+  // Member discount (CRM → Discounts): needs an attached customer who meets the
+  // owner's lifetime-spend floor, and never stacks with Senior/PWD (RA 9994 /
+  // RA 10754 bar double discounts). The server re-checks all of it.
+  const memberOffered = pricing.memberDiscountPct > 0 && !!customer && !discount;
+  const memberQualifies = memberOffered && customer!.totalSpentCents >= pricing.memberMinSpendCents;
+  const applyMember = member && memberQualifies;
+  const cartDiscount: CartDiscount | null = discount
+    ? toCartDiscount(discount)
+    : applyMember
+      ? { kind: "member", pct: pricing.memberDiscountPct }
+      : null;
+
+  // Preview of the server's priceCart, without and with the points redemption.
+  // Points are capped at the balance AND the payable, so they can't overdraw or
+  // drive the total negative. Derived (not stored), so it self-corrects when the
+  // customer, discount or cart changes.
+  const previewLines = toPreviewLines(lines);
+  const pricedWith = (points: number) =>
+    previewCart({
+      lines: previewLines,
+      discount: cartDiscount,
+      requestedPoints: points,
+      pointsBalance: points,
+      pointValueCents: pricing.pointValueCents,
+      vatRegistered: pricing.vatRegistered,
+    });
+  const base = pricedWith(0);
+  const withAllPoints = customer ? pricedWith(customer.loyaltyPoints) : base;
+  const final = redeem ? withAllPoints : base;
+  const discountCents = base.discountCents;
+  const netCents = base.netCents; // payable before points — gates the Charge button
+  const maxRedeemablePoints = withAllPoints.pointsRedeemed;
+  const redeemPoints = final.pointsRedeemed;
+  const redeemCents = base.netCents - final.netCents;
+  const dueCents = final.netCents;
+  const dueVatCents = final.vatCents;
 
   const tenderedCents = Math.round((Number(tendered) || 0) * 100);
   const cashShort = method === "Cash" && tenderedCents < dueCents;
@@ -1268,7 +1319,8 @@ function CheckoutOverlay({
       paymentMethod: method,
       tenderedCents: method === "Cash" ? tenderedCents : undefined,
       referenceCode: isEwallet && refCode ? refCode : undefined,
-      discount: discount ?? undefined,
+      // Only the CATEGORY is sent — the server prices it.
+      discount: discount ? toOrderDiscount(discount) : applyMember ? { type: "member" } : undefined,
       customerId: customer?.id,
       redeemPoints: redeemPoints > 0 ? redeemPoints : undefined,
     });
@@ -1308,7 +1360,7 @@ function CheckoutOverlay({
             <Row label={`Items (${count})`} value={peso(grossCents)} />
             {discountCents > 0 && (
               <div className="flex items-center justify-between text-accent-600 font-semibold">
-                <span>{discountLabel ?? "Discount"}</span>
+                <span>{discountLabel(cartDiscount, pricing.vatRegistered) ?? "Discount"}</span>
                 <span className="tabular-nums">−{peso(discountCents)}</span>
               </div>
             )}
@@ -1321,11 +1373,11 @@ function CheckoutOverlay({
                 <span className="tabular-nums">−{peso(redeemCents)}</span>
               </div>
             )}
-            <Row label={dueVatCents > 0 ? "VAT (12% incl.)" : "VAT (none)"} value={peso(dueVatCents)} muted />
             <div className="flex items-center justify-between pt-1.5 mt-1 hairline-t">
               <span className="text-[14px] font-bold">Total due</span>
               <span className="text-[1.35rem] font-extrabold tracking-tightest">{peso(dueCents)}</span>
             </div>
+            <VatIncludedNote vatCents={dueVatCents} />
           </div>
 
           {/* Customer (optional) — attach for loyalty + purchase history */}
@@ -1333,14 +1385,27 @@ function CheckoutOverlay({
             customer={customer}
             onChange={(c) => {
               setCustomer(c);
-              setRedeem(false); // a fresh customer starts with no redemption staged
+              setRedeem(false); // a fresh customer starts with nothing staged
+              setMember(false);
             }}
           />
+
+          {/* Member discount — the owner's preset %, never a typed amount */}
+          {memberOffered && (
+            <MemberDiscount
+              pct={pricing.memberDiscountPct}
+              qualifies={memberQualifies}
+              minSpendCents={pricing.memberMinSpendCents}
+              applied={applyMember}
+              onToggle={() => setMember((m) => !m)}
+            />
+          )}
 
           {/* Loyalty redemption — only when the attached customer has points */}
           {customer && customer.loyaltyPoints > 0 && (
             <RedeemPoints
               points={customer.loyaltyPoints}
+              pointValueCents={pricing.pointValueCents}
               maxRedeemable={maxRedeemablePoints}
               redeeming={redeem}
               redeemCents={redeemCents}
@@ -1447,7 +1512,7 @@ function CheckoutOverlay({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={uploadedQr} alt={`${method} payment QR`} className="w-full h-full object-contain" />
                   ) : (
-                    <MockQr seed={`${method}|${netCents}`} className="w-[80px] h-[80px] text-[#0b1220]" />
+                    <MockQr seed={`${method}|${dueCents}`} className="w-[80px] h-[80px] text-[#0b1220]" />
                   )}
                 </div>
                 <div className="min-w-0">
@@ -1456,7 +1521,7 @@ function CheckoutOverlay({
                     {uploadedQr ? (
                       <>
                         Customer scans your {method} code (also shown on the customer display) for{" "}
-                        <span className="font-semibold text-ink tabular-nums">{peso(netCents)}</span>.
+                        <span className="font-semibold text-ink tabular-nums">{peso(dueCents)}</span>.
                       </>
                     ) : (
                       <>
@@ -1555,7 +1620,7 @@ function ReceiptOverlay({
           {sale.discountCents > 0 && (
             <RcptRow label={sale.discountLabel ?? "Discount"} value={`−${peso(sale.discountCents)}`} />
           )}
-          <RcptRow label={sale.vatCents > 0 ? "VAT (12% incl.)" : "VAT (none)"} value={peso(sale.vatCents)} />
+          {sale.vatCents > 0 && <RcptRow label="Includes VAT (12%)" value={peso(sale.vatCents)} />}
           {sale.paymentRef && <RcptRow label={`${sale.paymentMethod} ref`} value={`••${sale.paymentRef}`} mono />}
           {sale.paymentMethod === "Cash" && sale.tenderedCents !== null && (
             <>
@@ -1653,181 +1718,168 @@ function RcptRow({ label, value, mono, strong }: { label: string; value: string;
 
 /* ------------------------------ discount modal ------------------------------ */
 
+/**
+ * The cart's discount picker. Cashiers can only TAP what the owner set up:
+ *   • an active promo (amount set by the owner in CRM → Discounts), or
+ *   • Senior Citizen / PWD, entering the cardholder's details.
+ * There is no amount field anywhere — the server prices every pick. The loyalty
+ * member discount is applied at checkout, where the customer is attached.
+ */
 function DiscountModal({
-  grossCents,
-  seniorPwdCents,
+  lines,
+  promotions,
+  pointValueCents,
+  vatRegistered,
   current,
   onClose,
   onApply,
 }: {
-  grossCents: number;
-  /** Server-mirrored preview of the Senior/PWD benefit (VAT-exempt + 20%). */
-  seniorPwdCents: number;
-  current: Discount | null;
+  lines: Line[];
+  promotions: Promotion[];
+  pointValueCents: number;
+  vatRegistered: boolean;
+  current: TillDiscount | null;
   onClose: () => void;
-  onApply: (d: Discount | null) => void;
+  onApply: (d: TillDiscount | null) => void;
 }) {
   const { closing, dismiss } = useDismiss(onClose);
-  const [mode, setMode] = useState<"percent" | "fixed">(
-    current?.type === "fixed" ? "fixed" : "percent",
-  );
-  const [value, setValue] = useState(
-    current && current.type !== "senior_pwd"
-      ? String(current.type === "fixed" ? current.value / 100 : current.value)
-      : "",
-  );
-  // Senior/PWD sub-view: collect the BIR-required ID number + cardholder name.
-  const [scPwd, setScPwd] = useState(current?.type === "senior_pwd");
-  const [idNumber, setIdNumber] = useState(current?.type === "senior_pwd" ? current.idNumber : "");
-  const [holderName, setHolderName] = useState(
-    current?.type === "senior_pwd" ? current.holderName : "",
-  );
-  const num = Number(value) || 0;
-  const previewCents =
-    mode === "percent"
-      ? Math.round((grossCents * Math.min(100, num)) / 100)
-      : Math.min(grossCents, Math.round(num * 100));
+  const scPwd = current && current.type !== "promo" ? current : null;
+  const [kind, setKind] = useState<"senior" | "pwd" | null>(scPwd?.type ?? null);
+  const [idNumber, setIdNumber] = useState(scPwd?.idNumber ?? "");
+  const [holderName, setHolderName] = useState(scPwd?.holderName ?? "");
+  const [exclusiveUse, setExclusiveUse] = useState(scPwd?.exclusiveUse ?? false);
+  const activePromoId = current?.type === "promo" ? current.promo.id : null;
 
-  function applyCustom() {
-    if (num <= 0) return;
-    if (mode === "percent") {
-      const pct = Math.min(100, num);
-      onApply({ type: "percent", value: pct, label: `${pct}% off` });
-    } else {
-      const cents = Math.round(num * 100);
-      onApply({ type: "fixed", value: cents, label: `${peso(cents)} off` });
-    }
+  const preview = kind
+    ? previewCart({
+        lines: toPreviewLines(lines),
+        discount: { kind },
+        requestedPoints: 0,
+        pointsBalance: 0,
+        pointValueCents,
+        vatRegistered,
+      })
+    : null;
+  const noneEligible = preview !== null && preview.eligibleLineCount === 0;
+  const ready = !!kind && idNumber.trim().length > 0 && holderName.trim().length > 0 && exclusiveUse && !noneEligible;
+
+  function apply() {
+    if (!ready || !kind) return;
+    onApply({ type: kind, idNumber: idNumber.trim(), holderName: holderName.trim(), exclusiveUse: true });
   }
 
-  const scPwdReady = idNumber.trim().length > 0 && holderName.trim().length > 0;
-  function applySeniorPwd() {
-    if (!scPwdReady) return;
-    onApply({ type: "senior_pwd", idNumber: idNumber.trim(), holderName: holderName.trim() });
-  }
+  const label = kind === "pwd" ? "PWD ID No." : "OSCA / Senior Citizen ID No.";
 
   return (
     <div className="fixed inset-0 z-[110] grid place-items-center px-5" role="dialog" aria-modal="true" aria-label="Apply discount">
       <button type="button" aria-label="Close" onClick={dismiss} className={"absolute inset-0 glass overlay-backdrop " + (closing ? "closing" : "")} />
-      <div className={"relative w-full max-w-[360px] rounded-xl2 bg-surface hairline shadow-soft overlay-card " + (closing ? "closing" : "")}>
+      <div className={"relative w-full max-w-[380px] rounded-xl2 bg-surface hairline shadow-soft overlay-card " + (closing ? "closing" : "")}>
         <div className="flex items-center justify-between px-6 py-4 hairline-b">
-          <h3 className="text-[1.1rem] font-extrabold tracking-tight">
-            {scPwd ? "Senior / PWD" : "Apply discount"}
-          </h3>
+          <h3 className="text-[1.1rem] font-extrabold tracking-tight">Discounts</h3>
           <button type="button" onClick={dismiss} aria-label="Close" className="tap press grid place-items-center text-ink-faint hover:text-ink">
             <Icon name="x" className="w-5 h-5" strokeWidth={1.8} />
           </button>
         </div>
 
-        {scPwd ? (
-          /* BIR Senior Citizen / PWD benefit: VAT-exempt, then 20% off the net.
-             The ID number + cardholder name are mandatory and print on the receipt. */
-          <div className="px-6 py-5 space-y-4">
-            <div className="rounded-[10px] bg-brand-50 px-3.5 py-2.5 text-[12.5px] text-ink-soft leading-snug">
-              VAT is removed first, then 20% is taken off. The ID number and name are
-              required and appear on the receipt.
-            </div>
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-bold text-ink-soft">Senior/PWD ID No.</span>
-              <input
-                value={idNumber}
-                onChange={(e) => setIdNumber(e.target.value)}
-                placeholder="e.g. OSCA-12345"
-                className="field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14px] transition duration-150 ease-in-out"
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-bold text-ink-soft">Cardholder name</span>
-              <input
-                value={holderName}
-                onChange={(e) => setHolderName(e.target.value)}
-                placeholder="Full name on the ID"
-                className="field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14px] transition duration-150 ease-in-out"
-              />
-            </label>
-            {seniorPwdCents > 0 && (
-              <div className="flex items-center justify-between rounded-[10px] bg-accent-50 px-3.5 py-2 text-[13.5px] font-bold text-accent-600">
-                <span>Discount (VAT-exempt + 20%)</span>
-                <span className="tabular-nums">−{peso(seniorPwdCents)}</span>
+        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          {promotions.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[12px] font-bold tracking-wide text-ink-faint uppercase">Promos</div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {promotions.map((p) => {
+                  const on = activePromoId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => onApply({ type: "promo", promo: p })}
+                      aria-pressed={on}
+                      className={
+                        "press rounded-[12px] hairline px-3 py-3 text-left " +
+                        (on ? "bg-brand-50 border-brand-300" : "bg-paper hover:border-brand-200 hover:bg-brand-50")
+                      }
+                    >
+                      <div className="text-[14px] font-extrabold tracking-tight truncate">{p.name}</div>
+                      <div className="text-[12px] text-ink-soft">{promoAmountText(p)}</div>
+                    </button>
+                  );
+                })}
               </div>
-            )}
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => setScPwd(false)}
-                className="press px-4 py-2.5 rounded-[10px] text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-paper"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={applySeniorPwd}
-                disabled={!scPwdReady}
-                className="tap press flex-1 rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3 font-semibold text-[14px] text-white shadow-btn tracking-tight disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Apply Senior/PWD
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-        <div className="px-6 py-5 space-y-4">
-          {/* Presets */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => onApply({ type: "percent", value: 10, label: "10% off" })}
-              className="press rounded-[12px] bg-paper hairline px-3 py-3 text-left hover:border-brand-200 hover:bg-brand-50"
-            >
-              <div className="text-[15px] font-extrabold tracking-tight">10%</div>
-              <div className="text-[12px] text-ink-soft">Promo</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setScPwd(true)}
-              className="press rounded-[12px] bg-paper hairline px-3 py-3 text-left hover:border-brand-200 hover:bg-brand-50"
-            >
-              <div className="text-[15px] font-extrabold tracking-tight">Senior / PWD</div>
-              <div className="text-[12px] text-ink-soft">VAT-exempt + 20%</div>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3 text-[12px] font-semibold text-ink-faint">
-            <span className="h-px flex-1 bg-ink/8" />
-            OR CUSTOM
-            <span className="h-px flex-1 bg-ink/8" />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-[10px] bg-paper hairline p-0.5">
-              {(["percent", "fixed"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMode(m)}
-                  className={
-                    "press px-3 py-2 rounded-[8px] text-[13px] font-bold " +
-                    (mode === m ? "bg-surface shadow-card text-ink" : "text-ink-soft")
-                  }
-                >
-                  {m === "percent" ? "%" : "₱"}
-                </button>
-              ))}
-            </div>
-            <input
-              value={value}
-              onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ""))}
-              inputMode="decimal"
-              placeholder={mode === "percent" ? "e.g. 15" : "e.g. 50.00"}
-              className="field-input rounded-[10px] px-3.5 py-2.5 text-[14px] flex-1 tabular-nums transition duration-150 ease-in-out"
-            />
-          </div>
-
-          {previewCents > 0 && (
-            <div className="flex items-center justify-between rounded-[10px] bg-accent-50 px-3.5 py-2 text-[13.5px] font-bold text-accent-600">
-              <span>Discount</span>
-              <span className="tabular-nums">−{peso(previewCents)}</span>
+              <p className="text-[12px] text-ink-faint">Promo amounts are set by the owner.</p>
             </div>
           )}
+
+          <div className="text-[12px] font-bold tracking-wide text-ink-faint uppercase">Senior Citizen / PWD</div>
+          <div className="grid grid-cols-2 gap-2.5">
+            {(["senior", "pwd"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setKind(k)}
+                aria-pressed={kind === k}
+                className={
+                  "press rounded-[12px] hairline px-3 py-3 text-left " +
+                  (kind === k ? "bg-brand-50 border-brand-300" : "bg-paper hover:border-brand-200 hover:bg-brand-50")
+                }
+              >
+                <div className="text-[15px] font-extrabold tracking-tight">{k === "senior" ? "Senior Citizen" : "PWD"}</div>
+                <div className="text-[12px] text-ink-soft">{k === "senior" ? "RA 9994" : "RA 10754"} · 20% + VAT-exempt</div>
+              </button>
+            ))}
+          </div>
+
+          {kind && (
+            <>
+              <div className="rounded-[10px] bg-brand-50 px-3.5 py-2.5 text-[12.5px] text-ink-soft leading-snug">
+                {vatRegistered ? "VAT is removed first, then 20% is taken off the eligible items." : "20% is taken off the eligible items (your store is non-VAT)."} The ID number and name are
+                required and appear on the receipt. The amount is fixed by law and can&rsquo;t be changed.
+              </div>
+              <label className="block space-y-1.5">
+                <span className="text-[12px] font-bold text-ink-soft">{label}</span>
+                <input
+                  value={idNumber}
+                  onChange={(e) => setIdNumber(e.target.value)}
+                  placeholder={kind === "pwd" ? "e.g. PWD-0001234" : "e.g. OSCA-12345"}
+                  className="field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14px] transition duration-150 ease-in-out"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-[12px] font-bold text-ink-soft">Cardholder name</span>
+                <input
+                  value={holderName}
+                  onChange={(e) => setHolderName(e.target.value)}
+                  placeholder="Full name on the ID"
+                  className="field-input w-full rounded-[10px] px-3.5 py-2.5 text-[14px] transition duration-150 ease-in-out"
+                />
+              </label>
+              <label className="flex items-start gap-2.5 text-[13px] text-ink-soft">
+                <input
+                  type="checkbox"
+                  checked={exclusiveUse}
+                  onChange={(e) => setExclusiveUse(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-brand-500"
+                />
+                <span>This purchase is for the cardholder&rsquo;s exclusive use.</span>
+              </label>
+              {noneEligible ? (
+                <p className="rounded-[10px] bg-rose-50 px-3.5 py-2 text-[12.5px] font-semibold text-rose-600">
+                  No item in this cart qualifies for the benefit.
+                </p>
+              ) : (
+                preview &&
+                preview.discountCents > 0 && (
+                  <div className="flex items-center justify-between rounded-[10px] bg-accent-50 px-3.5 py-2 text-[13.5px] font-bold text-accent-600">
+                    <span>Discount (VAT-exempt + 20%)</span>
+                    <span className="tabular-nums">−{peso(preview.discountCents)}</span>
+                  </div>
+                )
+              )}
+            </>
+          )}
+
+          <p className="text-[12px] text-ink-faint">
+            Loyalty member discounts are applied at checkout once a customer is attached.
+          </p>
         </div>
 
         <div className="flex items-center gap-3 px-6 py-4 hairline-t">
@@ -1842,15 +1894,13 @@ function DiscountModal({
           )}
           <button
             type="button"
-            onClick={applyCustom}
-            disabled={num <= 0}
+            onClick={apply}
+            disabled={!ready}
             className="tap press flex-1 rounded-[10px] bg-brand-500 hover:bg-brand-600 py-3 font-semibold text-[14px] text-white shadow-btn tracking-tight disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Apply discount
+            Apply {kind === "pwd" ? "PWD" : kind === "senior" ? "Senior Citizen" : "discount"}
           </button>
         </div>
-          </>
-        )}
       </div>
     </div>
   );
@@ -1956,18 +2006,67 @@ function CheckoutCustomer({
 /* ----------------------------- redeem points ----------------------------- */
 
 /**
+ * Member-discount toggle for the checkout overlay. Shown when the owner has a
+ * member % configured and a customer is attached (and no Senior/PWD is set). A
+ * customer below the lifetime-spend floor sees why, with the toggle disabled.
+ */
+function MemberDiscount({
+  pct,
+  qualifies,
+  minSpendCents,
+  applied,
+  onToggle,
+}: {
+  pct: number;
+  qualifies: boolean;
+  minSpendCents: number;
+  applied: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[10px] bg-brand-50 px-3.5 py-2.5">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 text-[13px] font-bold text-brand-700">
+          <Icon name="tag" className="w-[15px] h-[15px]" strokeWidth={1.8} />
+          Member discount · {pct}%
+        </div>
+        <div className="text-[12px] text-brand-600">
+          {qualifies ? "Set by the owner in CRM → Discounts" : `Needs ${peso(minSpendCents)} lifetime spend`}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={!qualifies}
+        className={
+          "press shrink-0 rounded-[9px] px-3 py-2 text-[12.5px] font-bold tracking-tight disabled:opacity-40 disabled:cursor-not-allowed " +
+          (applied
+            ? "bg-surface hairline text-ink-soft hover:text-rose-600 hover:border-rose-200"
+            : "bg-brand-500 text-white hover:bg-brand-600 shadow-btn")
+        }
+      >
+        {applied ? "Remove" : "Apply"}
+      </button>
+    </div>
+  );
+}
+
+/**
  * Loyalty redemption toggle for the checkout overlay. Shown only when the
- * attached customer has points; tapping applies the maximum redeemable (1 pt =
- * ₱1, capped to the payable) as a discount the server re-derives and deducts.
+ * attached customer has points; tapping applies the maximum redeemable (valued
+ * at the store's point rate, capped to the payable) as a discount the server
+ * re-derives and deducts.
  */
 function RedeemPoints({
   points,
+  pointValueCents,
   maxRedeemable,
   redeeming,
   redeemCents,
   onToggle,
 }: {
   points: number;
+  pointValueCents: number;
   maxRedeemable: number;
   redeeming: boolean;
   redeemCents: number;
@@ -1983,7 +2082,7 @@ function RedeemPoints({
         <div className="text-[12px] text-accent-600">
           {redeeming
             ? `Redeeming −${peso(redeemCents)}`
-            : `${points} pt${points === 1 ? "" : "s"} available · worth ${peso(points * 100)}`}
+            : `${points} pt${points === 1 ? "" : "s"} available · worth ${peso(points * pointValueCents)}`}
         </div>
       </div>
       <button

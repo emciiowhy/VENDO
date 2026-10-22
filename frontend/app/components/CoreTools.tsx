@@ -2,11 +2,9 @@ import { Icon, type IconName } from "./Icon";
 
 const tools: { icon: IconName; title: string; body: string }[] = [
   { icon: "pos", title: "Point of Sale", body: "Ring up Customers and take payment — the fast front-of-house sales surface." },
-  { icon: "box", title: "Inventory", body: "Know exactly how much stock you have and where it sits, in real time." },
-  { icon: "truck", title: "Procurement & Supply Chain", body: "Suppliers, purchase orders, and receiving — manage how goods arrive." },
-  { icon: "factory", title: "Manufacturing", body: "Build products from raw materials with recipes and bill-of-materials." },
+  { icon: "box", title: "Product Management", body: "Products, categories, prices and stock — with low-stock alerts and automatic deduction on every sale." },
   { icon: "chart", title: "Finance & Accounting", body: "Money in and out — sales reports, expenses, tax, and profit & loss." },
-  { icon: "users", title: "Human Resources", body: "Employees, shifts, and payroll for your own staff." },
+  { icon: "users", title: "People & Payroll", body: "Employees, attendance from Shift In/Out, and payroll the owner reviews and approves." },
   { icon: "heart", title: "Customer Relationship", body: "Track your Customers and grow loyalty over time." },
 ];
 
@@ -27,7 +25,7 @@ export function CoreTools() {
           </p>
         </div>
 
-        <div className="mt-14 grid grid-cols-2 lg:grid-cols-4 gap-4 reveal">
+        <div className="mt-14 grid grid-cols-2 lg:grid-cols-5 gap-4 reveal">
           {/* wide highlight */}
           <article className="col-span-2 row-span-1 lg:row-span-2 rounded-xl2 bg-ink text-white p-8 flex flex-col justify-between relative overflow-hidden">
             <div className="absolute -right-20 -bottom-20 w-64 h-64 rounded-full bg-brand-500/25 blur-3xl" />

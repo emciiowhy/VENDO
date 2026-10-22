@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "../Icon";
+import { Pagination, usePagination } from "../Pagination";
 import { useToast } from "../Toast";
 import { formatCents, formatCentsWhole, formatDate } from "@/lib/format";
 import {
@@ -12,7 +13,8 @@ import {
   type EmployeeDetail,
   type UnlinkedCashier,
 } from "@/lib/hr";
-import { AttendanceCalendar } from "./AttendanceCalendar";
+import { AttendanceCalendar, STATUS_STYLE, fmtHours } from "./AttendanceCalendar";
+import { AttendanceDayPanel } from "./AttendanceDayPanel";
 import { EmployeeFormModal } from "./EmployeeFormModal";
 import { PayrollDetailDrawer } from "./PayrollDetailDrawer";
 
@@ -23,8 +25,39 @@ import { PayrollDetailDrawer } from "./PayrollDetailDrawer";
  * server-side; the URL only carries the employee id.
  */
 function thisMonth(): string {
-  return new Date().toISOString().slice(0, 7);
+  return todayManila().slice(0, 7);
 }
+
+function todayManila(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** [1,2,3,4,5,6] → "Mon–Sat"; anything non-contiguous lists the days. */
+function workDaysLabel(days: number[]): string {
+  const d = [...days].sort((a, b) => a - b);
+  if (d.length === 0) return "no days";
+  const contiguous = d.every((v, i) => i === 0 || v === d[i - 1] + 1);
+  return contiguous && d.length > 2 ? `${WEEKDAYS[d[0]]}–${WEEKDAYS[d[d.length - 1]]}` : d.map((x) => WEEKDAYS[x]).join(", ");
+}
+
+/** A Manila wall-clock time, e.g. "8:05 AM". */
+function clock(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString("en-PH", { timeZone: "Asia/Manila", hour: "numeric", minute: "2-digit" });
+}
+
+function Chip({ tone, label, value }: { tone: string; label: string; value: number }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full bg-paper hairline pl-1.5 pr-3 py-1 text-[12.5px] text-ink-soft">
+      <span className={"grid place-items-center min-w-6 h-6 px-1.5 rounded-full text-[12px] font-extrabold " + tone}>{value}</span>
+      {label}
+    </span>
+  );
+}
+
+const NO_SLIPS: EmployeeDetail["payslips"] = [];
 
 export function EmployeeProfile({ employeeId }: { employeeId: string }) {
   const { push } = useToast();
@@ -35,6 +68,8 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
   const [editing, setEditing] = useState(false);
   const [granting, setGranting] = useState(false);
   const [payslipRun, setPayslipRun] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const slips = usePagination(state.status === "ready" ? state.emp.payslips : NO_SLIPS, employeeId, 10);
 
   async function load() {
     const res = await getEmployeeDetail(employeeId, month);
@@ -79,6 +114,17 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
   }
 
   const e = state.emp;
+  // The day shown in the details panel: the one tapped, else the first day that
+  // needs review, else today (when it is in this month).
+  const selectedDay =
+    e.attendanceMonth.find((d) => d.date === selectedDate) ??
+    e.attendanceMonth.find((d) => d.status === "needs_review") ??
+    e.attendanceMonth.find((d) => d.date === todayManila()) ??
+    null;
+  // Rows for the attendance log: every day with a punch or a decided status.
+  const loggedDays = e.attendanceMonth.filter(
+    (d) => d.punches.length > 0 || ["present", "half_day", "absent", "leave", "needs_review"].includes(d.status),
+  );
   const initials = e.name.split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 
   return (
@@ -132,10 +178,10 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
 
       {/* Stat strip */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat icon="clock" label="Hours this month" value={`${e.hours.hoursWorked}h`} sub={`${e.hours.regularHours} reg · ${e.hours.overtimeHours} OT`} />
-        <Stat icon="check" label="Attendance" value={`${e.hours.attendanceRatePct}%`} sub={`${e.hours.daysPresent} days present`} tone="good" />
+        <Stat icon="clock" label="Hours worked this month" value={fmtHours(e.attendanceSummary.workedMinutes)} sub={`${e.hours.regularHours}h regular · ${e.hours.overtimeHours}h past the standard day`} />
+        <Stat icon="check" label="Attendance" value={`${e.hours.attendanceRatePct}%`} sub={`${e.attendanceSummary.presentDays} present · ${e.attendanceSummary.absentDays} absent · ${e.attendanceSummary.halfDays} half-day`} tone="good" />
         <Stat icon="heart" label="PTO balance" value={`${e.ptoBalanceDays}d`} sub={`${e.ptoUsedYtd} used this year`} />
-        <Stat icon="peso" label="Pay rate" value={formatCentsWhole(e.payRateCents)} sub={`per ${e.payType.toLowerCase() === "monthly" ? "month" : e.payType.toLowerCase() === "daily" ? "day" : "hour"}`} />
+        <Stat icon="peso" label="Daily rate" value={e.dailyRateCents != null ? formatCentsWhole(e.dailyRateCents) : "Not set"} sub={`per ${e.payType.toLowerCase() === "monthly" ? "month" : e.payType.toLowerCase() === "daily" ? "day" : "hour"}`} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -153,7 +199,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
 
         {/* Financial suite */}
         <Card title="Financial suite" icon="wallet">
-          <Detail label="Pay basis" value={`${e.payType} · ${formatCents(e.payRateCents)}`} />
+          <Detail label="Daily rate" value={e.dailyRateCents != null ? `${formatCents(e.dailyRateCents)} per day` : "Not set — confirm it in payroll"} />
           <Detail label="PTO balance" value={`${e.ptoBalanceDays} days`} />
           <div className="pt-2 mt-1 border-t border-ink/8">
             <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Direct deposit</span>
@@ -183,31 +229,107 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
         </Card>
       </div>
 
-      {/* Attendance calendar */}
+      {/* Attendance — derived from the schedule + Shift In / Shift Out */}
       <div className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div>
             <h3 className="font-extrabold tracking-tight">Attendance</h3>
-            <p className="text-[12.5px] text-ink-soft">Daily history · regular vs overtime built from logged hours.</p>
+            <p className="text-[12.5px] text-ink-soft">
+              Works {workDaysLabel(e.workDays)} · {e.standardDailyHours}h standard day · {e.unpaidBreakMinutes} min unpaid
+              break (on days of 5h or more).{" "}
+              {e.userId ? "Time In / Time Out come from Shift In / Shift Out." : "No till login — mark days by hand."}
+            </p>
           </div>
           <input
             type="month"
             value={month}
             max={thisMonth()}
-            onChange={(ev) => setMonth(ev.target.value)}
+            onChange={(ev) => {
+              setMonth(ev.target.value);
+              setSelectedDate(null);
+            }}
             className="field-input rounded-[10px] px-3 py-2 text-[14px]"
           />
         </div>
-        <div className="border-t border-ink/8 p-5">
-          <AttendanceCalendar month={month} days={e.attendanceMonth} />
+
+        <div className="border-t border-ink/8 px-5 py-3 flex flex-wrap gap-2">
+          <Chip tone={STATUS_STYLE.present.cell} label="Present" value={e.attendanceSummary.presentDays} />
+          <Chip tone={STATUS_STYLE.absent.cell} label="Absent" value={e.attendanceSummary.absentDays} />
+          <Chip tone={STATUS_STYLE.half_day.cell} label="Half-day" value={e.attendanceSummary.halfDays} />
+          <Chip tone={STATUS_STYLE.leave.cell} label="Leave" value={e.attendanceSummary.leaveDays} />
+          <Chip tone={STATUS_STYLE.rest_day.cell} label="Rest days" value={e.attendanceSummary.restDays} />
+          {e.attendanceSummary.needsReviewDays > 0 && (
+            <Chip tone={STATUS_STYLE.needs_review.cell} label="Needs review" value={e.attendanceSummary.needsReviewDays} />
+          )}
         </div>
+
+        <div className="border-t border-ink/8 p-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <AttendanceCalendar
+            month={month}
+            days={e.attendanceMonth}
+            selected={selectedDay?.date ?? null}
+            onSelect={setSelectedDate}
+          />
+          {selectedDay ? (
+            <AttendanceDayPanel day={selectedDay} employeeId={e.id} onChanged={() => void load()} />
+          ) : (
+            <p className="text-[13px] text-ink-soft">Tap a date to see its Time In, Time Out and hours.</p>
+          )}
+        </div>
+
+        {/* Attendance log */}
+        {loggedDays.length > 0 && (
+          <div className="overflow-x-auto border-t border-ink/8">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-[12px] font-semibold text-ink-faint border-b border-ink/8 bg-paper/40">
+                  <th className="px-5 py-2.5">Date</th>
+                  <th className="px-3 py-2.5">Time In</th>
+                  <th className="px-3 py-2.5">Time Out</th>
+                  <th className="px-3 py-2.5 text-right">Break</th>
+                  <th className="px-3 py-2.5 text-right">Hours</th>
+                  <th className="px-5 py-2.5">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loggedDays.map((d) => {
+                  const first = d.punches[0];
+                  const last = d.punches[d.punches.length - 1];
+                  return (
+                    <tr
+                      key={d.date}
+                      onClick={() => setSelectedDate(d.date)}
+                      className={
+                        "border-b border-ink/5 last:border-0 cursor-pointer hover:bg-paper/40 transition " +
+                        (selectedDay?.date === d.date ? "bg-brand-50/50" : "")
+                      }
+                    >
+                      <td className="px-5 py-2.5 font-semibold whitespace-nowrap">{formatDate(d.date)}</td>
+                      <td className="px-3 py-2.5 tabular-nums">{first ? clock(first.timeIn) : "—"}</td>
+                      <td className="px-3 py-2.5 tabular-nums">
+                        {!last ? "—" : last.open ? "On the clock" : last.needsReview ? "Missing" : clock(last.timeOut)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{d.breakMinutes > 0 ? fmtHours(d.breakMinutes) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmtHours(d.workedMinutes)}</td>
+                      <td className="px-5 py-2.5">
+                        <span className={"inline-block rounded-full px-2.5 py-0.5 text-[11.5px] font-bold " + STATUS_STYLE[d.status].cell}>
+                          {STATUS_STYLE[d.status].label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Paystub archive */}
       <div className="rounded-xl2 bg-surface hairline shadow-card overflow-hidden">
         <div className="px-5 py-4">
           <h3 className="font-extrabold tracking-tight">Paystub archive</h3>
-          <p className="text-[12.5px] text-ink-soft">Every payroll run this employee was part of.</p>
+          <p className="text-[12.5px] text-ink-soft">Every approved payroll run this employee was paid in.</p>
         </div>
         {e.payslips.length === 0 ? (
           <p className="px-5 pb-6 text-[13px] text-ink-soft border-t border-ink/8 pt-4">No payslips yet — they appear here after a payroll run includes this employee.</p>
@@ -218,23 +340,20 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
                 <tr className="text-left text-[12px] font-semibold text-ink-faint border-b border-ink/8 bg-paper/40">
                   <th className="px-5 py-2.5">Run #</th>
                   <th className="px-3 py-2.5">Period</th>
-                  <th className="px-3 py-2.5">Basis</th>
-                  <th className="px-3 py-2.5 text-right">Gross</th>
+                  <th className="px-3 py-2.5 text-right">Base</th>
+                  <th className="px-3 py-2.5 text-right">Final payable</th>
                   <th className="px-5 py-2.5 text-right">·</th>
                 </tr>
               </thead>
               <tbody>
-                {e.payslips.map((p) => (
+                {slips.pageItems.map((p) => (
                   <tr key={p.runId} className="border-b border-ink/5 last:border-0 hover:bg-paper/40 transition">
                     <td className="px-5 py-3 font-bold tabular-nums">{p.reference}</td>
                     <td className="px-3 py-3 text-ink-soft tabular-nums whitespace-nowrap">
                       {formatDate(p.periodStart)} – {formatDate(p.periodEnd)}
                     </td>
-                    <td className="px-3 py-3 text-ink-soft">
-                      {p.payType} · {p.basisQty}
-                      {p.payType === "Hourly" ? "h" : p.payType === "Daily" ? "d" : ""}
-                    </td>
-                    <td className="px-3 py-3 text-right font-bold tabular-nums whitespace-nowrap">{formatCents(p.grossCents)}</td>
+                    <td className="px-3 py-3 text-right text-ink-soft tabular-nums whitespace-nowrap">{formatCents(p.grossCents)}</td>
+                    <td className="px-3 py-3 text-right font-bold tabular-nums whitespace-nowrap">{formatCents(p.payableCents)}</td>
                     <td className="px-5 py-3 text-right">
                       <button
                         type="button"
@@ -250,6 +369,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
                 ))}
               </tbody>
             </table>
+            <Pagination page={slips.page} total={slips.total} pageSize={slips.pageSize} onPage={slips.setPage} noun="payslips" />
           </div>
         )}
       </div>
