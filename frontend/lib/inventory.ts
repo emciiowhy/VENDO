@@ -188,3 +188,59 @@ export async function deleteCategory(id: string): Promise<Result<Record<string, 
     return NETWORK_ERR;
   }
 }
+
+// ── Stock history (the stock-movement ledger) ───────────────────────────────
+
+const LEDGER = `${API_BASE_URL}/api/v1/inventory`;
+
+/** Raw ledger reasons as stored server-side. */
+export type MovementReason =
+  | "sale"
+  | "sale_void"
+  | "return"
+  | "po_receive"
+  | "produce_consume"
+  | "produce_output"
+  | "adjust"
+  | "count";
+
+/** The Stock history filter groups (server maps each to its reasons). */
+export type MovementType = "sales" | "reversals" | "manual" | "received" | "production";
+
+export interface StockMovement {
+  id: string;
+  productId: string;
+  productName: string | null;
+  qtyDelta: number;
+  balanceAfter: number;
+  reason: MovementReason;
+  refTable: string | null;
+  refId: string | null;
+  note: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+export interface MovementQuery {
+  type?: MovementType;
+  productId?: string;
+  /** Manila dates (YYYY-MM-DD), inclusive. */
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** The whole-store movement feed, newest first, with units in/out for the filtered set. */
+export async function listStockMovements(
+  q: MovementQuery,
+): Promise<Result<{ movements: StockMovement[]; total: number; unitsIn: number; unitsOut: number; page: number; pageSize: number }>> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== "") params.set(k, String(v));
+  try {
+    return await readJson(await fetch(`${LEDGER}/movements?${params}`, { credentials: "include" }));
+  } catch {
+    return NETWORK_ERR;
+  }
+}

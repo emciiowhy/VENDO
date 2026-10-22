@@ -2,7 +2,7 @@
 
 import { DashShell } from "../../components/dash/DashShell";
 import { MERCHANT_NAV } from "../../components/dash/merchantNav";
-import { InventoryMatrix } from "../../components/inventory/InventoryMatrix";
+import { ProductManagement } from "../../components/inventory/ProductManagement";
 
 /**
  * Merchant Inventory & Category CRUD Matrix. Owners and managers only — the
@@ -12,12 +12,12 @@ export default function InventoryPage() {
   return (
     <DashShell
       title="Product Management"
-      subtitle="Products, categories, prices & stock"
+      subtitle="Products, categories, prices, stock & stock history"
       brandSub="Merchant Workspace"
       nav={MERCHANT_NAV}
       allow={["MERCHANT_OWNER", "MANAGER"]}
     >
-      <InventoryMatrix />
+      <ProductManagement />
     </DashShell>
   );
 }

@@ -49,16 +49,63 @@ stockMovementsRouter.get("/products/:id/movements", async (req, res) => {
   }
 });
 
-/** Whole-store feed, optionally `?reason=`. */
+/**
+ * The Stock history page's filter groups. Retired modules (procurement,
+ * manufacturing) stay as groups so their past rows remain findable.
+ */
+const TYPE_GROUPS: Record<string, StockReason[]> = {
+  sales: ["sale"],
+  reversals: ["sale_void", "return"],
+  manual: ["adjust", "count"],
+  received: ["po_receive"],
+  production: ["produce_consume", "produce_output"],
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+
+/**
+ * Whole-store feed — powers Product Management → Stock history. Optional
+ * filters: `?type=` (a group above) or `?reason=` (one raw reason),
+ * `?productId=`, `?from=` / `?to=` (Manila dates, inclusive). Invalid values
+ * are ignored rather than rejected.
+ */
 stockMovementsRouter.get("/movements", async (req, res) => {
   const tenantId = tenantOf(req);
   if (!tenantId) return noTenant(res);
-  const raw = typeof req.query.reason === "string" ? req.query.reason : undefined;
-  const reason = REASONS.includes(raw as StockReason) ? (raw as StockReason) : undefined;
+  const type = str(req.query.type);
+  const reason = str(req.query.reason);
+  const reasons =
+    type && TYPE_GROUPS[type]
+      ? TYPE_GROUPS[type]
+      : REASONS.includes(reason as StockReason)
+        ? [reason as StockReason]
+        : undefined;
+  const productId = str(req.query.productId);
+  const from = str(req.query.from);
+  const to = str(req.query.to);
   try {
     const paging = parsePaging(req.query);
-    const page = await listMovements(tenantId, { reason }, paging);
-    res.json({ ok: true, movements: page.items, total: page.total, page: paging.page, pageSize: paging.pageSize });
+    const page = await listMovements(
+      tenantId,
+      {
+        reasons,
+        productId: productId && UUID.test(productId) ? productId : undefined,
+        from: from && ISO_DATE.test(from) ? from : undefined,
+        to: to && ISO_DATE.test(to) ? to : undefined,
+      },
+      paging,
+    );
+    res.json({
+      ok: true,
+      movements: page.items,
+      total: page.total,
+      unitsIn: page.unitsIn,
+      unitsOut: page.unitsOut,
+      page: paging.page,
+      pageSize: paging.pageSize,
+    });
   } catch (err) {
     console.error("[inventory] movements feed failed:", err);
     res.status(500).json({ ok: false, error: "Could not load stock movements." });

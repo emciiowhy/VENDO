@@ -164,18 +164,52 @@ export async function listProductMovements(
   return { items: rows.map(toMovement), total: Number(count.rows[0]?.n ?? 0) };
 }
 
-/** The whole-store movement feed (optionally filtered by reason), newest first. */
+export interface MovementFilter {
+  /** Only these reasons (e.g. the "Voids & returns" group is ['sale_void', 'return']). */
+  reasons?: StockReason[];
+  productId?: string;
+  /** Manila calendar dates (YYYY-MM-DD), inclusive. */
+  from?: string;
+  to?: string;
+}
+
+/**
+ * The tenant-fenced WHERE clause for the movement feed. Pure, so the
+ * placeholder numbering is unit-tested; every value is a bound parameter.
+ */
+export function movementWhere(tenantId: string, f: MovementFilter): { where: string; params: unknown[] } {
+  const params: unknown[] = [tenantId];
+  const parts = ["m.tenant_id = $1"];
+  if (f.reasons && f.reasons.length > 0) {
+    params.push(f.reasons);
+    parts.push(`m.reason = ANY($${params.length}::text[])`);
+  }
+  if (f.productId) {
+    params.push(f.productId);
+    parts.push(`m.product_id = $${params.length}`);
+  }
+  if (f.from) {
+    params.push(f.from);
+    parts.push(`m.created_at >= ($${params.length}::date::timestamp AT TIME ZONE 'Asia/Manila')`);
+  }
+  if (f.to) {
+    params.push(f.to);
+    parts.push(`m.created_at < ((($${params.length}::date + 1)::timestamp) AT TIME ZONE 'Asia/Manila')`);
+  }
+  return { where: parts.join(" AND "), params };
+}
+
+/**
+ * The whole-store movement feed, newest first, with optional reason / product /
+ * date filters — plus the units in and out across the WHOLE filtered set (not
+ * just the page) for the summary strip.
+ */
 export async function listMovements(
   tenantId: string,
-  opts: { reason?: StockReason } = {},
+  filter: MovementFilter = {},
   paging: { page: number; pageSize: number; offset: number } = { page: 1, pageSize: 25, offset: 0 },
-): Promise<{ items: StockMovement[]; total: number }> {
-  const params: unknown[] = [tenantId];
-  let where = `m.tenant_id = $1`;
-  if (opts.reason) {
-    params.push(opts.reason);
-    where += ` AND m.reason = $${params.length}`;
-  }
+): Promise<{ items: StockMovement[]; total: number; unitsIn: number; unitsOut: number }> {
+  const { where, params } = movementWhere(tenantId, filter);
   const { rows } = await query<MovementRow>(
     `SELECT ${MOVEMENT_COLUMNS}
        FROM stock_movements m
@@ -183,11 +217,24 @@ export async function listMovements(
        LEFT JOIN users u    ON u.id = m.created_by
       WHERE ${where}
       ORDER BY m.created_at DESC, m.id DESC
-      LIMIT ${params.length + 1} OFFSET ${params.length + 2}`,
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, paging.pageSize, paging.offset],
   );
-  const count = await query<{ n: string }>(`SELECT count(*) AS n FROM stock_movements m WHERE ${where}`, params);
-  return { items: rows.map(toMovement), total: Number(count.rows[0]?.n ?? 0) };
+  const agg = await query<{ n: string; units_in: string | null; units_out: string | null }>(
+    `SELECT count(*) AS n,
+            sum(m.qty_delta) FILTER (WHERE m.qty_delta > 0)  AS units_in,
+            -sum(m.qty_delta) FILTER (WHERE m.qty_delta < 0) AS units_out
+       FROM stock_movements m
+      WHERE ${where}`,
+    params,
+  );
+  const r = agg.rows[0];
+  return {
+    items: rows.map(toMovement),
+    total: Number(r?.n ?? 0),
+    unitsIn: Number(r?.units_in ?? 0),
+    unitsOut: Number(r?.units_out ?? 0),
+  };
 }
 
 /**

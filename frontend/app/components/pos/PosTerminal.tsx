@@ -737,7 +737,7 @@ export function PosTerminal() {
                 stay quiet. */}
             <Link
               href="/me"
-              title="My record — hours, PTO & paystubs"
+              title="My record — your Shift In / Out hours"
               aria-label="My record"
               className="tap press grid place-items-center w-9 h-9 rounded-[10px] bg-surface hairline text-ink-soft hover:text-brand-600 hover:border-brand-200 transition-colors"
             >

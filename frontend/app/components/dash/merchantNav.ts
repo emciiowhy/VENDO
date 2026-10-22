@@ -34,7 +34,6 @@ export const MERCHANT_NAV: NavGroup[] = [
   {
     items: [
       { label: "Activity log", icon: "shield", href: "/dashboard/audit" },
-      { label: "My record", icon: "clock", href: "/me" },
       { label: "Account", icon: "gear", href: "/dashboard/account" },
     ],
   },

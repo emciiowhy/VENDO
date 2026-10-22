@@ -24,8 +24,9 @@ import { CategoryManagerModal } from "./CategoryManagerModal";
  * staff search, filter by category, add/edit/delete products with images, and
  * manage the nested category tree. Stock at or below each item's configured
  * threshold trips an amber/rose badge and a row tint across the matrix.
+ * `onHistory` adds a per-row button that opens that product's Stock history.
  */
-export function InventoryMatrix() {
+export function InventoryMatrix({ onHistory }: { onHistory?: (product: Product) => void } = {}) {
   const store = useDashUser().tenantName ?? "your store";
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -267,6 +268,17 @@ export function InventoryMatrix() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        {onHistory && (
+                          <button
+                            type="button"
+                            onClick={() => onHistory(p)}
+                            aria-label={`Stock history for ${p.name}`}
+                            title="Stock history"
+                            className="grid place-items-center w-8 h-8 rounded-[8px] text-ink-faint hover:text-brand-600 hover:bg-brand-50 transition duration-150"
+                          >
+                            <Icon name="activity" className="w-[17px] h-[17px]" strokeWidth={1.7} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
