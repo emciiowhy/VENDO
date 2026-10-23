@@ -9,6 +9,9 @@ services:
     name: vendopos-api
     runtime: node
     rootDir: backend
+    # Node pinned via backend/.node-version (24.22.1) — a patched release per the
+    # Oct 2025 eMudhra/Node TLS+Brotli advisory. Rebuilding also refreshes the
+    # system CA store. Bump that file to raise the version.
     region: singapore          # co-located with Neon ap-southeast-1 (low latency)
     plan: free                 # free idles/cold-starts; bump to "starter" for always-on + a disk
     branch: main
